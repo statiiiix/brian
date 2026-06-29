@@ -6,6 +6,7 @@ vi.mock("../db/embed.js", () => ({
 }));
 
 import { runMigrations } from "../db/migrate.js";
+import { resetDb } from "../test/resetDb.js";
 import { pool } from "../db/pool.js";
 import { buildApp } from "./app.js";
 
@@ -18,10 +19,7 @@ d("API", () => {
   const app = buildApp();
   beforeAll(async () => { await runMigrations(pool); await app.ready(); });
   afterAll(async () => { await app.close(); await pool.end(); });
-  beforeEach(async () => {
-    await pool.query("delete from skill_versions");
-    await pool.query("delete from skills");
-  });
+  beforeEach(async () => { await resetDb(pool); });
 
   it("creates a draft skill via POST", async () => {
     const res = await app.inject({ method: "POST", url: "/api/skills", payload: valid });

@@ -7,6 +7,7 @@ vi.mock("../db/embed.js", () => ({
 
 import pg from "pg";
 import { runMigrations } from "../db/migrate.js";
+import { resetDb } from "../test/resetDb.js";
 import { createSkill, getSkill, listSkills, updateSkill, setStatus, listVersions } from "./repo.js";
 import type { NewSkill } from "./types.js";
 
@@ -33,12 +34,7 @@ d("skill repo", () => {
     await runMigrations(pool);
   });
   afterAll(async () => { await pool.end(); });
-  beforeEach(async () => {
-    await pool.query("delete from skill_versions");
-    await pool.query("delete from executions");
-    await pool.query("delete from skill_links");
-    await pool.query("delete from skills");
-  });
+  beforeEach(async () => { await resetDb(pool); });
 
   it("creates a skill as draft v1", async () => {
     const s = await createSkill(sample, pool);

@@ -7,6 +7,7 @@ vi.mock("../db/embed.js", () => ({
 
 import pg from "pg";
 import { runMigrations } from "../db/migrate.js";
+import { resetDb } from "../test/resetDb.js";
 import { createSkill } from "../skills/repo.js";
 import { logExecution, listExecutions } from "./executions.js";
 
@@ -17,10 +18,7 @@ d("executions", () => {
   let pool: pg.Pool;
   beforeAll(async () => { pool = new pg.Pool({ connectionString: url }); await runMigrations(pool); });
   afterAll(async () => { await pool.end(); });
-  beforeEach(async () => {
-    await pool.query("delete from executions");
-    await pool.query("delete from skills");
-  });
+  beforeEach(async () => { await resetDb(pool); });
 
   it("logs and lists an execution for a skill", async () => {
     const s = await createSkill(

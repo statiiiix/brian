@@ -7,6 +7,7 @@ vi.mock("../db/embed.js", () => ({
 
 import pg from "pg";
 import { runMigrations } from "../db/migrate.js";
+import { resetDb } from "../test/resetDb.js";
 import { createSkill, setStatus, getSkill } from "../skills/repo.js";
 import { markStale } from "./staleness.js";
 
@@ -17,7 +18,7 @@ d("markStale", () => {
   let pool: pg.Pool;
   beforeAll(async () => { pool = new pg.Pool({ connectionString: url }); await runMigrations(pool); });
   afterAll(async () => { await pool.end(); });
-  beforeEach(async () => { await pool.query("delete from skill_versions"); await pool.query("delete from skills"); });
+  beforeEach(async () => { await resetDb(pool); });
 
   it("flags an active skill last reviewed beyond the window", async () => {
     const s = await createSkill(

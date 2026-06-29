@@ -7,6 +7,7 @@ vi.mock("../db/embed.js", () => ({
 
 import pg from "pg";
 import { runMigrations } from "../db/migrate.js";
+import { resetDb } from "../test/resetDb.js";
 import { createSkill, setStatus, findSkill } from "../skills/repo.js";
 import { logExecution, listExecutions } from "../feedback/executions.js";
 import { getOrder, issueRefund } from "./businessTools.js";
@@ -46,9 +47,7 @@ d("end-to-end execution loop (M3)", () => {
   });
   afterAll(async () => { await pool.end(); });
   beforeEach(async () => {
-    await pool.query("delete from executions");
-    await pool.query("delete from skill_versions");
-    await pool.query("delete from skills");
+    await resetDb(pool);
     const s = await createSkill(
       {
         name: "Refund Handling",

@@ -7,6 +7,7 @@ vi.mock("../db/embed.js", () => ({
 
 import pg from "pg";
 import { runMigrations } from "../db/migrate.js";
+import { resetDb } from "../test/resetDb.js";
 import { pool } from "../db/pool.js";
 import { draftFromText, type AnthropicLike } from "./draftFromText.js";
 
@@ -32,7 +33,7 @@ const fakeClient: AnthropicLike = {
 d("draftFromText", () => {
   beforeAll(async () => { await runMigrations(pool); });
   afterAll(async () => { await pool.end(); });
-  beforeEach(async () => { await pool.query("delete from skills"); });
+  beforeEach(async () => { await resetDb(pool); });
 
   it("drafts a valid skill from text and stores it as draft", async () => {
     const skill = await draftFromText("When a user is locked out...", fakeClient);

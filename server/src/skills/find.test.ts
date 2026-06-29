@@ -14,6 +14,7 @@ vi.mock("../db/embed.js", () => ({
 
 import pg from "pg";
 import { runMigrations } from "../db/migrate.js";
+import { resetDb } from "../test/resetDb.js";
 import { createSkill, setStatus, findSkill } from "./repo.js";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -23,10 +24,7 @@ d("findSkill", () => {
   let pool: pg.Pool;
   beforeAll(async () => { pool = new pg.Pool({ connectionString: url }); await runMigrations(pool); });
   afterAll(async () => { await pool.end(); });
-  beforeEach(async () => {
-    await pool.query("delete from skill_versions");
-    await pool.query("delete from skills");
-  });
+  beforeEach(async () => { await resetDb(pool); });
 
   it("returns the active skill whose trigger matches the query", async () => {
     const refund = await createSkill(
