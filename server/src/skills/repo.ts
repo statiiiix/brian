@@ -164,3 +164,18 @@ export async function findSkill(query: string, p: pg.Pool = defaultPool): Promis
   );
   return rows[0] ? rowToSkill(rows[0]) : null;
 }
+
+// Nearest skill of ANY status (so capture can match and revise drafts too),
+// returning the cosine distance for dedup/routing decisions.
+export async function findSkillWithDistance(
+  query: string,
+  p: pg.Pool = defaultPool
+): Promise<{ skill: Skill; distance: number } | null> {
+  const vec = toVectorLiteral(await embed(query));
+  const { rows } = await p.query(
+    `select ${SKILL_COLUMNS}, embedding <=> $1::vector as distance
+     from skills order by embedding <=> $1::vector limit 1`,
+    [vec]
+  );
+  return rows[0] ? { skill: rowToSkill(rows[0]), distance: Number(rows[0].distance) } : null;
+}
