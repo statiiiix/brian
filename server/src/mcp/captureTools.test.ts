@@ -7,13 +7,13 @@ import { runMigrations } from "../db/migrate.js";
 import { resetDb } from "../test/resetDb.js";
 import { capture } from "../ingestion/capture.js";
 import { findContextWithDistance } from "../context/repo.js";
-import type { AnthropicLike } from "../ingestion/draftFromText.js";
+import type { LlmClient } from "../llm/complete.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
 
-const client: AnthropicLike = {
-  messages: { create: async () => ({ content: [{ type: "text", text: JSON.stringify([{ kind: "context", confidence: 0.9, content: "ship weekly", summary: "ship weekly", tags: [] }]) }] }) },
+const client: LlmClient = {
+  complete: async () => JSON.stringify([{ kind: "context", confidence: 0.9, content: "ship weekly", summary: "ship weekly", tags: [] }]),
 };
 
 d("capture + find_context (MCP building blocks)", () => {

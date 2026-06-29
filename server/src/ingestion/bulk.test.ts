@@ -6,22 +6,17 @@ import pg from "pg";
 import { runMigrations } from "../db/migrate.js";
 import { resetDb } from "../test/resetDb.js";
 import { ingestBulk } from "./bulk.js";
-import type { AnthropicLike } from "./draftFromText.js";
+import type { LlmClient } from "../llm/complete.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
 
 // Returns valid JSON for a doc containing "good", invalid otherwise.
-const client: AnthropicLike = {
-  messages: {
-    create: async (args: any) => {
-      const userText = args.messages[0].content as string;
-      const text = userText.includes("good")
-        ? JSON.stringify([{ kind: "context", confidence: 0.9, content: "a goal", summary: "a goal", tags: [] }])
-        : "not json";
-      return { content: [{ type: "text", text }] };
-    },
-  },
+const client: LlmClient = {
+  complete: async ({ user }) =>
+    user.includes("good")
+      ? JSON.stringify([{ kind: "context", confidence: 0.9, content: "a goal", summary: "a goal", tags: [] }])
+      : "not json",
 };
 
 d("ingestBulk", () => {

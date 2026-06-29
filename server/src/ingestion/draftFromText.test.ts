@@ -9,25 +9,20 @@ import pg from "pg";
 import { runMigrations } from "../db/migrate.js";
 import { resetDb } from "../test/resetDb.js";
 import { pool } from "../db/pool.js";
-import { draftFromText, type AnthropicLike } from "./draftFromText.js";
+import { draftFromText } from "./draftFromText.js";
+import type { LlmClient } from "../llm/complete.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
 
-const fakeClient: AnthropicLike = {
-  messages: {
-    create: async () => ({
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          name: "Password Reset", trigger: "user locked out", inputs: ["email"],
-          procedure: "verify identity then reset", hard_rules: ["never reset without identity check"],
-          tools: ["lookup_user"], guardrails: ["if account flagged, escalate"],
-          escalation_target: "Security", examples: [], owner: "IT",
-        }),
-      }],
+const fakeClient: LlmClient = {
+  complete: async () =>
+    JSON.stringify({
+      name: "Password Reset", trigger: "user locked out", inputs: ["email"],
+      procedure: "verify identity then reset", hard_rules: ["never reset without identity check"],
+      tools: ["lookup_user"], guardrails: ["if account flagged, escalate"],
+      escalation_target: "Security", examples: [], owner: "IT",
     }),
-  },
 };
 
 d("draftFromText", () => {
@@ -43,7 +38,7 @@ d("draftFromText", () => {
   });
 
   it("rejects malformed model output", async () => {
-    const bad: AnthropicLike = { messages: { create: async () => ({ content: [{ type: "text", text: "not json" }] }) } };
+    const bad: LlmClient = { complete: async () => "not json" };
     await expect(draftFromText("x", bad)).rejects.toThrow();
   });
 });

@@ -15,13 +15,13 @@ import { runMigrations } from "../db/migrate.js";
 import { resetDb } from "../test/resetDb.js";
 import { getSkill } from "../skills/repo.js";
 import { capture, type CapturedItem } from "./capture.js";
-import type { AnthropicLike } from "./draftFromText.js";
+import type { LlmClient } from "../llm/complete.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
 
-function clientReturning(items: CapturedItem[]): AnthropicLike {
-  return { messages: { create: async () => ({ content: [{ type: "text", text: JSON.stringify(items) }] }) } };
+function clientReturning(items: CapturedItem[]): LlmClient {
+  return { complete: async () => JSON.stringify(items) };
 }
 
 const skillBase = { name: "", trigger: "", inputs: [], procedure: "p", hard_rules: [], tools: [], guardrails: [], escalation_target: null, examples: [], owner: null };

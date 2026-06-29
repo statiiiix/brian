@@ -4,7 +4,8 @@ Standalone TypeScript service. See `../CompanyBrain.md` and
 `../docs/superpowers/specs/2026-06-29-company-brain-design.md`.
 
 ## Setup
-1. `cp .env.example .env` and fill in `DATABASE_URL` (Supabase), `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`.
+1. `cp .env.example .env` and fill in `DATABASE_URL` (Supabase) and `OPENAI_API_KEY`.
+   The generative LLM (skill drafting + capture) uses OpenAI; model is `LLM_MODEL` (default `gpt-5.4-mini`).
 2. `npm install`
 3. `npm run migrate`   # create tables + pgvector
 4. `npm run seed`      # 2 active example skills

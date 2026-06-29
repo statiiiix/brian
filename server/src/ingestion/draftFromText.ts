@@ -1,13 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { createSkill } from "../skills/repo.js";
 import { parseNewSkill } from "../skills/validation.js";
+import { defaultLlm, type LlmClient } from "../llm/complete.js";
 import type { Skill } from "../skills/types.js";
-
-export interface AnthropicLike {
-  messages: {
-    create(args: any): Promise<{ content: Array<{ type: string; text?: string }> }>;
-  };
-}
 
 const SYSTEM = `You convert a company's process documentation into ONE structured skill.
 Return ONLY a JSON object with keys: name, trigger, inputs (string[]), procedure,
@@ -22,21 +16,13 @@ function extractJson(text: string): unknown {
   return JSON.parse(text.slice(start, end + 1));
 }
 
-let defaultClient: AnthropicLike | null = null;
-function client(): AnthropicLike {
-  if (!defaultClient) defaultClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  return defaultClient as unknown as AnthropicLike;
-}
-
-export async function draftFromText(text: string, c: AnthropicLike = client()): Promise<Skill> {
-  const res = await c.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2000,
+export async function draftFromText(text: string, llm: LlmClient = defaultLlm()): Promise<Skill> {
+  const out = await llm.complete({
     system: SYSTEM,
-    messages: [{ role: "user", content: `Draft a skill from this:\n\n${text}` }],
+    user: `Draft a skill from this:\n\n${text}`,
+    maxTokens: 2000,
   });
-  const textOut = res.content.find((b) => b.type === "text")?.text ?? "";
-  const raw = extractJson(textOut);
-  const input = parseNewSkill(raw); // throws ValidationError if Claude returned a bad shape
+  const raw = extractJson(out);
+  const input = parseNewSkill(raw); // throws ValidationError if the model returned a bad shape
   return createSkill(input); // stored as draft, never auto-active
 }

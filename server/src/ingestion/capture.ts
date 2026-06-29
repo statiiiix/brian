@@ -1,7 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type pg from "pg";
 import { pool as defaultPool } from "../db/pool.js";
-import type { AnthropicLike } from "./draftFromText.js";
+import { defaultLlm, type LlmClient } from "../llm/complete.js";
 import { parseNewSkill } from "../skills/validation.js";
 import { parseNewContext } from "../context/validation.js";
 import { skillIsAutoSafe } from "../mcp/toolRisk.js";
@@ -37,22 +36,14 @@ function extractArray(text: string): unknown[] {
   return parsed;
 }
 
-let defaultClient: AnthropicLike | null = null;
-function client(): AnthropicLike {
-  if (!defaultClient) defaultClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) as unknown as AnthropicLike;
-  return defaultClient;
-}
-
 export async function capture(
-  text: string, c: AnthropicLike = client(), p: pg.Pool = defaultPool
+  text: string, llm: LlmClient = defaultLlm(), p: pg.Pool = defaultPool
 ): Promise<CaptureResult> {
-  const res = await c.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 4000,
+  const out = await llm.complete({
     system: SYSTEM,
-    messages: [{ role: "user", content: `Extract from this session:\n\n${text}` }],
+    user: `Extract from this session:\n\n${text}`,
+    maxTokens: 4000,
   });
-  const out = res.content.find((b) => b.type === "text")?.text ?? "";
   const raw = extractArray(out);
 
   const items: CaptureResult["items"] = [];
