@@ -2,9 +2,16 @@ import pg from "pg";
 
 const { Pool } = pg;
 
-export function makePool(
-  connectionString = process.env.DATABASE_URL ?? process.env.TEST_DATABASE_URL
-): pg.Pool {
+// Under Vitest, prefer TEST_DATABASE_URL (which carries search_path=test,public)
+// so tests operate in the `test` schema and never truncate live `public` data.
+// Outside tests, use DATABASE_URL.
+function resolveConnectionString(): string | undefined {
+  return process.env.VITEST
+    ? process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL
+    : process.env.DATABASE_URL ?? process.env.TEST_DATABASE_URL;
+}
+
+export function makePool(connectionString = resolveConnectionString()): pg.Pool {
   if (!connectionString) throw new Error("DATABASE_URL is not set");
   return new Pool({ connectionString });
 }

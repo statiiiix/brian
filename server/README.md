@@ -18,6 +18,11 @@ Standalone TypeScript service. See `../CompanyBrain.md` and
 Set `TEST_DATABASE_URL` to a Postgres+pgvector DB, then `npm test`.
 DB-backed tests are skipped if it is unset; pure-logic tests always run.
 
+Tests run in a dedicated `test` schema (via `?options=-c search_path=test,public`
+on `TEST_DATABASE_URL`) so truncation in `resetDb` never touches live `public`
+data — even when both URLs point at the same database. Under Vitest the shared
+pool also prefers `TEST_DATABASE_URL`.
+
 ## Knowledge capture (v2)
 The brain stores two things: **skills** (executable processes) and **context**
 (goals/decisions/preferences that inform the agent).
