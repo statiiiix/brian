@@ -8,4 +8,6 @@ export async function resetDb(pool: pg.Pool): Promise<void> {
   await pool.query("delete from skill_versions");
   await pool.query("delete from skill_links");
   await pool.query("delete from skills");
+  await pool.query("delete from context_versions");
+  await pool.query("delete from context_entries");
 }
