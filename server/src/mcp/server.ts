@@ -2,6 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { findSkill, getSkill } from "../skills/repo.js";
 import { getOrder, issueRefund } from "./businessTools.js";
+import { capture } from "../ingestion/capture.js";
+import { findContextWithDistance } from "../context/repo.js";
 
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: "brian", version: "0.1.0" });
@@ -46,6 +48,30 @@ export function buildMcpServer(): McpServer {
     },
     async ({ order_id, amount }) => {
       return { content: [{ type: "text", text: JSON.stringify(issueRefund(order_id, amount)) }] };
+    }
+  );
+
+  server.registerTool(
+    "capture",
+    {
+      description: "Capture a work session into the brain: classify into skills/context and file each into the right place.",
+      inputSchema: { text: z.string() },
+    },
+    async ({ text }) => {
+      const result = await capture(text);
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    }
+  );
+
+  server.registerTool(
+    "find_context",
+    {
+      description: "Find the most relevant active context (goals/decisions/preferences) for a query.",
+      inputSchema: { query: z.string() },
+    },
+    async ({ query }) => {
+      const hit = await findContextWithDistance(query);
+      return { content: [{ type: "text", text: hit ? JSON.stringify(hit.entry) : "NO_MATCHING_CONTEXT" }] };
     }
   );
 

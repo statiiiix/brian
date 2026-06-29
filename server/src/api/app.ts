@@ -6,6 +6,11 @@ import { parseNewSkill, parseUpdateSkill, ValidationError } from "../skills/vali
 import { listExecutions } from "../feedback/executions.js";
 import { draftFromText } from "../ingestion/draftFromText.js";
 import type { SkillStatus } from "../skills/types.js";
+import { createContext, getContext, listContext, updateContext, retireContext, listContextVersions } from "../context/repo.js";
+import { parseNewContext, parseUpdateContext } from "../context/validation.js";
+import { capture } from "../ingestion/capture.js";
+import { ingestBulk } from "../ingestion/bulk.js";
+import type { ContextStatus } from "../context/types.js";
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -60,6 +65,43 @@ export function buildApp(): FastifyInstance {
     const skill = await draftFromText(text);
     return reply.code(201).send(skill);
   });
+
+  app.post("/api/capture", async (req, reply) => {
+    const text = (req.body as any)?.text;
+    if (typeof text !== "string" || text.trim().length === 0) return reply.code(400).send({ error: "text is required" });
+    return capture(text);
+  });
+
+  app.post("/api/ingest/bulk", async (req, reply) => {
+    const docs = (req.body as any)?.docs;
+    if (!Array.isArray(docs)) return reply.code(400).send({ error: "docs array is required" });
+    return { results: await ingestBulk(docs) };
+  });
+
+  app.get("/api/context", async (req) => {
+    const status = (req.query as any)?.status as ContextStatus | undefined;
+    return listContext(status);
+  });
+
+  app.get("/api/context/:id", async (req, reply) => {
+    const c = await getContext((req.params as any).id);
+    if (!c) return reply.code(404).send({ error: "context not found" });
+    return c;
+  });
+
+  app.post("/api/context", async (req, reply) => {
+    const input = parseNewContext(req.body);
+    return reply.code(201).send(await createContext(input));
+  });
+
+  app.put("/api/context/:id", async (req) =>
+    updateContext((req.params as any).id, parseUpdateContext(req.body), "api"));
+
+  app.post("/api/context/:id/retire", async (req) =>
+    retireContext((req.params as any).id));
+
+  app.get("/api/context/:id/versions", async (req) =>
+    listContextVersions((req.params as any).id));
 
   return app;
 }
