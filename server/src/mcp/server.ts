@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { findSkill, getSkill } from "../skills/repo.js";
-import { getOrder, issueRefund } from "./businessTools.js";
+import { businessAdapters } from "./adapters.js";
 import { capture } from "../ingestion/capture.js";
 import { findContextWithDistance } from "../context/repo.js";
 
@@ -31,25 +31,20 @@ export function buildMcpServer(): McpServer {
     }
   );
 
-  server.registerTool(
-    "get_order",
-    { description: "Look up an order by id.", inputSchema: { order_id: z.string() } },
-    async ({ order_id }) => {
-      const order = getOrder(order_id);
-      return { content: [{ type: "text", text: order ? JSON.stringify(order) : "NOT_FOUND" }] };
-    }
-  );
-
-  server.registerTool(
-    "issue_refund",
-    {
-      description: "Issue a refund for an order.",
-      inputSchema: { order_id: z.string(), amount: z.number() },
-    },
-    async ({ order_id, amount }) => {
-      return { content: [{ type: "text", text: JSON.stringify(issueRefund(order_id, amount)) }] };
-    }
-  );
+  for (const tool of businessAdapters()) {
+    server.registerTool(
+      tool.name,
+      { description: tool.description, inputSchema: tool.inputSchema },
+      async (args: Record<string, unknown>) => {
+        const result = await tool.handler(args);
+        return {
+          content: [
+            { type: "text" as const, text: result == null ? "NOT_FOUND" : JSON.stringify(result) },
+          ],
+        };
+      }
+    );
+  }
 
   server.registerTool(
     "capture",
