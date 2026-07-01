@@ -12,6 +12,7 @@ import { parseNewContext, parseUpdateContext } from "../context/validation.js";
 import { capture } from "../ingestion/capture.js";
 import { ingestBulk } from "../ingestion/bulk.js";
 import type { ContextStatus } from "../context/types.js";
+import { registerMcpHttp } from "../mcp/http.js";
 
 function bearerMatches(header: string | undefined, expected: string): boolean {
   if (!header?.startsWith("Bearer ")) return false;
@@ -123,6 +124,8 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
 
   app.get("/api/context/:id/versions", async (req) =>
     listContextVersions((req.params as any).id));
+
+  registerMcpHttp(app);
 
   return app;
 }
