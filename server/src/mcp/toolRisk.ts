@@ -7,7 +7,9 @@ const REGISTRY: Record<string, ToolRisk> = {
   find_skill: "safe",
   get_skill: "safe",
   find_context: "safe",
+  create_email_draft: "safe", // reversible: a human reviews/sends/deletes the draft
   issue_refund: "destructive",
+  send_email: "destructive", // irreversible once sent
   post_reply: "destructive",
   page_oncall: "destructive",
 };

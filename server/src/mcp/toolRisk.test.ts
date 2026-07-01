@@ -9,6 +9,12 @@ describe("toolRisk", () => {
   it("defaults unknown tools to destructive", () => {
     expect(toolRisk("delete_everything")).toBe("destructive");
   });
+  it("classifies gmail tools: draft is safe, send is destructive", () => {
+    expect(toolRisk("create_email_draft")).toBe("safe");
+    expect(toolRisk("send_email")).toBe("destructive");
+    expect(skillIsAutoSafe(["create_email_draft"])).toBe(true);
+    expect(skillIsAutoSafe(["create_email_draft", "send_email"])).toBe(false);
+  });
 });
 
 describe("skillIsAutoSafe", () => {
