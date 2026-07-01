@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "brian": {
+      "command": "npm",
+      "args": ["--prefix", "server", "run", "mcp"]
+    }
+  }
+}
