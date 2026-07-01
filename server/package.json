@@ -10,7 +10,9 @@
     "migrate": "tsx src/db/migrate.ts",
     "seed": "tsx src/seed.ts",
     "api": "tsx src/api/index.ts",
-    "mcp": "tsx src/mcp/index.ts"
+    "mcp": "tsx src/mcp/index.ts",
+    "review": "tsx src/review/cli.ts",
+    "gmail:auth": "tsx src/gmail/authCli.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
