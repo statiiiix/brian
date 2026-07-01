@@ -4,6 +4,7 @@ import { findSkill, getSkill } from "../skills/repo.js";
 import { businessAdapters } from "./adapters.js";
 import { capture } from "../ingestion/capture.js";
 import { findContextWithDistance } from "../context/repo.js";
+import { logExecution } from "../feedback/executions.js";
 
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: "brian", version: "0.1.0" });
@@ -67,6 +68,27 @@ export function buildMcpServer(): McpServer {
     async ({ query }) => {
       const hit = await findContextWithDistance(query);
       return { content: [{ type: "text", text: hit ? JSON.stringify(hit.entry) : "NO_MATCHING_CONTEXT" }] };
+    }
+  );
+
+  server.registerTool(
+    "log_execution",
+    {
+      description:
+        "Log a skill execution to the feedback loop: what was asked, what was done, and the outcome. Call this after finishing (or escalating) a task.",
+      inputSchema: {
+        skill_id: z.string().nullable(),
+        skill_version: z.number().nullable(),
+        task_input: z.string(),
+        actions_taken: z.string(),
+        outcome: z.enum(["completed", "escalated", "failed"]),
+      },
+    },
+    async ({ skill_id, skill_version, task_input, actions_taken, outcome }) => {
+      const row = await logExecution({
+        skill_id, skill_version, task_input, actions_taken, outcome, human_override: null,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(row) }] };
     }
   );
 
