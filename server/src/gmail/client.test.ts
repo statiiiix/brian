@@ -4,7 +4,7 @@ import { gmailConfigFromEnv, createDraft, sendEmail, type GmailConfig } from "./
 const cfg: GmailConfig = { clientId: "cid", clientSecret: "sec", refreshToken: "rt" };
 
 function fakeFetch(routes: Record<string, unknown>) {
-  return vi.fn(async (url: string | URL) => {
+  return vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
     const key = Object.keys(routes).find((k) => String(url).includes(k));
     if (!key) return { ok: false, status: 404, text: async () => "no route", json: async () => ({}) } as any;
     return { ok: true, status: 200, json: async () => routes[key], text: async () => "" } as any;
