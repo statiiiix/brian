@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import {
   createSkill, getSkill, listSkills, updateSkill, setStatus, listVersions, NotFoundError,
 } from "../skills/repo.js";
@@ -11,9 +12,30 @@ import { parseNewContext, parseUpdateContext } from "../context/validation.js";
 import { capture } from "../ingestion/capture.js";
 import { ingestBulk } from "../ingestion/bulk.js";
 import type { ContextStatus } from "../context/types.js";
+import { registerMcpHttp } from "../mcp/http.js";
 
-export function buildApp(): FastifyInstance {
+function bearerMatches(header: string | undefined, expected: string): boolean {
+  if (!header?.startsWith("Bearer ")) return false;
+  const got = Buffer.from(header.slice("Bearer ".length));
+  const want = Buffer.from(expected);
+  return got.length === want.length && timingSafeEqual(got, want);
+}
+
+export interface AppOptions {
+  authToken?: string | null;
+}
+
+export function buildApp(opts: AppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: false });
+  const authToken = opts.authToken ?? null;
+
+  if (authToken) {
+    app.addHook("onRequest", async (req, reply) => {
+      if (!bearerMatches(req.headers.authorization, authToken)) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
+    });
+  }
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof ValidationError) return reply.code(400).send({ error: err.issues.join("; ") });
@@ -102,6 +124,8 @@ export function buildApp(): FastifyInstance {
 
   app.get("/api/context/:id/versions", async (req) =>
     listContextVersions((req.params as any).id));
+
+  registerMcpHttp(app);
 
   return app;
 }
