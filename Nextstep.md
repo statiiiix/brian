@@ -39,10 +39,20 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
      and the system-prompt contract in `docs/agent-contract.md`.
      **Cloud deploy deliberately deferred** — runs locally until a real external
      agent needs it.
+- **Brian-bench Phase 1 (2026-07-02):** retrieval benchmark at scale
+  (`npm run bench`, spec `docs/superpowers/specs/2026-07-02-brian-bench-design.md`).
+  120 skills drafted from real GitLab-handbook pages in an isolated `bench` schema;
+  120 labeled queries. **Result: 85.0% top-1 / 91.7% top-3**
+  (`docs/bench/2026-07-02-retrieval.md`). The bench exposed a real production bug —
+  ivfflat embedding indexes trained on empty tables silently returned empty/partial
+  results at 100+ rows (first run scored 12.5%) — fixed by migration `003_hnsw.sql`
+  (HNSW), applied to live. New repo fn `findSkillsWithDistance` (top-k).
+  Phases 2–3 (500-task inbox marathon w/ adversarial slice; learning curve) are
+  specced in the design doc, not built.
 - **LLM:** OpenAI only (no Claude). Embeddings `text-embedding-3-small` (1536);
   generative `gpt-5.4-mini` via `LLM_MODEL`, using **Structured Outputs** (strict
   `json_schema`) because it's a reasoning model.
-- **Status:** 74/74 tests pass on the live DB.
+- **Status:** 81/81 tests pass on the live DB.
 
 ### Environment / infra facts (don't re-derive)
 - Supabase project **brian**, ref `foydcrwyakpkisxtvzgr` (Postgres 17 + pgvector).
