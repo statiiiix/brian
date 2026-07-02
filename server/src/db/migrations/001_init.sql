@@ -20,7 +20,8 @@ create table if not exists skills (
   embedding         vector(1536)
 );
 
-create index if not exists skills_embedding_idx on skills using ivfflat (embedding vector_cosine_ops);
+-- embedding index: see 003_hnsw.sql (ivfflat replaced by hnsw; keeping the old
+-- create here would rebuild a dropped index on every run — these files re-run).
 
 create table if not exists skill_versions (
   id          uuid primary key default gen_random_uuid(),
