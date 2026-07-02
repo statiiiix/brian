@@ -11,7 +11,7 @@ create table if not exists context_entries (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
-create index if not exists context_entries_embedding_idx on context_entries using ivfflat (embedding vector_cosine_ops);
+-- embedding index: see 003_hnsw.sql.
 
 create table if not exists context_versions (
   id          uuid primary key default gen_random_uuid(),

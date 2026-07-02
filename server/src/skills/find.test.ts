@@ -15,7 +15,7 @@ vi.mock("../db/embed.js", () => ({
 import pg from "pg";
 import { runMigrations } from "../db/migrate.js";
 import { resetDb } from "../test/resetDb.js";
-import { createSkill, setStatus, findSkill } from "./repo.js";
+import { createSkill, setStatus, findSkill, findSkillsWithDistance } from "./repo.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
@@ -48,5 +48,26 @@ d("findSkill", () => {
     const hit = await findSkill("refund please", pool);
     expect(hit).toBeNull();
     expect(refund.status).toBe("draft");
+  });
+
+  it("findSkillsWithDistance returns k active skills nearest-first, excluding drafts", async () => {
+    const refund = await createSkill(
+      { name: "Refund Handling", trigger: "customer wants a refund", inputs: [], procedure: "refund flow",
+        hard_rules: [], tools: [], guardrails: [], escalation_target: null, examples: [], owner: null }, pool);
+    const incident = await createSkill(
+      { name: "Incident Response", trigger: "production outage sev-2", inputs: [], procedure: "incident flow",
+        hard_rules: [], tools: [], guardrails: [], escalation_target: null, examples: [], owner: null }, pool);
+    const draft = await createSkill(
+      { name: "Refund Drafts", trigger: "refund refund refund", inputs: [], procedure: "p",
+        hard_rules: [], tools: [], guardrails: [], escalation_target: null, examples: [], owner: null }, pool);
+    await setStatus(refund.id, "active", pool);
+    await setStatus(incident.id, "active", pool);
+    // draft stays draft
+
+    const hits = await findSkillsWithDistance("a customer is asking for a refund", 3, pool);
+    expect(hits.length).toBe(2); // draft excluded even though it matches
+    expect(hits[0].skill.name).toBe("Refund Handling");
+    expect(hits[0].distance).toBeLessThanOrEqual(hits[1].distance);
+    expect(hits.map((h) => h.skill.id)).not.toContain(draft.id);
   });
 });
