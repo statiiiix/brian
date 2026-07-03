@@ -26,9 +26,14 @@ export default function Nav() {
           <a href="#pricing">Pricing</a>
           <a href="#faq">FAQ</a>
         </div>
-        <a href="#cta" className="btn btn--primary btn--sm">
-          Get a demo
-        </a>
+        <div className="nav-actions">
+          <a href="/login" className="nav-login">
+            Log in
+          </a>
+          <a href="#cta" className="btn btn--primary btn--sm">
+            Get a demo
+          </a>
+        </div>
       </div>
     </nav>
   );

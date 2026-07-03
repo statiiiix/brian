@@ -67,6 +67,26 @@
   color: var(--fg);
 }
 
+.nav-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.nav-login {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  transition: color 150ms ease;
+}
+
+.nav-login:hover,
+.nav-login:focus-visible {
+  color: var(--fg);
+}
+
 @media (max-width: 860px) {
   .nav-links {
     display: none;
