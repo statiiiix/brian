@@ -1,0 +1,48 @@
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.14rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.status-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.status-badge--active,
+.status-badge--completed {
+  border-color: rgba(61, 214, 140, 0.35);
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.status-badge--needs_review,
+.status-badge--ready {
+  border-color: rgba(245, 166, 35, 0.35);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.status-badge--retired,
+.status-badge--failed,
+.status-badge--abandoned {
+  border-color: rgba(242, 85, 90, 0.35);
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+.status-badge--escalated {
+  border-color: rgba(245, 166, 35, 0.35);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
