@@ -1,3 +1,22 @@
 .skills-list .dash-chip {
   text-transform: capitalize;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.skills-chip-count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-2);
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+  line-height: 1.4;
+}
+
+.dash-chip.is-active .skills-chip-count {
+  color: var(--accent);
+  background: rgba(245, 166, 35, 0.15);
 }

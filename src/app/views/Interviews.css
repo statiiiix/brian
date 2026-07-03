@@ -1,15 +1,18 @@
 .interviews-new {
   display: flex;
   align-items: flex-end;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: 1.1rem;
+  margin-bottom: 1.75rem;
   flex-wrap: wrap;
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(245, 166, 35, 0.05), transparent 45%),
+    var(--bg-raised);
 }
 
 .interviews-new-fields {
   display: grid;
   grid-template-columns: minmax(16rem, 2fr) minmax(12rem, 1fr);
-  gap: 1rem;
+  gap: 1.1rem;
   flex: 1;
 }
 
@@ -24,5 +27,9 @@
 @media (max-width: 720px) {
   .interviews-new-fields {
     grid-template-columns: 1fr;
+  }
+
+  .interviews-new .dash-btn {
+    width: 100%;
   }
 }

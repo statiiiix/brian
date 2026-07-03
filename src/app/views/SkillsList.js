@@ -1,13 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { icons } from '../../components/Icon';
 import { api } from '../api';
+import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
+import TableSkeleton from '../components/TableSkeleton';
 import './SkillsList.css';
 
 const FILTERS = ['all', 'active', 'draft', 'needs_review', 'retired'];
 
 function fmtDate(iso) {
-  return iso ? new Date(iso).toLocaleDateString() : '—';
+  return iso
+    ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : '—';
 }
 
 export default function SkillsList() {
@@ -16,10 +21,19 @@ export default function SkillsList() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const q = filter === 'all' ? '' : `?status=${filter}`;
-    setSkills(null);
-    api(`/api/skills${q}`).then(setSkills).catch((e) => setError(e.message));
-  }, [filter]);
+    api('/api/skills').then(setSkills).catch((e) => setError(e.message));
+  }, []);
+
+  const counts = useMemo(() => {
+    const c = { all: skills?.length || 0 };
+    for (const s of skills || []) c[s.status] = (c[s.status] || 0) + 1;
+    return c;
+  }, [skills]);
+
+  const visible = useMemo(
+    () => (skills || []).filter((s) => filter === 'all' || s.status === filter),
+    [skills, filter]
+  );
 
   return (
     <div className="skills-list">
@@ -42,18 +56,35 @@ export default function SkillsList() {
             onClick={() => setFilter(f)}
           >
             {f === 'all' ? 'All' : f.replace('_', ' ')}
+            {skills !== null && (
+              <span className="skills-chip-count">{counts[f] || 0}</span>
+            )}
           </button>
         ))}
       </div>
 
       {error && <p className="dash-error" role="alert">{error}</p>}
-      {!error && skills === null && <p className="dash-loading">Loading skills…</p>}
-      {skills !== null && skills.length === 0 && (
-        <div className="dash-card dash-empty">
-          No skills here yet. Run an interview or capture a process to teach Brian.
-        </div>
+      {!error && skills === null && <TableSkeleton rows={6} />}
+
+      {skills !== null && visible.length === 0 && (
+        <EmptyState
+          icon={icons.rules}
+          title={filter === 'all' ? 'No skills yet' : `No ${filter.replace('_', ' ')} skills`}
+          action={
+            filter === 'all' ? (
+              <Link to="/app/interviews" className="dash-btn dash-btn--primary">
+                Start an interview
+              </Link>
+            ) : null
+          }
+        >
+          {filter === 'all'
+            ? 'Run an interview or capture a process to teach Brian its first skill.'
+            : 'Try a different filter — nothing matches this status right now.'}
+        </EmptyState>
       )}
-      {skills !== null && skills.length > 0 && (
+
+      {skills !== null && visible.length > 0 && (
         <div className="dash-table-wrap">
           <table className="dash-table">
             <thead>
@@ -66,7 +97,7 @@ export default function SkillsList() {
               </tr>
             </thead>
             <tbody>
-              {skills.map((s) => (
+              {visible.map((s) => (
                 <tr key={s.id}>
                   <td><Link to={`/app/skills/${s.id}`}>{s.name}</Link></td>
                   <td>{s.owner || '—'}</td>

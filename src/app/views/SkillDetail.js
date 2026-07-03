@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { Icon, icons } from '../../components/Icon';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
 import './SkillDetail.css';
@@ -96,20 +97,33 @@ export default function SkillDetail() {
   }
 
   if (error && !skill) return <p className="dash-error" role="alert">{error}</p>;
-  if (!skill || !form) return <p className="dash-loading">Loading skill…</p>;
+  if (!skill || !form) {
+    return (
+      <div className="dash-skeleton" aria-hidden="true">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="dash-skeleton-row">
+            <span className="dash-skeleton-bar" style={{ width: `${60 - i * 10}%` }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="skill-detail">
       <header className="dash-head">
         <div>
-          <p className="skill-detail-back">
-            <Link to="/app/skills">← Skills</Link>
+          <p className="dash-back">
+            <Link to="/app/skills">
+              <Icon path={icons.arrowLeft} size={14} />
+              Skills
+            </Link>
           </p>
           <h1 className="dash-title">{skill.name}</h1>
-          <p className="dash-subtitle">
+          <p className="dash-subtitle skill-detail-meta">
             <StatusBadge status={skill.status} />
-            <span className="dash-mono"> v{skill.version}</span>
-            {skill.owner && <span> · owned by {skill.owner}</span>}
+            <span className="dash-mono">v{skill.version}</span>
+            {skill.owner && <span>owned by {skill.owner}</span>}
           </p>
         </div>
         <div className="skill-detail-actions">
@@ -127,7 +141,7 @@ export default function SkillDetail() {
       </header>
 
       {error && <p className="dash-error" role="alert">{error}</p>}
-      {notice && <p className="skill-detail-notice" role="status">{notice}</p>}
+      {notice && <p className="dash-notice" role="status">{notice}</p>}
 
       <div className="skill-detail-grid">
         <section className="dash-card">
@@ -209,8 +223,8 @@ export default function SkillDetail() {
 
         <aside>
           <section className="dash-card">
-            <h2 className="skill-detail-h2">Version history</h2>
-            {versions.length === 0 && <p className="dash-empty">No prior versions.</p>}
+            <h2 className="dash-h2">Version history</h2>
+            {versions.length === 0 && <p className="skill-detail-noversions">No prior versions.</p>}
             <ul className="skill-detail-versions">
               {versions.map((v) => (
                 <li key={v.id}>

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { icons } from '../../components/Icon';
 import { api } from '../api';
+import EmptyState from '../components/EmptyState';
 import './Capture.css';
 
 const ACTION_LABELS = {
@@ -44,7 +46,7 @@ export default function Capture() {
         </div>
       </header>
 
-      <form className="dash-card" onSubmit={submit}>
+      <form className="dash-card capture-card" onSubmit={submit}>
         <div className="dash-field">
           <label htmlFor="capture-text">Knowledge to capture</label>
           <textarea
@@ -58,6 +60,7 @@ export default function Capture() {
           />
         </div>
         <div className="capture-submit">
+          <span className="capture-hint">Brian extracts the durable rules and discards the noise.</span>
           <button type="submit" className="dash-btn dash-btn--primary" disabled={busy || !text.trim()}>
             {busy ? 'Capturing…' : 'Capture'}
           </button>
@@ -68,15 +71,22 @@ export default function Capture() {
 
       {items !== null && (
         <section className="capture-results" aria-label="Capture results">
-          <h2 className="capture-h2">Filed {items.length} item{items.length === 1 ? '' : 's'}</h2>
+          <h2 className="dash-h2">Filed {items.length} item{items.length === 1 ? '' : 's'}</h2>
           {items.length === 0 && (
-            <div className="dash-card dash-empty">Brian found nothing durable to keep from that text.</div>
+            <EmptyState icon={icons.capture} title="Nothing durable found">
+              Brian read the text but found no rules or context worth keeping.
+            </EmptyState>
           )}
           {items.map((item, i) => (
-            <div key={i} className="dash-card capture-item">
+            <div key={i} className="dash-card capture-item" style={{ animationDelay: `${i * 45}ms` }}>
               <span className={`capture-kind capture-kind--${item.kind}`}>{item.kind}</span>
               <span className="capture-action">{ACTION_LABELS[item.action] || item.action}</span>
-              <span className="dash-mono capture-conf">{Math.round(item.confidence * 100)}%</span>
+              <span className="capture-conf" title="Confidence">
+                <span className="capture-conf-track" aria-hidden="true">
+                  <span className="capture-conf-fill" style={{ width: `${Math.round(item.confidence * 100)}%` }} />
+                </span>
+                <span className="dash-mono">{Math.round(item.confidence * 100)}%</span>
+              </span>
               {item.kind === 'skill' && (
                 <Link className="capture-link" to={`/app/skills/${item.id}`}>View skill →</Link>
               )}

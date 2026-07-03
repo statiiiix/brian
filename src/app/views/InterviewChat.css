@@ -1,15 +1,7 @@
-.ivc-back {
-  margin: 0 0 0.4rem;
-  font-size: 0.82rem;
-}
-
-.ivc-back a {
-  color: var(--muted);
-  text-decoration: none;
-}
-
-.ivc-back a:hover {
-  color: var(--fg);
+.ivc-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .ivc-grid {
@@ -31,36 +23,63 @@
 .ivc-thread {
   flex: 1;
   min-height: 20rem;
-  max-height: 55vh;
+  max-height: 58vh;
   overflow-y: auto;
-  padding: 1.25rem;
+  padding: 1.4rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.1rem;
 }
 
 .ivc-msg {
   max-width: 85%;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.25rem;
+  animation: ivc-msg-in 220ms var(--ease) both;
+}
+
+@keyframes ivc-msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .ivc-msg p {
   margin: 0;
-  padding: 0.6rem 0.85rem;
-  border-radius: 10px;
+  padding: 0.65rem 0.95rem;
+  border-radius: 12px;
   font-size: 0.9rem;
   white-space: pre-wrap;
 }
 
 .ivc-msg-who {
-  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   color: var(--muted-2);
   padding: 0 0.25rem;
+}
+
+.ivc-msg-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  flex-shrink: 0;
 }
 
 .ivc-msg--brian {
@@ -68,9 +87,9 @@
 }
 
 .ivc-msg--brian p {
-  background: var(--bg-hover);
+  background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-left: 2px solid var(--accent);
+  border-top-left-radius: 4px;
   color: var(--fg);
 }
 
@@ -82,24 +101,65 @@
 .ivc-msg--expert p {
   background: var(--accent-dim);
   border: 1px solid rgba(245, 166, 35, 0.25);
+  border-top-right-radius: 4px;
   color: var(--fg);
 }
 
-.ivc-msg--thinking p {
-  color: var(--muted);
-  font-style: italic;
+/* Typing indicator — 3-dot pulse */
+
+.ivc-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 1.4em;
 }
+
+.ivc-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: ivc-typing 1.2s ease-in-out infinite;
+}
+
+.ivc-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.ivc-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes ivc-typing {
+  0%, 60%, 100% {
+    opacity: 0.35;
+    transform: none;
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+/* Composer */
 
 .ivc-input {
   display: flex;
   gap: 0.6rem;
   align-items: flex-end;
-  padding: 0.9rem 1.25rem;
+  padding: 0.9rem 1.1rem;
   border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.012);
 }
 
 .ivc-input .dash-textarea {
-  min-height: 2.6rem;
+  min-height: 2.7rem;
+}
+
+.ivc-send {
+  width: 42px;
+  min-width: 42px;
+  padding: 0.5rem;
 }
 
 .ivc-retry {
@@ -107,21 +167,30 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin: 0 1.25rem;
+  margin: 0.75rem 1.1rem;
 }
 
 .ivc-ready,
 .ivc-done {
-  padding: 0.9rem 1.25rem;
+  padding: 0.9rem 1.4rem;
   border-top: 1px solid var(--border);
   font-size: 0.88rem;
   color: var(--fg-secondary);
 }
 
+.ivc-done {
+  color: var(--green);
+  background: var(--green-dim);
+}
+
 .ivc-done a {
-  color: var(--accent);
+  color: var(--fg);
   text-decoration: none;
   font-weight: 500;
+}
+
+.ivc-done a:hover {
+  color: var(--accent);
 }
 
 /* --- Right rail ------------------------------------------------------------ */
@@ -134,17 +203,36 @@
   top: 1.5rem;
 }
 
-.ivc-h2 {
-  margin: 0 0 0.6rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+.ivc-coverage-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.ivc-coverage-head .dash-h2 {
+  margin: 0;
 }
 
 .ivc-progress {
-  margin: 0 0 0.75rem;
   color: var(--accent);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
+}
+
+.ivc-progress-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.ivc-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #d98a0f, var(--accent));
+  transition: width 400ms var(--ease);
 }
 
 .ivc-coverage {
@@ -153,7 +241,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
 .ivc-coverage li {
@@ -162,7 +250,7 @@
   gap: 0.55rem;
   font-size: 0.86rem;
   color: var(--muted);
-  transition: color 200ms ease;
+  transition: color 200ms var(--ease);
 }
 
 .ivc-coverage li.is-covered {
@@ -177,9 +265,9 @@
   height: 17px;
   border-radius: 5px;
   border: 1px solid var(--border-strong);
-  font-size: 0.7rem;
   color: var(--green);
   flex-shrink: 0;
+  transition: background 200ms var(--ease), border-color 200ms var(--ease);
 }
 
 .is-covered .ivc-check {
@@ -199,8 +287,8 @@
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin: 0.75rem 0 0.15rem;
+  letter-spacing: 0.07em;
+  margin: 0.8rem 0 0.15rem;
 }
 
 .ivc-draft dt:first-child {
@@ -224,24 +312,12 @@
 .ivc-draft-actions {
   display: flex;
   gap: 0.5rem;
-  margin-top: 1rem;
+  margin-top: 1.1rem;
   justify-content: flex-end;
   flex-wrap: wrap;
 }
 
-/* --- Utility / responsive ---------------------------------------------------- */
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
-}
+/* --- Responsive ---------------------------------------------------------------- */
 
 @media (max-width: 1024px) {
   .ivc-grid {

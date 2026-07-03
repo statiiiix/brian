@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { icons } from '../../components/Icon';
 import { api } from '../api';
+import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
+import TableSkeleton from '../components/TableSkeleton';
 import './Interviews.css';
 
 export default function Interviews() {
@@ -73,12 +76,14 @@ export default function Interviews() {
       </form>
 
       {error && <p className="dash-error" role="alert">{error}</p>}
-      {!error && interviews === null && <p className="dash-loading">Loading interviews…</p>}
+      {!error && interviews === null && <TableSkeleton rows={4} />}
+
       {interviews !== null && interviews.length === 0 && (
-        <div className="dash-card dash-empty">
-          No interviews yet. Start one above — it takes about five minutes.
-        </div>
+        <EmptyState icon={icons.review} title="No interviews yet">
+          Start one above — five minutes of questions turns tribal knowledge into a runnable skill.
+        </EmptyState>
       )}
+
       {interviews !== null && interviews.length > 0 && (
         <div className="dash-table-wrap">
           <table className="dash-table">
