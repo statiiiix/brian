@@ -13,6 +13,8 @@ import { capture } from "../ingestion/capture.js";
 import { ingestBulk } from "../ingestion/bulk.js";
 import type { ContextStatus } from "../context/types.js";
 import { registerMcpHttp } from "../mcp/http.js";
+import { findUserByEmail, verifyPassword } from "../auth/users.js";
+import { signUserToken, verifyUserToken, type TokenUser } from "../auth/jwt.js";
 
 function bearerMatches(header: string | undefined, expected: string): boolean {
   if (!header?.startsWith("Bearer ")) return false;
@@ -23,19 +25,48 @@ function bearerMatches(header: string | undefined, expected: string): boolean {
 
 export interface AppOptions {
   authToken?: string | null;
+  jwtSecret?: string | null;
 }
+
+declare module "fastify" {
+  interface FastifyRequest { user?: TokenUser }
+}
+
+const PUBLIC_PATHS = new Set(["/api/auth/login"]);
 
 export function buildApp(opts: AppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: false });
   const authToken = opts.authToken ?? null;
+  const jwtSecret = opts.jwtSecret ?? null;
 
-  if (authToken) {
+  if (authToken || jwtSecret) {
     app.addHook("onRequest", async (req, reply) => {
-      if (!bearerMatches(req.headers.authorization, authToken)) {
-        return reply.code(401).send({ error: "unauthorized" });
+      if (PUBLIC_PATHS.has(req.url.split("?")[0])) return;
+      if (authToken && bearerMatches(req.headers.authorization, authToken)) return;
+      if (jwtSecret && req.headers.authorization?.startsWith("Bearer ")) {
+        const u = verifyUserToken(req.headers.authorization.slice("Bearer ".length), jwtSecret);
+        if (u) { req.user = u; return; }
       }
+      return reply.code(401).send({ error: "unauthorized" });
     });
   }
+
+  app.post("/api/auth/login", async (req, reply) => {
+    if (!jwtSecret) return reply.code(500).send({ error: "auth not configured" });
+    const { email, password } = (req.body ?? {}) as { email?: string; password?: string };
+    if (!email || !password) return reply.code(400).send({ error: "email and password required" });
+    const u = await findUserByEmail(email);
+    if (!u || !(await verifyPassword(u.password_hash, password))) {
+      return reply.code(401).send({ error: "invalid credentials" });
+    }
+    const token = signUserToken({ id: u.id, email: u.email, role: u.role }, jwtSecret);
+    return { token, user: { id: u.id, email: u.email, name: u.name, role: u.role } };
+  });
+
+  app.get("/api/auth/me", async (req, reply) => {
+    if (!req.user) return reply.code(401).send({ error: "unauthorized" });
+    return req.user;
+  });
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof ValidationError) return reply.code(400).send({ error: err.issues.join("; ") });
