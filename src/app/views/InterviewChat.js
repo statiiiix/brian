@@ -1,3 +1,249 @@
+import { useEffect, useRef, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { api } from '../api';
+import StatusBadge from '../components/StatusBadge';
+import './InterviewChat.css';
+
+const COVERAGE_FIELDS = [
+  ['trigger', 'Trigger'],
+  ['inputs', 'Inputs'],
+  ['procedure', 'Procedure'],
+  ['hard_rules', 'Hard rules'],
+  ['guardrails', 'Guardrails'],
+  ['escalation_target', 'Escalation'],
+  ['examples', 'Examples'],
+];
+
 export default function InterviewChat() {
-  return <div>InterviewChat</div>;
+  const { id } = useParams();
+  const [iv, setIv] = useState(null);
+  const [answer, setAnswer] = useState('');
+  const [pendingAnswer, setPendingAnswer] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const threadRef = useRef(null);
+
+  useEffect(() => {
+    api(`/api/interviews/${id}`).then(setIv).catch((e) => setError(e.message));
+  }, [id]);
+
+  useEffect(() => {
+    if (threadRef.current) {
+      threadRef.current.scrollTop = threadRef.current.scrollHeight;
+    }
+  }, [iv, busy]);
+
+  async function sendContent(content) {
+    setBusy(true);
+    setError('');
+    try {
+      const updated = await api(`/api/interviews/${id}/messages`, {
+        method: 'POST',
+        body: { content },
+      });
+      setIv(updated);
+      setPendingAnswer(null);
+      setAnswer('');
+    } catch (e) {
+      setPendingAnswer(content);
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function send(e) {
+    e.preventDefault();
+    if (!answer.trim() || busy) return;
+    sendContent(answer.trim());
+  }
+
+  function onKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send(e);
+    }
+  }
+
+  async function approve(activate) {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api(`/api/interviews/${id}/approve`, {
+        method: 'POST',
+        body: { activate },
+      });
+      setIv(res.interview);
+      setResult({ skill: res.skill, activated: activate });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function abandon() {
+    if (!window.confirm('Abandon this interview? The conversation is kept but Brian stops asking.')) return;
+    try {
+      setIv(await api(`/api/interviews/${id}/abandon`, { method: 'POST' }));
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  if (error && !iv) return <p className="dash-error" role="alert">{error}</p>;
+  if (!iv) return <p className="dash-loading">Loading interview…</p>;
+
+  const covered = COVERAGE_FIELDS.filter(([k]) => iv.coverage[k]).length;
+  const draft = iv.draft;
+
+  return (
+    <div className="ivc">
+      <header className="dash-head">
+        <div>
+          <p className="ivc-back"><Link to="/app/interviews">← Interviews</Link></p>
+          <h1 className="dash-title">{iv.topic}</h1>
+          <p className="dash-subtitle">
+            <StatusBadge status={iv.status} />
+            {iv.owner && <span> · expert: {iv.owner}</span>}
+          </p>
+        </div>
+        {iv.status === 'active' && (
+          <button type="button" className="dash-btn dash-btn--ghost" onClick={abandon}>
+            Abandon
+          </button>
+        )}
+      </header>
+
+      <div className="ivc-grid">
+        <section className="ivc-chat dash-card">
+          <div className="ivc-thread" ref={threadRef}>
+            {iv.messages.map((m, i) => (
+              <div key={i} className={`ivc-msg ivc-msg--${m.role}`}>
+                <span className="ivc-msg-who">{m.role === 'brian' ? 'Brian' : 'You'}</span>
+                <p>{m.content}</p>
+              </div>
+            ))}
+            {busy && (
+              <div className="ivc-msg ivc-msg--brian ivc-msg--thinking">
+                <span className="ivc-msg-who">Brian</span>
+                <p>Thinking…</p>
+              </div>
+            )}
+          </div>
+
+          {error && iv.status === 'active' && (
+            <div className="dash-error ivc-retry" role="alert">
+              <span>{error}</span>
+              {pendingAnswer && (
+                <button
+                  type="button"
+                  className="dash-btn dash-btn--ghost"
+                  onClick={() => sendContent(pendingAnswer)}
+                  disabled={busy}
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+          )}
+
+          {iv.status === 'active' && (
+            <form className="ivc-input" onSubmit={send}>
+              <label htmlFor="ivc-answer" className="sr-only">Your answer</label>
+              <textarea
+                id="ivc-answer"
+                className="dash-textarea"
+                rows={2}
+                placeholder="Answer in plain language — Brian asks the follow-ups."
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                onKeyDown={onKeyDown}
+                disabled={busy}
+              />
+              <button type="submit" className="dash-btn dash-btn--primary" disabled={busy || !answer.trim()}>
+                Send
+              </button>
+            </form>
+          )}
+
+          {iv.status === 'ready' && draft && !result && (
+            <div className="ivc-ready" role="status">
+              Brian has everything it needs — review the draft on the right and approve it.
+            </div>
+          )}
+
+          {result && (
+            <div className="ivc-done" role="status">
+              {result.activated
+                ? 'Skill is live. Agents can retrieve and run it now. '
+                : 'Saved as a draft in the review queue. '}
+              <Link to={`/app/skills/${result.skill.id}`}>View skill →</Link>
+            </div>
+          )}
+        </section>
+
+        <aside className="ivc-rail">
+          <section className="dash-card">
+            <h2 className="ivc-h2">Coverage</h2>
+            <p className="ivc-progress dash-mono">{covered}/{COVERAGE_FIELDS.length}</p>
+            <ul className="ivc-coverage">
+              {COVERAGE_FIELDS.map(([key, label]) => (
+                <li key={key} className={iv.coverage[key] ? 'is-covered' : ''}>
+                  <span className="ivc-check" aria-hidden="true">
+                    {iv.coverage[key] ? '✓' : ''}
+                  </span>
+                  {label}
+                  <span className="sr-only">{iv.coverage[key] ? ' covered' : ' not yet covered'}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          {draft && (iv.status === 'ready' || iv.status === 'completed') && (
+            <section className="dash-card ivc-draft">
+              <h2 className="ivc-h2">Drafted skill</h2>
+              <dl>
+                <dt>Name</dt>
+                <dd>{draft.name}</dd>
+                <dt>Trigger</dt>
+                <dd>{draft.trigger}</dd>
+                <dt>Procedure</dt>
+                <dd className="ivc-pre">{draft.procedure}</dd>
+                {draft.hard_rules?.length > 0 && (
+                  <>
+                    <dt>Hard rules</dt>
+                    <dd><ul>{draft.hard_rules.map((r, i) => <li key={i}>{r}</li>)}</ul></dd>
+                  </>
+                )}
+                {draft.guardrails?.length > 0 && (
+                  <>
+                    <dt>Guardrails</dt>
+                    <dd><ul>{draft.guardrails.map((g, i) => <li key={i}>{g}</li>)}</ul></dd>
+                  </>
+                )}
+                {draft.escalation_target && (
+                  <>
+                    <dt>Escalates to</dt>
+                    <dd>{draft.escalation_target}</dd>
+                  </>
+                )}
+              </dl>
+              {iv.status === 'ready' && !result && (
+                <div className="ivc-draft-actions">
+                  <button type="button" className="dash-btn dash-btn--ghost" onClick={() => approve(false)} disabled={busy}>
+                    Save as draft
+                  </button>
+                  <button type="button" className="dash-btn dash-btn--primary" onClick={() => approve(true)} disabled={busy}>
+                    Approve &amp; activate
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
 }
