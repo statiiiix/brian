@@ -65,3 +65,25 @@ export const CAPTURE_JSON_SCHEMA: Record<string, unknown> = {
     },
   },
 };
+
+export const INTERVIEW_TURN_JSON_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  required: ["status", "question", "coverage", "draft"],
+  properties: {
+    status: { type: "string", enum: ["asking", "ready"] },
+    question: { type: ["string", "null"] },
+    coverage: {
+      type: "object",
+      additionalProperties: false,
+      required: ["trigger", "inputs", "procedure", "hard_rules", "guardrails", "escalation_target", "examples"],
+      properties: {
+        trigger: { type: "boolean" }, inputs: { type: "boolean" },
+        procedure: { type: "boolean" }, hard_rules: { type: "boolean" },
+        guardrails: { type: "boolean" }, escalation_target: { type: "boolean" },
+        examples: { type: "boolean" },
+      },
+    },
+    draft: { anyOf: [SKILL_JSON_SCHEMA, { type: "null" }] },
+  },
+};
