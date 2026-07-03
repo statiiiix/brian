@@ -237,6 +237,18 @@ GET    /api/skills/:id/versions    -> SkillVersion[]     (version history)
 GET    /api/skills/:id/executions  -> Execution[]        (execution log for this skill)
 POST   /api/skills/:id/draft-from-text -> Skill          (Phase 2: Claude drafts a skill from pasted text)
 GET    /api/executions             -> Execution[]        (recent executions across all skills)
+
+-- Auth (added 2026-07-03: dashboard login; /api/* and /mcp accept BRIAN_API_TOKEN or a user JWT)
+POST   /api/auth/login             {email, password}     -> { token, user }
+GET    /api/auth/me                -> TokenUser           (JWT only)
+
+-- Interview mode (added 2026-07-03: Brian interviews a process expert, drafts the skill)
+POST   /api/interviews             {topic, owner?}       -> Interview (first question included)
+GET    /api/interviews             -> Interview[]
+GET    /api/interviews/:id         -> Interview
+POST   /api/interviews/:id/messages {content}            -> Interview (next question, or ready + draft)
+POST   /api/interviews/:id/approve  {activate?: boolean} -> { interview, skill }
+POST   /api/interviews/:id/abandon  -> Interview
 ```
 
 All write endpoints validate against the schema and return the updated object. Errors return `{ error: string }` with an appropriate status code.

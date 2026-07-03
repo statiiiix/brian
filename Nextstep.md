@@ -69,6 +69,25 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
   `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`.
 - Consider rotating the OpenAI key (it was shared in chat).
 
+- **Interview mode + dashboard (2026-07-03, branch `interview-mode-dashboard`):**
+  spec `docs/superpowers/specs/2026-07-03-interview-mode-dashboard-design.md`.
+  Backend: migration `004_users_interviews.sql` (users + interviews, RLS),
+  bcrypt+JWT auth (`src/auth/`), dual-mode guard (static `BRIAN_API_TOKEN` **or**
+  user JWT on `/api/*` + `/mcp`; `POST /api/auth/login`, `GET /api/auth/me`),
+  `npm run seed:admin` (env-driven: `ADMIN_EMAIL`/`ADMIN_PASSWORD`/`AUTH_JWT_SECRET`),
+  interview engine (`src/interviews/`, one Structured-Outputs call per turn:
+  next question OR finished draft + 7-field coverage map, 25-question cap,
+  retry-once on malformed output), REST: `POST/GET /api/interviews`,
+  `POST /api/interviews/:id/messages|approve|abandon`. 103/103 tests.
+  Frontend: react-router v6 (`/` landing, `/login`, `/app/*` JWT-gated), CRA
+  proxy → :3001, nav "Log in" button, dashboard (`src/app/`, one CSS per
+  component): Skills list/editor + versions, Review queue (web replacement for
+  the CLI), Interviews list + chat with live coverage checklist and
+  approve-to-active draft panel, Capture box, Executions log.
+  **Verified live end to end:** JWT login → real-LLM interview (2 rich answers →
+  faithful draft, zero invented policy) → approve → active → `find_skill`
+  retrieves it ("Approve customer discount requests").
+
 ---
 
 ## Next steps (prioritized)
@@ -82,10 +101,11 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
   and the full e2e ("a customer asked X — handle it" → draft in Gmail).
 - Rotate the OpenAI API key.
 
-### 2. Founder's React UI (their track)
-Skill list, editor with version history, capture paste box, execution log, and a
-review queue highlighting `draft`/`needs_review`. The JSON API contract is ready
-(`CompanyBrain.md` → API Contract); auth is a bearer header.
+### 2. Dashboard follow-ups
+The dashboard is built (see above). Remaining ideas: shareable interview links
+for non-admin experts, review-queue count badge in the sidebar, interview
+resume-from-abandoned. Next capture milestone per the 2026-07-03 brainstorm:
+**connectors** (Slack/Gmail/tickets → drafts into the same review queue).
 
 ### 3. Later / deferred (intentional anti-goals until real use proves them out)
 - Cloud hosting of the HTTP surface (Fly/Railway) — everything is transport-ready;
