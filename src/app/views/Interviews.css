@@ -1,0 +1,28 @@
+.interviews-new {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.interviews-new-fields {
+  display: grid;
+  grid-template-columns: minmax(16rem, 2fr) minmax(12rem, 1fr);
+  gap: 1rem;
+  flex: 1;
+}
+
+.interviews-new .dash-field {
+  margin-bottom: 0;
+}
+
+.interviews-new .dash-btn {
+  margin-bottom: 1px;
+}
+
+@media (max-width: 720px) {
+  .interviews-new-fields {
+    grid-template-columns: 1fr;
+  }
+}

@@ -13,16 +13,20 @@
     "mcp": "tsx src/mcp/index.ts",
     "review": "tsx src/review/cli.ts",
     "gmail:auth": "tsx src/gmail/authCli.ts",
-    "bench": "tsx src/bench/cli.ts"
+    "bench": "tsx src/bench/cli.ts",
+    "seed:admin": "tsx src/scripts/seedAdmin.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
+    "bcryptjs": "^3.0.3",
     "fastify": "^5.6.0",
+    "jsonwebtoken": "^9.0.3",
     "openai": "^6.7.0",
     "pg": "^8.16.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.10.0",
     "@types/pg": "^8.15.0",
     "tsx": "^4.20.0",

@@ -13,6 +13,14 @@ import { capture } from "../ingestion/capture.js";
 import { ingestBulk } from "../ingestion/bulk.js";
 import type { ContextStatus } from "../context/types.js";
 import { registerMcpHttp } from "../mcp/http.js";
+import { findUserByEmail, verifyPassword } from "../auth/users.js";
+import { signUserToken, verifyUserToken, type TokenUser } from "../auth/jwt.js";
+import {
+  createInterview, getInterview, listInterviews, appendMessage as appendInterviewMessage,
+  completeInterview, abandonInterview,
+} from "../interviews/repo.js";
+import { runTurn } from "../interviews/engine.js";
+import { defaultLlm, type LlmClient } from "../llm/complete.js";
 
 function bearerMatches(header: string | undefined, expected: string): boolean {
   if (!header?.startsWith("Bearer ")) return false;
@@ -23,19 +31,49 @@ function bearerMatches(header: string | undefined, expected: string): boolean {
 
 export interface AppOptions {
   authToken?: string | null;
+  jwtSecret?: string | null;
+  llm?: LlmClient;
 }
+
+declare module "fastify" {
+  interface FastifyRequest { user?: TokenUser }
+}
+
+const PUBLIC_PATHS = new Set(["/api/auth/login"]);
 
 export function buildApp(opts: AppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: false });
   const authToken = opts.authToken ?? null;
+  const jwtSecret = opts.jwtSecret ?? null;
 
-  if (authToken) {
+  if (authToken || jwtSecret) {
     app.addHook("onRequest", async (req, reply) => {
-      if (!bearerMatches(req.headers.authorization, authToken)) {
-        return reply.code(401).send({ error: "unauthorized" });
+      if (PUBLIC_PATHS.has(req.url.split("?")[0])) return;
+      if (authToken && bearerMatches(req.headers.authorization, authToken)) return;
+      if (jwtSecret && req.headers.authorization?.startsWith("Bearer ")) {
+        const u = verifyUserToken(req.headers.authorization.slice("Bearer ".length), jwtSecret);
+        if (u) { req.user = u; return; }
       }
+      return reply.code(401).send({ error: "unauthorized" });
     });
   }
+
+  app.post("/api/auth/login", async (req, reply) => {
+    if (!jwtSecret) return reply.code(500).send({ error: "auth not configured" });
+    const { email, password } = (req.body ?? {}) as { email?: string; password?: string };
+    if (!email || !password) return reply.code(400).send({ error: "email and password required" });
+    const u = await findUserByEmail(email);
+    if (!u || !(await verifyPassword(u.password_hash, password))) {
+      return reply.code(401).send({ error: "invalid credentials" });
+    }
+    const token = signUserToken({ id: u.id, email: u.email, role: u.role }, jwtSecret);
+    return { token, user: { id: u.id, email: u.email, name: u.name, role: u.role } };
+  });
+
+  app.get("/api/auth/me", async (req, reply) => {
+    if (!req.user) return reply.code(401).send({ error: "unauthorized" });
+    return req.user;
+  });
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof ValidationError) return reply.code(400).send({ error: err.issues.join("; ") });
@@ -124,6 +162,56 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
 
   app.get("/api/context/:id/versions", async (req) =>
     listContextVersions((req.params as any).id));
+
+  const llm = () => opts.llm ?? defaultLlm();
+
+  app.post("/api/interviews", async (req, reply) => {
+    const { topic, owner } = (req.body ?? {}) as { topic?: string; owner?: string };
+    if (!topic?.trim()) return reply.code(400).send({ error: "topic is required" });
+    const iv = await createInterview({
+      topic: topic.trim(), owner: owner ?? null, created_by: req.user?.id ?? null,
+    });
+    return reply.code(201).send(await runTurn(iv, llm()));
+  });
+
+  app.get("/api/interviews", async () => listInterviews());
+
+  app.get("/api/interviews/:id", async (req, reply) => {
+    const iv = await getInterview((req.params as any).id);
+    if (!iv) return reply.code(404).send({ error: "interview not found" });
+    return iv;
+  });
+
+  app.post("/api/interviews/:id/messages", async (req, reply) => {
+    const content = (req.body as any)?.content;
+    if (typeof content !== "string" || !content.trim()) {
+      return reply.code(400).send({ error: "content is required" });
+    }
+    const iv = await getInterview((req.params as any).id);
+    if (!iv) return reply.code(404).send({ error: "interview not found" });
+    if (iv.status !== "active") return reply.code(400).send({ error: `interview is ${iv.status}` });
+    const withMsg = await appendInterviewMessage(iv.id, { role: "expert", content: content.trim() });
+    return runTurn(withMsg, llm());
+  });
+
+  app.post("/api/interviews/:id/approve", async (req, reply) => {
+    const iv = await getInterview((req.params as any).id);
+    if (!iv) return reply.code(404).send({ error: "interview not found" });
+    if (iv.status !== "ready" || !iv.draft) {
+      return reply.code(400).send({ error: "interview has no draft to approve" });
+    }
+    const activate = (req.body as any)?.activate !== false;
+    let skill = await createSkill(parseNewSkill(iv.draft));
+    if (activate) skill = await setStatus(skill.id, "active");
+    const interview = await completeInterview(iv.id, skill.id);
+    return { interview, skill };
+  });
+
+  app.post("/api/interviews/:id/abandon", async (req, reply) => {
+    const iv = await getInterview((req.params as any).id);
+    if (!iv) return reply.code(404).send({ error: "interview not found" });
+    return abandonInterview(iv.id);
+  });
 
   registerMcpHttp(app);
 

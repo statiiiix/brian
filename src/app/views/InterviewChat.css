@@ -1,0 +1,254 @@
+.ivc-back {
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+}
+
+.ivc-back a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.ivc-back a:hover {
+  color: var(--fg);
+}
+
+.ivc-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+/* --- Chat column ---------------------------------------------------------- */
+
+.ivc-chat {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.ivc-thread {
+  flex: 1;
+  min-height: 20rem;
+  max-height: 55vh;
+  overflow-y: auto;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ivc-msg {
+  max-width: 85%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.ivc-msg p {
+  margin: 0;
+  padding: 0.6rem 0.85rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+
+.ivc-msg-who {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-2);
+  padding: 0 0.25rem;
+}
+
+.ivc-msg--brian {
+  align-self: flex-start;
+}
+
+.ivc-msg--brian p {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  color: var(--fg);
+}
+
+.ivc-msg--expert {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.ivc-msg--expert p {
+  background: var(--accent-dim);
+  border: 1px solid rgba(245, 166, 35, 0.25);
+  color: var(--fg);
+}
+
+.ivc-msg--thinking p {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.ivc-input {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-end;
+  padding: 0.9rem 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.ivc-input .dash-textarea {
+  min-height: 2.6rem;
+}
+
+.ivc-retry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 1.25rem;
+}
+
+.ivc-ready,
+.ivc-done {
+  padding: 0.9rem 1.25rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.88rem;
+  color: var(--fg-secondary);
+}
+
+.ivc-done a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+/* --- Right rail ------------------------------------------------------------ */
+
+.ivc-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  position: sticky;
+  top: 1.5rem;
+}
+
+.ivc-h2 {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.ivc-progress {
+  margin: 0 0 0.75rem;
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.ivc-coverage {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.ivc-coverage li {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.86rem;
+  color: var(--muted);
+  transition: color 200ms ease;
+}
+
+.ivc-coverage li.is-covered {
+  color: var(--fg);
+}
+
+.ivc-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
+  border: 1px solid var(--border-strong);
+  font-size: 0.7rem;
+  color: var(--green);
+  flex-shrink: 0;
+}
+
+.is-covered .ivc-check {
+  background: var(--green-dim);
+  border-color: rgba(61, 214, 140, 0.4);
+}
+
+/* --- Draft panel ------------------------------------------------------------ */
+
+.ivc-draft dl {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+.ivc-draft dt {
+  color: var(--muted-2);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0.75rem 0 0.15rem;
+}
+
+.ivc-draft dt:first-child {
+  margin-top: 0;
+}
+
+.ivc-draft dd {
+  margin: 0;
+  color: var(--fg-secondary);
+}
+
+.ivc-draft dd ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.ivc-pre {
+  white-space: pre-wrap;
+}
+
+.ivc-draft-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* --- Utility / responsive ---------------------------------------------------- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 1024px) {
+  .ivc-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ivc-rail {
+    position: static;
+  }
+}

@@ -4,7 +4,10 @@ loadServerEnv();
 const { buildApp } = await import("./app.js");
 
 const port = Number(process.env.PORT ?? 3001);
-buildApp({ authToken: process.env.BRIAN_API_TOKEN ?? null })
+buildApp({
+  authToken: process.env.BRIAN_API_TOKEN ?? null,
+  jwtSecret: process.env.AUTH_JWT_SECRET ?? null,
+})
   .listen({ port, host: "0.0.0.0" })
   .then((addr) => console.log(`API listening on ${addr}`))
   .catch((e) => {

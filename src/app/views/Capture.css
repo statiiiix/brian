@@ -1,0 +1,68 @@
+.capture-textarea {
+  font-size: 0.92rem;
+}
+
+.capture-submit {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.capture-results {
+  margin-top: 1.5rem;
+}
+
+.capture-h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.capture-item {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.8rem 1.1rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.capture-kind {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  color: var(--muted);
+}
+
+.capture-kind--skill {
+  border-color: rgba(245, 166, 35, 0.35);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.capture-kind--context {
+  border-color: rgba(61, 214, 140, 0.35);
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.capture-action {
+  color: var(--fg-secondary);
+  font-size: 0.88rem;
+  flex: 1;
+}
+
+.capture-conf {
+  color: var(--muted);
+}
+
+.capture-link {
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+}
