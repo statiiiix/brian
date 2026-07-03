@@ -1,0 +1,77 @@
+.faq-list {
+  margin-top: 3rem;
+  max-width: 46rem;
+  border-top: 1px solid var(--border);
+}
+
+.faq-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.faq-item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.25rem 0.25rem;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+  cursor: pointer;
+  list-style: none;
+  transition: color 150ms ease;
+}
+
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-item summary:hover {
+  color: var(--accent);
+}
+
+.faq-plus {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.faq-plus::before,
+.faq-plus::after {
+  content: '';
+  position: absolute;
+  background: var(--muted);
+  transition: transform 200ms ease, background-color 150ms ease;
+}
+
+.faq-plus::before {
+  left: 0;
+  top: 6px;
+  width: 14px;
+  height: 2px;
+}
+
+.faq-plus::after {
+  left: 6px;
+  top: 0;
+  width: 2px;
+  height: 14px;
+}
+
+.faq-item[open] .faq-plus::after {
+  transform: scaleY(0);
+}
+
+.faq-item[open] summary {
+  color: var(--fg);
+}
+
+.faq-item p {
+  margin: 0;
+  padding: 0 2.5rem 1.4rem 0.25rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  max-width: 42rem;
+}

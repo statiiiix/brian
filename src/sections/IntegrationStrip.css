@@ -1,0 +1,37 @@
+.integrations {
+  border-top: 1px solid var(--border);
+}
+
+.integrations-inner {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 1.6rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.integrations-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted-2);
+  flex-shrink: 0;
+}
+
+.integrations-list {
+  display: flex;
+  align-items: center;
+  gap: 2.25rem;
+  flex-wrap: wrap;
+}
+
+.integrations-item {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
