@@ -1,38 +1,57 @@
+.capture-card {
+  background:
+    radial-gradient(120% 160% at 100% 0%, rgba(245, 166, 35, 0.05), transparent 45%),
+    var(--bg-raised);
+}
+
 .capture-textarea {
   font-size: 0.92rem;
 }
 
 .capture-submit {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.capture-hint {
+  font-size: 0.8rem;
+  color: var(--muted-2);
 }
 
 .capture-results {
-  margin-top: 1.5rem;
-}
-
-.capture-h2 {
-  margin: 0 0 0.75rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  margin-top: 1.75rem;
 }
 
 .capture-item {
   display: flex;
   align-items: center;
-  gap: 0.9rem;
-  padding: 0.8rem 1.1rem;
-  margin-bottom: 0.5rem;
+  gap: 1rem;
+  padding: 0.85rem 1.2rem;
+  margin-bottom: 0.6rem;
   flex-wrap: wrap;
+  animation: capture-item-in 260ms var(--ease) both;
+}
+
+@keyframes capture-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .capture-kind {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0.12rem 0.55rem;
+  letter-spacing: 0.07em;
+  padding: 0.14rem 0.6rem;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
   color: var(--muted);
@@ -57,7 +76,24 @@
 }
 
 .capture-conf {
-  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.capture-conf-track {
+  width: 56px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.capture-conf-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #d98a0f, var(--accent));
 }
 
 .capture-link {
@@ -65,4 +101,8 @@
   font-size: 0.85rem;
   font-weight: 500;
   text-decoration: none;
+}
+
+.capture-link:hover {
+  color: var(--accent-hover);
 }

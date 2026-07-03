@@ -2,11 +2,12 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.14rem 0.6rem;
+  padding: 0.16rem 0.65rem;
   border-radius: 999px;
   border: 1px solid var(--border-strong);
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   font-weight: 500;
+  letter-spacing: 0.01em;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -16,6 +17,7 @@
   height: 6px;
   border-radius: 50%;
   background: currentColor;
+  box-shadow: 0 0 6px currentColor;
   flex-shrink: 0;
 }
 

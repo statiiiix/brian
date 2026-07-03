@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { Icon, icons } from '../../components/Icon';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
 import './InterviewChat.css';
@@ -93,20 +94,36 @@ export default function InterviewChat() {
   }
 
   if (error && !iv) return <p className="dash-error" role="alert">{error}</p>;
-  if (!iv) return <p className="dash-loading">Loading interview…</p>;
+  if (!iv) {
+    return (
+      <div className="dash-skeleton" aria-hidden="true">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="dash-skeleton-row">
+            <span className="dash-skeleton-bar" style={{ width: `${55 - i * 12}%` }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   const covered = COVERAGE_FIELDS.filter(([k]) => iv.coverage[k]).length;
+  const pct = Math.round((covered / COVERAGE_FIELDS.length) * 100);
   const draft = iv.draft;
 
   return (
     <div className="ivc">
       <header className="dash-head">
         <div>
-          <p className="ivc-back"><Link to="/app/interviews">← Interviews</Link></p>
+          <p className="dash-back">
+            <Link to="/app/interviews">
+              <Icon path={icons.arrowLeft} size={14} />
+              Interviews
+            </Link>
+          </p>
           <h1 className="dash-title">{iv.topic}</h1>
-          <p className="dash-subtitle">
+          <p className="dash-subtitle ivc-meta">
             <StatusBadge status={iv.status} />
-            {iv.owner && <span> · expert: {iv.owner}</span>}
+            {iv.owner && <span>expert: {iv.owner}</span>}
           </p>
         </div>
         {iv.status === 'active' && (
@@ -121,14 +138,28 @@ export default function InterviewChat() {
           <div className="ivc-thread" ref={threadRef}>
             {iv.messages.map((m, i) => (
               <div key={i} className={`ivc-msg ivc-msg--${m.role}`}>
-                <span className="ivc-msg-who">{m.role === 'brian' ? 'Brian' : 'You'}</span>
+                <span className="ivc-msg-who">
+                  {m.role === 'brian' && (
+                    <span className="ivc-msg-avatar" aria-hidden="true">
+                      <Icon path={icons.bolt} size={9} />
+                    </span>
+                  )}
+                  {m.role === 'brian' ? 'Brian' : 'You'}
+                </span>
                 <p>{m.content}</p>
               </div>
             ))}
             {busy && (
-              <div className="ivc-msg ivc-msg--brian ivc-msg--thinking">
-                <span className="ivc-msg-who">Brian</span>
-                <p>Thinking…</p>
+              <div className="ivc-msg ivc-msg--brian">
+                <span className="ivc-msg-who">
+                  <span className="ivc-msg-avatar" aria-hidden="true">
+                    <Icon path={icons.bolt} size={9} />
+                  </span>
+                  Brian
+                </span>
+                <p className="ivc-typing" aria-label="Brian is thinking">
+                  <span /><span /><span />
+                </p>
               </div>
             )}
           </div>
@@ -162,8 +193,13 @@ export default function InterviewChat() {
                 onKeyDown={onKeyDown}
                 disabled={busy}
               />
-              <button type="submit" className="dash-btn dash-btn--primary" disabled={busy || !answer.trim()}>
-                Send
+              <button
+                type="submit"
+                className="dash-btn dash-btn--primary ivc-send"
+                disabled={busy || !answer.trim()}
+                aria-label="Send answer"
+              >
+                <Icon path={icons.send} size={16} />
               </button>
             </form>
           )}
@@ -186,13 +222,25 @@ export default function InterviewChat() {
 
         <aside className="ivc-rail">
           <section className="dash-card">
-            <h2 className="ivc-h2">Coverage</h2>
-            <p className="ivc-progress dash-mono">{covered}/{COVERAGE_FIELDS.length}</p>
+            <div className="ivc-coverage-head">
+              <h2 className="dash-h2">Coverage</h2>
+              <span className="ivc-progress dash-mono">{covered}/{COVERAGE_FIELDS.length}</span>
+            </div>
+            <div
+              className="ivc-progress-track"
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Interview coverage"
+            >
+              <span className="ivc-progress-fill" style={{ width: `${pct}%` }} />
+            </div>
             <ul className="ivc-coverage">
               {COVERAGE_FIELDS.map(([key, label]) => (
                 <li key={key} className={iv.coverage[key] ? 'is-covered' : ''}>
                   <span className="ivc-check" aria-hidden="true">
-                    {iv.coverage[key] ? '✓' : ''}
+                    {iv.coverage[key] && <Icon path={icons.check} size={11} />}
                   </span>
                   {label}
                   <span className="sr-only">{iv.coverage[key] ? ' covered' : ' not yet covered'}</span>
@@ -203,7 +251,7 @@ export default function InterviewChat() {
 
           {draft && (iv.status === 'ready' || iv.status === 'completed') && (
             <section className="dash-card ivc-draft">
-              <h2 className="ivc-h2">Drafted skill</h2>
+              <h2 className="dash-h2">Drafted skill</h2>
               <dl>
                 <dt>Name</dt>
                 <dd>{draft.name}</dd>

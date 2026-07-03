@@ -34,7 +34,7 @@ export default function Login() {
     <div className="login">
       <a href="/" className="login-logo">
         <span className="login-logo-mark" aria-hidden="true">
-          <Icon path={icons.bolt} size={13} />
+          <Icon path={icons.bolt} size={14} />
         </span>
         Brian
       </a>

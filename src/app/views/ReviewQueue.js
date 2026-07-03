@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { icons } from '../../components/Icon';
 import { api } from '../api';
+import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
+import TableSkeleton from '../components/TableSkeleton';
 import './ReviewQueue.css';
 
 export default function ReviewQueue() {
@@ -28,6 +31,9 @@ export default function ReviewQueue() {
   useEffect(() => { load(); }, [load]);
 
   async function act(id, action) {
+    if (action === 'retire' && !window.confirm('Reject this skill? It will be retired and agents will never run it.')) {
+      return;
+    }
     setBusyId(id);
     setError('');
     try {
@@ -49,14 +55,20 @@ export default function ReviewQueue() {
             Drafts and flagged skills waiting for a human decision. Nothing goes live without you.
           </p>
         </div>
+        {items !== null && items.length > 0 && (
+          <span className="review-count dash-mono">
+            {items.length} pending
+          </span>
+        )}
       </header>
 
       {error && <p className="dash-error" role="alert">{error}</p>}
-      {!error && items === null && <p className="dash-loading">Loading queue…</p>}
+      {!error && items === null && <TableSkeleton rows={3} cols={3} />}
+
       {items !== null && items.length === 0 && (
-        <div className="dash-card dash-empty">
-          Queue is clear. New drafts from interviews, capture, or staleness checks will land here.
-        </div>
+        <EmptyState icon={icons.check} title="Queue is clear">
+          New drafts from interviews, capture, or staleness checks will land here for your sign-off.
+        </EmptyState>
       )}
 
       {items !== null && items.map((s) => (
@@ -68,8 +80,8 @@ export default function ReviewQueue() {
               </h2>
               <p className="review-item-meta">
                 <StatusBadge status={s.status} />
-                <span className="dash-mono"> v{s.version}</span>
-                {s.owner && <span> · {s.owner}</span>}
+                <span className="dash-mono">v{s.version}</span>
+                {s.owner && <span>{s.owner}</span>}
               </p>
             </div>
             <div className="review-item-actions">
@@ -95,7 +107,7 @@ export default function ReviewQueue() {
                 onClick={() => act(s.id, 'activate')}
                 disabled={busyId === s.id}
               >
-                Approve
+                {busyId === s.id ? 'Working…' : 'Approve'}
               </button>
             </div>
           </div>

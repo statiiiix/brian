@@ -9,7 +9,7 @@ export async function api(path, { method = 'GET', body } = {}) {
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
-  if (res.status === 401) {
+  if (res.status === 401 && !path.startsWith('/api/auth/login')) {
     clearToken();
     window.location.assign('/login');
     throw new Error('unauthorized');

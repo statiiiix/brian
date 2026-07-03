@@ -1,5 +1,18 @@
+.review-count {
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+}
+
 .review-item {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.85rem;
+  transition: border-color 150ms var(--ease);
+}
+
+.review-item:hover {
+  border-color: var(--border-strong);
 }
 
 .review-item-head {
@@ -12,7 +25,7 @@
 
 .review-item-name {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.02rem;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -20,6 +33,7 @@
 .review-item-name a {
   color: var(--fg);
   text-decoration: none;
+  transition: color 120ms var(--ease);
 }
 
 .review-item-name a:hover {
@@ -27,7 +41,10 @@
 }
 
 .review-item-meta {
-  margin: 0.3rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.4rem 0 0;
   color: var(--muted);
   font-size: 0.82rem;
 }
@@ -39,21 +56,33 @@
 }
 
 .review-item-detail {
-  margin: 1rem 0 0;
-  padding-top: 1rem;
+  margin: 1.1rem 0 0;
+  padding-top: 1.1rem;
   border-top: 1px solid var(--border);
   display: grid;
   grid-template-columns: 9rem minmax(0, 1fr);
-  gap: 0.5rem 1rem;
+  gap: 0.55rem 1.25rem;
   font-size: 0.86rem;
+  animation: review-detail-in 200ms var(--ease) both;
+}
+
+@keyframes review-detail-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .review-item-detail dt {
   color: var(--muted-2);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   padding-top: 0.15rem;
 }
 

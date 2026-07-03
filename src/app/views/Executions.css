@@ -1,5 +1,12 @@
 .executions-override {
-  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.74rem;
   font-weight: 500;
   color: var(--red);
+  background: var(--red-dim);
+  border: 1px solid rgba(242, 85, 90, 0.3);
+  border-radius: 999px;
+  padding: 0.14rem 0.6rem;
+  white-space: nowrap;
 }
