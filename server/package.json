@@ -13,7 +13,8 @@
     "mcp": "tsx src/mcp/index.ts",
     "review": "tsx src/review/cli.ts",
     "gmail:auth": "tsx src/gmail/authCli.ts",
-    "bench": "tsx src/bench/cli.ts"
+    "bench": "tsx src/bench/cli.ts",
+    "seed:admin": "tsx src/scripts/seedAdmin.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
