@@ -4,6 +4,7 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { installBrianHooks, hookCommand } from "../../scripts/hooks/install.mjs";
 
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -66,5 +67,28 @@ describe("hooks installer", () => {
     const res = await run(["--settings", settings]);
     expect(res.code).toBe(1);
     expect(await readFile(settings, "utf8")).toBe("{not json");
+  });
+
+  it("exposes installBrianHooks() that writes idempotently", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "brian-installfn-"));
+    const settings = path.join(dir, "settings.json");
+
+    const first = installBrianHooks({ settingsPath: settings });
+    expect(first.changed).toBe(true);
+    const after = JSON.parse(await readFile(settings, "utf8"));
+    expect(after.hooks.SessionStart[0].hooks[0].command).toBe(hookCommand);
+    expect(after.hooks.UserPromptSubmit[0].hooks[0].command).toBe(hookCommand);
+
+    const second = installBrianHooks({ settingsPath: settings });
+    expect(second.changed).toBe(false);
+    expect(JSON.parse(await readFile(settings, "utf8"))).toEqual(after);
+  });
+
+  it("installBrianHooks() throws on unparseable JSON", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "brian-installfn-"));
+    const settings = path.join(dir, "settings.json");
+    await writeFile(settings, "{broken");
+    expect(() => installBrianHooks({ settingsPath: settings })).toThrow("unparseable");
+    expect(await readFile(settings, "utf8")).toBe("{broken");
   });
 });
