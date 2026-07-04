@@ -67,7 +67,9 @@ async function main() {
       ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({ query: prompt }),
-    signal: AbortSignal.timeout(2500),
+    // Cold-start embedding calls can take >2.5s; unreachable hosts still fail
+    // fast, so a generous timeout only costs time when Brian is up but slow.
+    signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) return;
   const { skill, context } = await res.json();

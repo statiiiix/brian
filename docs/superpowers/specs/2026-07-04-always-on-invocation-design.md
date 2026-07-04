@@ -51,8 +51,9 @@ fail independently.
 - **Hook script** `server/scripts/hooks/brian-hook.mjs` — zero-dependency Node
   ESM, one script handling both events (reads the hook event JSON on stdin):
   - `SessionStart` → emits the agent contract as `additionalContext`.
-  - `UserPromptSubmit` → POSTs the prompt to `/api/agent/briefing` (2.5 s
-    timeout) and emits matched skill + context as `additionalContext`.
+  - `UserPromptSubmit` → POSTs the prompt to `/api/agent/briefing` (5 s
+    timeout — cold-start embedding calls exceed 2.5 s) and emits matched
+    skill + context as `additionalContext`.
   - Config from env: `BRIAN_URL` (default `http://localhost:3001`),
     `BRIAN_API_TOKEN`, or `BRIAN_ENV_FILE` pointing at `server/.env`.
   - **Fail-silent invariant:** any error (server down, bad token, timeout) →
