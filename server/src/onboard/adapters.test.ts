@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as claudeCode from "../../scripts/onboard/adapters/claudeCode.mjs";
+import * as desktop from "../../scripts/onboard/adapters/claudeDesktop.mjs";
 
 const OPTS = { serverPath: "/abs/server" };
 const env = (home: string) => ({ home, platform: "darwin", serverPath: "/abs/server" });
@@ -61,5 +62,38 @@ describe("adapter: claude-code", () => {
     expect(await readFile(path.join(home, ".claude.json"), "utf8")).toBe("{broken");
     // the hook layer is independent and should still be applied
     expect(res.applied.some((a) => /hook/i.test(a.action))).toBe(true);
+  });
+});
+
+const cdir = (home: string) => path.join(home, "Library", "Application Support", "Claude");
+
+describe("adapter: claude-desktop", () => {
+  it("merges brian into existing claude_desktop_config.json, preserving keys", async () => {
+    const home = await tmpHome("cd-");
+    await mkdir(cdir(home), { recursive: true });
+    await writeFile(
+      path.join(cdir(home), "claude_desktop_config.json"),
+      JSON.stringify({ mcpServers: { other: { command: "x" } }, preferences: { a: 1 } }),
+    );
+    const res = await desktop.apply(env(home), OPTS);
+    expect(res.skipped).toHaveLength(0);
+    const c = JSON.parse(await readFile(path.join(cdir(home), "claude_desktop_config.json"), "utf8"));
+    expect(c.mcpServers.other).toEqual({ command: "x" }); // preserved
+    expect(c.preferences).toEqual({ a: 1 }); // preserved
+    expect(c.mcpServers.brian).toBeTruthy();
+    expect(desktop.status(env(home))).toEqual({ mcp: "wired", alwaysOn: "unsupported" });
+  });
+
+  it("creates claude_desktop_config.json when only the Claude dir exists", async () => {
+    const home = await tmpHome("cd-");
+    await mkdir(cdir(home), { recursive: true });
+    await desktop.apply(env(home), OPTS);
+    const c = JSON.parse(await readFile(path.join(cdir(home), "claude_desktop_config.json"), "utf8"));
+    expect(c.mcpServers.brian).toBeTruthy();
+  });
+
+  it("is not detected without the Claude support dir", async () => {
+    const home = await tmpHome("cd-");
+    expect(desktop.detect(env(home)).detected).toBe(false);
   });
 });
