@@ -2,7 +2,7 @@
 
 > Context-preservation doc. Snapshot of where the Company Brain backend stands and
 > what to do next, so we can resume without re-deriving anything.
-> Last updated: 2026-07-01.
+> Last updated: 2026-07-04.
 
 ---
 
@@ -87,6 +87,18 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
   **Verified live end to end:** JWT login → real-LLM interview (2 rich answers →
   faithful draft, zero invented policy) → approve → active → `find_skill`
   retrieves it ("Approve customer discount requests").
+
+- **Always-on invocation (2026-07-04, branch `always-on-invocation`):**
+  spec `docs/superpowers/specs/2026-07-04-always-on-invocation-design.md`.
+  Fixes "agents only call Brian when asked": (1) the MCP server now sends the
+  agent contract as MCP `instructions` at initialize
+  (`src/mcp/instructions.ts`) + trigger-rich tool descriptions — raises call
+  rates in every MCP client; (2) Claude Code hooks make it deterministic:
+  `POST /api/agent/briefing` (one-shot skill+context lookup, 0.6 distance
+  cutoff), zero-dep hook `server/scripts/hooks/brian-hook.mjs` (SessionStart →
+  contract; UserPromptSubmit → briefing injected; fail-silent if the API is
+  down), installer `npm run hooks:install [-- --user]`, repo-level
+  `.claude/settings.json`. The hook needs the API running (`npm run api`).
 
 ---
 

@@ -22,3 +22,32 @@ rules; you execute. Follow this contract on every task:
    (`actions_taken`), and the outcome (`completed` | `escalated` | `failed`).
 6. **When you learn something durable** (a decision, a preference, a process
    change), call `capture` with it so the brain stays current.
+
+---
+
+## Guaranteed invocation
+
+The contract above relies on the model choosing to call Brian. Two layers make
+that automatic:
+
+1. **All MCP clients** — Brian's MCP server sends this contract as MCP
+   `instructions` at initialize (see `server/src/mcp/instructions.ts`), so any
+   connected client (Claude Code, Claude Desktop, Cursor…) gets it in the
+   system prompt without pasting anything.
+2. **Claude Code (deterministic)** — hooks push Brian into every conversation:
+   `SessionStart` injects the contract; `UserPromptSubmit` sends each prompt to
+   `POST /api/agent/briefing` and injects the matched skill + context before
+   the model acts. The hook is fail-silent: if the Brian API isn't running,
+   sessions behave exactly as before.
+
+Install into any project (or user-wide) with:
+
+    cd server
+    npm run hooks:install                # this repo (.claude/settings.json)
+    npm run hooks:install -- --user      # everywhere: ~/.claude/settings.json
+    npm run hooks:install -- --settings /path/to/project/.claude/settings.json
+
+Requirements: the Brian API running locally (`cd server && npm run api`) and
+`BRIAN_API_TOKEN` in `server/.env` (the hook reads both the token and
+`BRIAN_URL` from there; env vars override). To uninstall, remove the two
+`brian-hook.mjs` entries from the settings file.
