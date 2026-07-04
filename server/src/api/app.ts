@@ -2,12 +2,13 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { timingSafeEqual } from "node:crypto";
 import {
   createSkill, getSkill, listSkills, updateSkill, setStatus, listVersions, NotFoundError,
+  findSkillsWithDistance,
 } from "../skills/repo.js";
 import { parseNewSkill, parseUpdateSkill, ValidationError } from "../skills/validation.js";
 import { listExecutions } from "../feedback/executions.js";
 import { draftFromText } from "../ingestion/draftFromText.js";
 import type { SkillStatus } from "../skills/types.js";
-import { createContext, getContext, listContext, updateContext, retireContext, listContextVersions } from "../context/repo.js";
+import { createContext, getContext, listContext, updateContext, retireContext, listContextVersions, findContextWithDistance } from "../context/repo.js";
 import { parseNewContext, parseUpdateContext } from "../context/validation.js";
 import { capture } from "../ingestion/capture.js";
 import { ingestBulk } from "../ingestion/bulk.js";
@@ -40,6 +41,10 @@ declare module "fastify" {
 }
 
 const PUBLIC_PATHS = new Set(["/api/auth/login"]);
+
+// Vector-search hits farther than this cosine distance are treated as
+// no-match so hooks don't inject unrelated skills into every prompt.
+const BRIEFING_MAX_DISTANCE = 0.6;
 
 export function buildApp(opts: AppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -116,6 +121,24 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     listExecutions((req.params as any).id));
 
   app.get("/api/executions", async () => listExecutions());
+
+  // One-shot skill+context lookup for agent harness hooks (see
+  // docs/agent-contract.md "Guaranteed invocation").
+  app.post("/api/agent/briefing", async (req, reply) => {
+    const query = (req.body as any)?.query;
+    if (typeof query !== "string" || query.trim().length === 0) {
+      return reply.code(400).send({ error: "query is required" });
+    }
+    const [skills, ctx] = await Promise.all([
+      findSkillsWithDistance(query, 1),
+      findContextWithDistance(query),
+    ]);
+    const skillHit = skills[0];
+    return {
+      skill: skillHit && skillHit.distance <= BRIEFING_MAX_DISTANCE ? skillHit.skill : null,
+      context: ctx && ctx.distance <= BRIEFING_MAX_DISTANCE ? ctx.entry : null,
+    };
+  });
 
   app.post("/api/skills/:id/draft-from-text", async (req, reply) => {
     const text = (req.body as any)?.text;
