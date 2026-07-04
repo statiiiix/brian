@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as claudeCode from "../../scripts/onboard/adapters/claudeCode.mjs";
 import * as desktop from "../../scripts/onboard/adapters/claudeDesktop.mjs";
+import * as cursor from "../../scripts/onboard/adapters/cursor.mjs";
 
 const OPTS = { serverPath: "/abs/server" };
 const env = (home: string) => ({ home, platform: "darwin", serverPath: "/abs/server" });
@@ -95,5 +96,39 @@ describe("adapter: claude-desktop", () => {
   it("is not detected without the Claude support dir", async () => {
     const home = await tmpHome("cd-");
     expect(desktop.detect(env(home)).detected).toBe(false);
+  });
+});
+
+describe("adapter: cursor", () => {
+  it("wires an empty mcp.json and creates AGENTS.md with the contract block", async () => {
+    const home = await tmpHome("cur-");
+    await mkdir(path.join(home, ".cursor"));
+    await writeFile(path.join(home, ".cursor", "mcp.json"), JSON.stringify({ mcpServers: {} }));
+    const res = await cursor.apply(env(home), OPTS);
+    expect(res.skipped).toHaveLength(0);
+    const m = JSON.parse(await readFile(path.join(home, ".cursor", "mcp.json"), "utf8"));
+    expect(m.mcpServers.brian).toEqual({ command: "npm", args: ["--prefix", "/abs/server", "run", "mcp"] });
+    const agents = await readFile(path.join(home, ".cursor", "AGENTS.md"), "utf8");
+    expect(agents).toContain(">>> brian >>>");
+    expect(agents).toContain("find_skill");
+    expect(cursor.status(env(home))).toEqual({ mcp: "wired", alwaysOn: "wired" });
+  });
+
+  it("preserves existing AGENTS.md content above the block", async () => {
+    const home = await tmpHome("cur-");
+    await mkdir(path.join(home, ".cursor"));
+    await writeFile(path.join(home, ".cursor", "AGENTS.md"), "# My rules\nBe nice.\n");
+    await cursor.apply(env(home), OPTS);
+    const agents = await readFile(path.join(home, ".cursor", "AGENTS.md"), "utf8");
+    expect(agents.startsWith("# My rules")).toBe(true);
+    expect(agents).toContain(">>> brian >>>");
+  });
+
+  it("is idempotent on a second run", async () => {
+    const home = await tmpHome("cur-");
+    await mkdir(path.join(home, ".cursor"));
+    await cursor.apply(env(home), OPTS);
+    const res = await cursor.apply(env(home), OPTS);
+    expect(res.applied.every((a) => /already/.test(a.action))).toBe(true);
   });
 });
