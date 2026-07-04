@@ -5,14 +5,19 @@ import { businessAdapters } from "./adapters.js";
 import { capture } from "../ingestion/capture.js";
 import { findContextWithDistance } from "../context/repo.js";
 import { logExecution } from "../feedback/executions.js";
+import { BRIAN_INSTRUCTIONS } from "./instructions.js";
 
 export function buildMcpServer(): McpServer {
-  const server = new McpServer({ name: "brian", version: "0.1.0" });
+  const server = new McpServer(
+    { name: "brian", version: "0.1.0" },
+    { instructions: BRIAN_INSTRUCTIONS }
+  );
 
   server.registerTool(
     "find_skill",
     {
-      description: "Find the best-matching active skill for a natural-language task.",
+      description:
+        "ALWAYS call this FIRST, before acting on ANY task — even when the user does not mention Brian. Returns the company-approved skill (procedure, hard rules, guardrails) that governs the task. If it returns NO_MATCHING_SKILL for a business process, ask a human instead of improvising.",
       inputSchema: { query: z.string() },
     },
     async ({ query }) => {
@@ -50,7 +55,8 @@ export function buildMcpServer(): McpServer {
   server.registerTool(
     "capture",
     {
-      description: "Capture a work session into the brain: classify into skills/context and file each into the right place.",
+      description:
+        "Whenever durable knowledge appears in a conversation (a decision, preference, or process change), call this to file it into the brain: it classifies the text into skills/context and stores each piece. Do not wait to be asked.",
       inputSchema: { text: z.string() },
     },
     async ({ text }) => {
@@ -62,7 +68,8 @@ export function buildMcpServer(): McpServer {
   server.registerTool(
     "find_context",
     {
-      description: "Find the most relevant active context (goals/decisions/preferences) for a query.",
+      description:
+        "Call this at the start of every task, alongside find_skill. Returns the company's most relevant active goals, decisions, and preferences for the task, which override your defaults.",
       inputSchema: { query: z.string() },
     },
     async ({ query }) => {
@@ -75,7 +82,7 @@ export function buildMcpServer(): McpServer {
     "log_execution",
     {
       description:
-        "Log a skill execution to the feedback loop: what was asked, what was done, and the outcome. Call this after finishing (or escalating) a task.",
+        "REQUIRED after every task that used a skill (finished, escalated, or failed): log what was asked, what you did, and the outcome. This is Brian's feedback loop; skipping it blinds the company.",
       inputSchema: {
         skill_id: z.string().nullable(),
         skill_version: z.number().nullable(),
