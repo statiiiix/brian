@@ -5,6 +5,8 @@ import path from "node:path";
 import * as claudeCode from "../../scripts/onboard/adapters/claudeCode.mjs";
 import * as desktop from "../../scripts/onboard/adapters/claudeDesktop.mjs";
 import * as cursor from "../../scripts/onboard/adapters/cursor.mjs";
+import * as codex from "../../scripts/onboard/adapters/codex.mjs";
+import * as openclaw from "../../scripts/onboard/adapters/openclaw.mjs";
 
 const OPTS = { serverPath: "/abs/server" };
 const env = (home: string) => ({ home, platform: "darwin", serverPath: "/abs/server" });
@@ -130,5 +132,61 @@ describe("adapter: cursor", () => {
     await cursor.apply(env(home), OPTS);
     const res = await cursor.apply(env(home), OPTS);
     expect(res.applied.every((a) => /already/.test(a.action))).toBe(true);
+  });
+});
+
+describe("adapter: codex", () => {
+  it("appends [mcp_servers.brian] + writes AGENTS.md, preserving content, idempotently", async () => {
+    const home = await tmpHome("cx-");
+    await mkdir(path.join(home, ".codex"));
+    await writeFile(path.join(home, ".codex", "config.toml"), 'model = "gpt-5"\n');
+    await codex.apply(env(home), OPTS);
+    const toml = await readFile(path.join(home, ".codex", "config.toml"), "utf8");
+    expect(toml).toContain("[mcp_servers.brian]");
+    expect(toml).toContain('command = "npm"');
+    expect(toml).toContain('model = "gpt-5"'); // preserved
+    const agents = await readFile(path.join(home, ".codex", "AGENTS.md"), "utf8");
+    expect(agents).toContain(">>> brian >>>");
+
+    const before = await readFile(path.join(home, ".codex", "config.toml"), "utf8");
+    await codex.apply(env(home), OPTS); // idempotent
+    expect(await readFile(path.join(home, ".codex", "config.toml"), "utf8")).toBe(before);
+    expect(codex.status(env(home))).toEqual({ mcp: "wired", alwaysOn: "wired" });
+  });
+
+  it("creates config.toml when only ~/.codex exists", async () => {
+    const home = await tmpHome("cx-");
+    await mkdir(path.join(home, ".codex"));
+    await codex.apply(env(home), OPTS);
+    const toml = await readFile(path.join(home, ".codex", "config.toml"), "utf8");
+    expect(toml).toContain("[mcp_servers.brian]");
+  });
+
+  it("is not detected without ~/.codex", async () => {
+    const home = await tmpHome("cx-");
+    expect(codex.detect(env(home)).detected).toBe(false);
+  });
+});
+
+describe("adapter: openclaw", () => {
+  it("writes the contract to AGENTS.md and reports mcp as manual/unsupported", async () => {
+    const home = await tmpHome("oc-");
+    await mkdir(path.join(home, ".openclaw"));
+    const res = await openclaw.apply(env(home), OPTS);
+    const agents = await readFile(path.join(home, ".openclaw", "AGENTS.md"), "utf8");
+    expect(agents).toContain(">>> brian >>>");
+    expect(res.skipped.some((s) => /manual/i.test(s.reason))).toBe(true);
+    expect(openclaw.status(env(home))).toEqual({ mcp: "unsupported", alwaysOn: "wired" });
+  });
+
+  it("detects ~/.clawdbot as an alternate directory", async () => {
+    const home = await tmpHome("oc-");
+    await mkdir(path.join(home, ".clawdbot"));
+    expect(openclaw.detect(env(home)).detected).toBe(true);
+  });
+
+  it("is not detected when neither dir exists", async () => {
+    const home = await tmpHome("oc-");
+    expect(openclaw.detect(env(home)).detected).toBe(false);
   });
 });
