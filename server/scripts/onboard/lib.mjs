@@ -135,3 +135,26 @@ export function appendTomlSection(text, sectionText) {
   const sep = source === "" ? "" : source.endsWith("\n\n") ? "" : source.endsWith("\n") ? "\n" : "\n\n";
   return source + sep + sectionText;
 }
+
+// --- Shared wiring helpers (used by several adapters) -----------------------
+
+// Merge mcpServers.brian into a JSON config. Idempotent: an existing brian
+// entry yields { status: "already" } with no write. Refuses unparseable files
+// ({ status: "unparseable" }, untouched). Backs up an existing file on write.
+export function mergeMcpServer(file, entry) {
+  const read = readJsonFile(file);
+  if (read.ok === false && read.reason === "unparseable") return { status: "unparseable" };
+  const base = read.ok ? read.value : {};
+  if (base && base.mcpServers && base.mcpServers.brian) return { status: "already" };
+  writeJsonFile(file, deepMerge(base, { mcpServers: { brian: entry } }));
+  return { status: "wired" };
+}
+
+// Upsert the Brian contract marker block into a text/markdown file (AGENTS.md).
+// Idempotent: an identical block already present yields { status: "already" }.
+export function wireMarkerFile(file, body) {
+  const { text, changed } = upsertMarkerBlock(readText(file) ?? "", body);
+  if (!changed) return { status: "already" };
+  writeTextFile(file, text);
+  return { status: "wired" };
+}

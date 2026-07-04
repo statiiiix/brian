@@ -13,6 +13,8 @@ import {
   appendTomlSection,
   mcpEntry,
   CONTRACT,
+  mergeMcpServer,
+  wireMarkerFile,
 } from "../../scripts/onboard/lib.mjs";
 
 describe("onboard lib — json/backup", () => {
@@ -118,5 +120,45 @@ describe("onboard lib — mcp entries & contract", () => {
     for (const t of ["find_skill", "find_context", "log_execution", "capture"]) {
       expect(CONTRACT).toContain(t);
     }
+  });
+});
+
+describe("onboard lib — shared wiring helpers", () => {
+  it("mergeMcpServer wires, is idempotent, preserves siblings, refuses unparseable", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "brian-mrg-"));
+    const f = path.join(dir, "cfg.json");
+
+    // fresh file
+    const a = mergeMcpServer(f, { command: "npm" });
+    expect(a.status).toBe("wired");
+    expect(JSON.parse(await readFile(f, "utf8")).mcpServers.brian).toEqual({ command: "npm" });
+
+    // already wired -> no change
+    const b = mergeMcpServer(f, { command: "changed" });
+    expect(b.status).toBe("already");
+    expect(JSON.parse(await readFile(f, "utf8")).mcpServers.brian).toEqual({ command: "npm" });
+
+    // preserves other servers
+    await writeFile(f, JSON.stringify({ mcpServers: { other: { command: "x" } } }));
+    mergeMcpServer(f, { command: "npm" });
+    const after = JSON.parse(await readFile(f, "utf8"));
+    expect(after.mcpServers.other).toEqual({ command: "x" });
+    expect(after.mcpServers.brian).toEqual({ command: "npm" });
+
+    // refuses unparseable
+    await writeFile(f, "{broken");
+    expect(mergeMcpServer(f, { command: "npm" }).status).toBe("unparseable");
+    expect(await readFile(f, "utf8")).toBe("{broken");
+  });
+
+  it("wireMarkerFile creates the file with the contract, then is idempotent", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "brian-mrk-"));
+    const f = path.join(dir, "AGENTS.md");
+    const a = wireMarkerFile(f, CONTRACT);
+    expect(a.status).toBe("wired");
+    const body = await readFile(f, "utf8");
+    expect(body).toContain(">>> brian >>>");
+    expect(body).toContain("find_skill");
+    expect(wireMarkerFile(f, CONTRACT).status).toBe("already");
   });
 });
