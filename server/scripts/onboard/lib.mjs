@@ -98,6 +98,30 @@ export function upsertMarkerBlock(text, body) {
   return { text: source + sep + block + "\n", changed: true };
 }
 
+// Build the MCP server entry: stdio (local, default) or Streamable HTTP
+// (remote, when a url is supplied). Shape matches the mcpServers JSON used by
+// Claude Code / Claude Desktop / Cursor.
+export function mcpEntry({ serverPath, url, token } = {}) {
+  if (url) {
+    return {
+      type: "http",
+      url: `${url.replace(/\/+$/, "")}/mcp`,
+      headers: { Authorization: `Bearer ${token ?? ""}` },
+    };
+  }
+  return { command: "npm", args: ["--prefix", serverPath, "run", "mcp"] };
+}
+
+// Canonical Brian agent contract. KEEP IN SYNC with scripts/hooks/brian-hook.mjs,
+// src/mcp/instructions.ts, and docs/agent-contract.md.
+export const CONTRACT = `You are connected to Brian, this company's brain. Follow this contract on every task:
+1. BEFORE acting, call find_skill with the task and find_context for relevant goals/decisions/preferences — even if the user does not mention Brian. If no skill matches a business process, ask a human; do not improvise.
+2. Follow the skill's procedure within its hard_rules (non-negotiable).
+3. If a guardrail triggers, STOP and escalate to the skill's escalation_target.
+4. Use only the tools the skill lists for business actions.
+5. AFTER finishing or escalating, call log_execution.
+6. Call capture when you learn something durable.`;
+
 // --- TOML section helpers (line-scan; no TOML parser) -----------------------
 // Detect `[section]` as a real (non-commented) table header.
 export function tomlHasSection(text, section) {

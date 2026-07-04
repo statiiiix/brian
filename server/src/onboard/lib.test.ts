@@ -11,6 +11,8 @@ import {
   hasMarkerBlock,
   tomlHasSection,
   appendTomlSection,
+  mcpEntry,
+  CONTRACT,
 } from "../../scripts/onboard/lib.mjs";
 
 describe("onboard lib — json/backup", () => {
@@ -96,5 +98,25 @@ describe("onboard lib — marker blocks & TOML", () => {
   it("tomlHasSection ignores commented-out sections", () => {
     const base = '# [mcp_servers.brian]\nmodel = "gpt-5"\n';
     expect(tomlHasSection(base, "mcp_servers.brian")).toBe(false);
+  });
+});
+
+describe("onboard lib — mcp entries & contract", () => {
+  it("mcpEntry builds a stdio entry locally and an http entry when url is given", () => {
+    expect(mcpEntry({ serverPath: "/abs/server" })).toEqual({
+      command: "npm",
+      args: ["--prefix", "/abs/server", "run", "mcp"],
+    });
+    expect(mcpEntry({ serverPath: "/abs/server", url: "https://b.example.com/", token: "T" })).toEqual({
+      type: "http",
+      url: "https://b.example.com/mcp",
+      headers: { Authorization: "Bearer T" },
+    });
+  });
+
+  it("CONTRACT names the required Brian tools", () => {
+    for (const t of ["find_skill", "find_context", "log_execution", "capture"]) {
+      expect(CONTRACT).toContain(t);
+    }
   });
 });
