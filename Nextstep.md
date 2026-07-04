@@ -52,7 +52,7 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
 - **LLM:** OpenAI only (no Claude). Embeddings `text-embedding-3-small` (1536);
   generative `gpt-5.4-mini` via `LLM_MODEL`, using **Structured Outputs** (strict
   `json_schema`) because it's a reasoning model.
-- **Status:** 114/114 tests pass on the live DB (as of 2026-07-04).
+- **Status:** 152/152 tests pass on the live DB (as of 2026-07-04).
 
 ### Environment / infra facts (don't re-derive)
 - Supabase project **brian**, ref `foydcrwyakpkisxtvzgr` (Postgres 17 + pgvector).
@@ -100,6 +100,28 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
   down), installer `npm run hooks:install [-- --user]`, repo-level
   `.claude/settings.json`. The hook needs the API running (`npm run api`).
 
+- **Brian onboard — one-command multi-agent installer (2026-07-04, branch
+  `brian-onboard`):** spec `docs/superpowers/specs/2026-07-04-brian-onboard-design.md`,
+  plan `docs/superpowers/plans/2026-07-04-brian-onboard.md`, usage `docs/onboard.md`.
+  `cd server && npm run onboard` detects installed agent platforms, prints a plan,
+  and wires each: MCP registration + the strongest always-on layer it supports.
+  Zero-dep ESM (`server/scripts/onboard/`): `onboard.mjs` entry + `lib.mjs`
+  (JSON deep-merge with timestamped `.bak-brian-*` backup + refuse-on-unparseable,
+  marker-block editing, TOML section append, `mcpEntry` stdio/http builders) +
+  one adapter per platform behind a `{detect,status,plan,apply}` interface.
+  Adapters: **Claude Code** (merge `~/.claude.json` + delegate hooks to the
+  shipped `installBrianHooks()` — no duplication), **Claude Desktop**
+  (`claude_desktop_config.json`/`mcp.json` merge), **Cursor** (`~/.cursor/mcp.json`
+  + contract block in `~/.cursor/AGENTS.md`), plus Tier-B **Codex**
+  (`~/.codex/config.toml` section + AGENTS.md) and **OpenClaw** (contract file +
+  manual MCP note). Flags: `--status`/`--dry-run`/`--yes`/`--only`/`--url --token`.
+  Safety invariants: backup-before-touch, refuse (never rewrite) unparseable
+  configs, idempotent (zero-diff re-runs), honest per-layer labels, exit 1 on any
+  refusal. 39 new tests (lib/adapters/CLI subprocess vs temp-HOME fixtures).
+  **Live-verified on this machine:** Claude Code + Claude Desktop + Cursor all
+  wired, backups created, second run reports "already wired". Restart each app to
+  load the new MCP server; keep `npm run api` up for the Claude Code hook.
+
 ---
 
 ## How any agent should resume work here (read this first)
@@ -146,53 +168,18 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
   editing its own `~/.claude/settings.json`), and keep `npm run api` running
   so the per-prompt briefing layer actually fires.
 
-### 2. Brian onboard — one-command multi-agent MCP install (specced, not built)
-**Spec (read first): `docs/superpowers/specs/2026-07-04-brian-onboard-design.md`.**
-Why it exists: wiring Brian into a customer's agents is currently manual and
-per-platform; onboarding must be ONE command. This builds on the shipped
-always-on-invocation work (see "done" above) — the onboarder installs those
-same layers everywhere.
-
-What to build, concretely:
-- **Entry point:** `npm run onboard` → `server/scripts/onboard/onboard.mjs`.
-  Zero-dependency Node ESM, bare-`node` runnable, same conventions as
-  `server/scripts/hooks/` (which is shipped and is the pattern to copy).
-- **Flow:** detect installed agent platforms → print a plan (every file +
-  action) → confirm → apply. Flags: `--yes` (no prompt), `--dry-run` (never
-  writes), `--status` (table: platform / detected / wired), `--only a,b`,
-  `--url <https://…> --token <t>` for remote/hosted Brian (default: local
-  stdio MCP + `http://localhost:3001` briefing hook).
-- **Adapter interface** (one file per platform in
-  `server/scripts/onboard/adapters/`, registered in an array — new platforms
-  are additive): `detect(env)`, `status(env)`, `plan(env, opts)`,
-  `apply(env, opts)`. `env` carries `home` + path overrides so tests run
-  against a temp HOME.
-- **Platforms, tier A** (installed on this machine; verify live):
-  Claude Code (MCP via `claude mcp add` or `~/.claude.json`; deterministic
-  hooks by REUSING `server/scripts/hooks/install.mjs` — do not duplicate it),
-  Claude Desktop (`~/Library/Application Support/Claude/` — read what config
-  file actually exists there, both `claude_desktop_config.json` and `mcp.json`
-  have been observed), Cursor (`~/.cursor/mcp.json` + contract block in
-  `~/.cursor/AGENTS.md`).
-- **Platforms, tier B** (NOT on this machine — build against official docs +
-  fixture tests, and verify the file formats against current docs before
-  writing code): Codex CLI (`~/.codex/config.toml` `[mcp_servers.brian]`
-  appended by line-scan, no TOML parser; contract in `~/.codex/AGENTS.md`),
-  OpenClaw/Clawdbot (`~/.openclaw/`; config-file MCP if supported, else print
-  manual steps; contract in workspace bootstrap files).
-- **Safety invariants (non-negotiable):** timestamped `.bak-brian-*` backup
-  before first touch of any file; refuse (skip + report) on unparseable
-  JSON/TOML — never rewrite what can't be parsed; idempotent — second run
-  produces "already wired" and zero diffs; label each layer honestly in output
-  (hooks = guaranteed per-prompt briefing; AGENTS.md/rules = contract always
-  in context, tools still model-pulled; instructions-only = contract at
-  connect).
-- **Testing:** unit tests for the shared merge/marker/TOML helpers
-  (`lib.mjs`); per-adapter subprocess tests against temp-HOME fixtures
-  (fresh / already-wired / foreign-content-preserved / broken-config-skipped);
-  live `--status`/`--dry-run` + real apply for tier A on this machine.
-- **Done means:** a new machine goes from zero → all its agents consulting
-  Brian with one command and one restart of each app.
+### 2. Brian onboard — one-command multi-agent MCP install ✅ DONE (2026-07-04)
+Built, tested (39 new tests), and **live-verified** on this machine — see the
+**Brian onboard** entry in the "done" list above for the full summary. Entry
+point: `cd server && npm run onboard` (`--status` / `--dry-run` / `--yes` /
+`--only a,b` / `--url --token`); usage in `docs/onboard.md`, plan in
+`docs/superpowers/plans/2026-07-04-brian-onboard.md`. Adding the next platform
+(Gemini CLI, Windsurf, …) = one new adapter file in
+`server/scripts/onboard/adapters/` registered in `onboard.mjs`'s REGISTRY array.
+Deferred edges (fine as-is): Codex/OpenClaw are Tier-B (fixture-tested, not
+installed here — reconfirm their file formats against current docs before a
+customer relies on them); remote `--url` emits HTTP MCP entries but the Claude
+Code briefing hook still reads `BRIAN_URL` from `server/.env` (local-first).
 
 ### 3. Connectors — mine Gmail/Slack for patterns & SOPs (chosen direction, needs brainstorm + spec before code)
 This was chosen as the next capture milestone in the 2026-07-03 brainstorm and
