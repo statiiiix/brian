@@ -1,0 +1,221 @@
+/* ---------------------------------------------------------------------------
+   ScrollExpandMedia — warm editorial scroll-expansion hero
+--------------------------------------------------------------------------- */
+
+.sem {
+  overflow-x: hidden;
+}
+
+.sem-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100dvh;
+}
+
+/* Warm paper backdrop with one quiet light source */
+.sem-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(70rem 44rem at 50% -6rem, rgba(245, 166, 35, 0.18), transparent 60%),
+    radial-gradient(48rem 48rem at 108% 8%, rgba(209, 82, 26, 0.08), transparent 55%),
+    var(--bg);
+}
+
+.sem-viewport {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- Expanding media card ------------------------------------------------ */
+
+.sem-media {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  max-width: 95vw;
+  max-height: 85vh;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 50px 100px -40px rgba(74, 50, 22, 0.5);
+  transition: width 80ms linear, height 80ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sem-media {
+    transition: none;
+  }
+}
+
+.sem-media-el {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Subtle inner ring + warm vignette so text stays legible over the video */
+.sem-media-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    inset 0 -120px 120px -60px rgba(32, 20, 8, 0.45);
+  pointer-events: none;
+}
+
+.sem-media-meta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 1.6rem;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.sem-date {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 250, 244, 0.9);
+}
+
+.sem-scrollcue {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: rgba(255, 250, 244, 0.92);
+}
+
+.sem-scrollcue-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.6);
+  animation: sem-pulse 1.8s ease-out infinite;
+}
+
+@keyframes sem-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.55); }
+  100% { box-shadow: 0 0 0 12px rgba(245, 166, 35, 0); }
+}
+
+/* --- Split title --------------------------------------------------------- */
+
+.sem-title {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  width: 100%;
+  text-align: center;
+  pointer-events: none;
+}
+
+.sem-title-word {
+  margin: 0;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 500;
+  font-size: clamp(3rem, 11vw, 7rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  color: var(--fg);
+  text-shadow: 0 2px 30px rgba(247, 243, 234, 0.6);
+}
+
+.sem-title-accent {
+  font-style: italic;
+  color: var(--accent);
+}
+
+/* --- Sound toggle (bottom-left of the top fold) -------------------------- */
+
+.sem-sound {
+  position: fixed;
+  right: 1.6rem;
+  bottom: 1rem;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-raised);
+  color: var(--fg);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: color 160ms ease, border-color 160ms ease,
+    opacity 220ms ease, transform 220ms ease;
+}
+
+.sem-sound--hidden {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+
+.sem-sound:hover {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.sem-sound-icon {
+  width: 20px;
+  height: 20px;
+}
+
+@media (max-width: 480px) {
+  .sem-sound {
+    right: 1rem;
+    bottom: 1rem;
+  }
+}
+
+/* --- Revealed content ---------------------------------------------------- */
+
+.sem-content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .sem-media {
+    border-radius: 16px;
+  }
+  .sem-title-word {
+    font-size: clamp(2.6rem, 15vw, 4rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sem-scrollcue-dot {
+    animation: none;
+  }
+}

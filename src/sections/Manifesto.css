@@ -5,11 +5,17 @@
 
 .manifesto-text {
   margin: 0;
-  font-size: clamp(1.15rem, 2.2vw, 1.45rem);
-  font-weight: 450;
-  line-height: 1.65;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-size: clamp(1.4rem, 2.8vw, 2rem);
+  font-weight: 400;
+  line-height: 1.4;
   letter-spacing: -0.015em;
-  color: var(--fg-secondary);
+  color: var(--fg);
+}
+
+.manifesto-text::first-letter {
+  color: var(--accent);
 }
 
 .manifesto-sig {

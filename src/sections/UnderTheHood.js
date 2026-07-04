@@ -39,10 +39,9 @@ export default function UnderTheHood() {
         <p className="kicker">Under the hood</p>
         <h2 className="section-title">For the engineer in the room.</h2>
         <p className="section-lede">
-          A Node/TypeScript backend — Fastify, Supabase Postgres with pgvector —
-          exposing an MCP server over stdio locally and Streamable HTTP with
-          bearer tokens hosted. Any MCP-capable agent gets your company's
-          judgment.
+          Node/TypeScript, Fastify, Supabase Postgres with pgvector — one MCP
+          server, stdio locally or Streamable HTTP with bearer tokens hosted.
+          Any MCP-capable agent gets your company's judgment.
         </p>
         <div className="hood-grid">
           <div className="code-card stagger" style={{ '--i': 0 }}>

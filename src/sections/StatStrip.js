@@ -21,7 +21,7 @@ export default function StatStrip() {
         </div>
         <div className="stat">
           <Counter to={100} suffix="%" />
-          <span className="stat-label">of runs land in the execution log</span>
+          <span className="stat-label">of runs logged. Every time.</span>
         </div>
       </div>
     </section>

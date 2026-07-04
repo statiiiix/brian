@@ -9,12 +9,11 @@ export default function Manifesto() {
         <p className="kicker">Why we're building this</p>
         <blockquote className="manifesto-text">
           Agents got good enough to do real work in 2025. What didn't exist was
-          the thing that makes delegation safe: a place where a company's
-          judgment lives — its procedures, its limits, its "stop and ask a
+          the thing that makes delegation safe — a place where a company's
+          judgment lives: its procedures, its limits, its "stop and ask a
           human" lines. Every team we talked to had rebuilt a worse version of
-          this in system prompts. So we're building it once, properly, as
-          infrastructure: versioned, reviewed, enforced, and shared by every
-          agent you run.
+          it in system prompts. So we built it once, properly: versioned,
+          reviewed, enforced, shared by every agent you run.
         </blockquote>
         <div className="manifesto-sig">
           <span className="manifesto-sig-avatar" aria-hidden="true">

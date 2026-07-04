@@ -8,8 +8,9 @@ export default function FinalCTA() {
       <div className="cta-inner reveal" ref={ref}>
         <h2>Stop pasting SOPs into system prompts.</h2>
         <p>
-          Give every agent at your company the same judgment: procedures, hard
-          rules, and guardrails — with escalation when they hit a limit.
+          Give every agent at your company the same judgment — procedures,
+          hard rules, guardrails, and an escalation path when they hit a
+          limit.
         </p>
         <div className="cta-actions">
           <a href="mailto:a7madinquiries@gmail.com" className="btn btn--primary">

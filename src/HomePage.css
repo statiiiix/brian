@@ -1,29 +1,50 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ---------------------------------------------------------------------------
-   Design tokens — restrained premium
+   Brian — warm editorial premium (light)
+   Off-white paper, burnt-orange ink accents, Fraunces display + Inter body.
 --------------------------------------------------------------------------- */
 
 :root {
-  --bg: #0a0a0b;
-  --bg-raised: #101013;
-  --bg-hover: #16161a;
-  --fg: #f7f8f8;
-  --fg-secondary: #d0d2d6;
-  --muted: #9a9ca3;
-  --muted-2: #64666e;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  --accent: #f5a623;
-  --accent-hover: #ffb63a;
-  --accent-ink: #1d1200;
-  --accent-dim: rgba(245, 166, 35, 0.12);
-  --green: #3dd68c;
-  --green-dim: rgba(61, 214, 140, 0.12);
-  --red: #f2555a;
+  /* Warm paper surfaces */
+  --bg: #f7f3ea;
+  --bg-raised: #fffdf8;
+  --bg-sunken: #f1ebdf;
+  --bg-hover: #f3ede1;
+
+  /* Warm near-black ink */
+  --fg: #201b15;
+  --fg-secondary: #4a443b;
+  --muted: #787064;
+  --muted-2: #a79d8e;
+
+  /* Hairlines on paper */
+  --border: rgba(32, 27, 21, 0.10);
+  --border-strong: rgba(32, 27, 21, 0.17);
+
+  /* Orange system */
+  --accent: #d1521a;          /* fills, marks */
+  --accent-hover: #b8420f;
+  --accent-text: #ad3f10;     /* small orange text — AA on paper */
+  --accent-ink: #fff8f2;      /* text on an orange fill */
+  --accent-soft: rgba(209, 82, 26, 0.10);
+  --accent-line: rgba(209, 82, 26, 0.28);
+  --amber: #f5a623;           /* decorative highlight / glow only */
+
+  --green: #1c9460;
+  --green-soft: rgba(28, 148, 96, 0.12);
+  --red: #cf3f34;
+  --red-soft: rgba(207, 63, 52, 0.12);
+
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
-  --container: 68rem;
+  --container: 72rem;
+
+  --shadow-sm: 0 1px 2px rgba(74, 50, 22, 0.06);
+  --shadow-md: 0 16px 40px -20px rgba(74, 50, 22, 0.22);
+  --shadow-lg: 0 50px 100px -50px rgba(74, 50, 22, 0.40);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html {
@@ -41,15 +62,33 @@ html {
 --------------------------------------------------------------------------- */
 
 .home {
+  position: relative;
   min-height: 100dvh;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font);
-  font-size: 15.5px;
+  font-size: 16px;
   line-height: 1.6;
   overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Faint warm paper wash — one quiet light source, top-center. */
+.home::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(60rem 40rem at 50% -8rem, rgba(245, 166, 35, 0.10), transparent 60%),
+    radial-gradient(50rem 50rem at 105% 12%, rgba(209, 82, 26, 0.05), transparent 55%);
+}
+
+.home > * {
+  position: relative;
+  z-index: 1;
 }
 
 .home a {
@@ -58,12 +97,12 @@ html {
 
 .home :focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 4px;
+  outline-offset: 3px;
+  border-radius: 5px;
 }
 
 .home ::selection {
-  background: rgba(245, 166, 35, 0.3);
+  background: rgba(209, 82, 26, 0.18);
 }
 
 /* ---------------------------------------------------------------------------
@@ -73,7 +112,7 @@ html {
 .section {
   position: relative;
   border-top: 1px solid var(--border);
-  padding: 7rem 1.5rem;
+  padding: 8rem 1.5rem;
 }
 
 .section-inner {
@@ -82,30 +121,58 @@ html {
 }
 
 .kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
   font-family: var(--font-mono);
   font-size: 0.72rem;
-  font-weight: 500;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--accent);
-  margin: 0 0 1.1rem;
+  letter-spacing: 0.18em;
+  color: var(--accent-text);
+  margin: 0 0 1.4rem;
+}
+
+.kicker::before {
+  content: '';
+  width: 1.6rem;
+  height: 1px;
+  background: var(--accent-line);
 }
 
 .section-title {
-  font-size: clamp(1.7rem, 3.4vw, 2.5rem);
-  font-weight: 600;
-  letter-spacing: -0.028em;
-  line-height: 1.15;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-size: clamp(2rem, 4.4vw, 3.05rem);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
   margin: 0;
-  max-width: 34rem;
+  max-width: 22ch;
   text-wrap: balance;
+  color: var(--fg);
+}
+
+.section-title em,
+.gradient-text {
+  font-style: italic;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.gradient-text {
+  font-style: normal;
+  background: linear-gradient(100deg, var(--accent) 20%, var(--amber) 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .section-lede {
-  max-width: 38rem;
-  margin: 1.25rem 0 0;
-  color: var(--muted);
-  font-size: 1.02rem;
+  max-width: 42rem;
+  margin: 1.4rem 0 0;
+  color: var(--fg-secondary);
+  font-size: 1.08rem;
   line-height: 1.7;
 }
 
@@ -117,51 +184,56 @@ html {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
-  min-height: 44px;
-  padding: 0.62rem 1.3rem;
-  border-radius: 8px;
+  gap: 0.5rem;
+  min-height: 46px;
+  padding: 0.7rem 1.4rem;
+  border-radius: 10px;
   border: 1px solid transparent;
   font-family: var(--font);
-  font-weight: 500;
-  font-size: 0.92rem;
+  font-weight: 550;
+  font-size: 0.95rem;
   letter-spacing: -0.01em;
   text-decoration: none;
   cursor: pointer;
-  transition: background-color 150ms ease, border-color 150ms ease,
-    color 150ms ease, transform 150ms ease;
+  transition: transform 200ms var(--ease), box-shadow 200ms var(--ease),
+    background-color 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
 .btn:active {
-  transform: scale(0.98);
+  transform: translateY(0) scale(0.985);
 }
 
 .btn--primary {
-  background: var(--accent);
+  background: linear-gradient(180deg, #e0631f, var(--accent));
   color: var(--accent-ink);
   font-weight: 600;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 10px 24px -12px rgba(209, 82, 26, 0.65);
 }
 
 .btn--primary:hover {
-  background: var(--accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 18px 34px -14px rgba(209, 82, 26, 0.7);
 }
 
 .btn--ghost {
   border-color: var(--border-strong);
   color: var(--fg);
-  background: transparent;
+  background: var(--bg-raised);
 }
 
 .btn--ghost:hover {
-  background: var(--bg-hover);
-  border-color: rgba(255, 255, 255, 0.26);
+  transform: translateY(-2px);
+  border-color: var(--accent-line);
+  box-shadow: var(--shadow-md);
 }
 
 .btn--sm {
-  min-height: 34px;
-  padding: 0.3rem 0.9rem;
+  min-height: 36px;
+  padding: 0.35rem 0.95rem;
   font-size: 0.85rem;
-  border-radius: 7px;
+  border-radius: 8px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -177,23 +249,23 @@ html {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  padding: 0.18rem 0.55rem;
+  padding: 0.2rem 0.58rem;
   border-radius: 99px;
 }
 
 .pill--live {
-  background: var(--green-dim);
+  background: var(--green-soft);
   color: var(--green);
 }
 
 .pill--draft {
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(32, 27, 21, 0.06);
   color: var(--muted);
 }
 
 .pill--stop {
-  background: var(--accent-dim);
-  color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 
 /* Hairline grid: 1px gaps drawn with the border color showing through. */
@@ -202,55 +274,56 @@ html {
   gap: 1px;
   background: var(--border);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .hairline-grid > * {
-  background: var(--bg);
-  padding: 2rem;
-  transition: background-color 180ms ease;
+  background: var(--bg-raised);
+  padding: 2.1rem;
+  transition: background-color 200ms ease, transform 200ms var(--ease);
 }
 
 .hairline-grid > *:hover {
-  background: var(--bg-raised);
+  background: #fff;
 }
 
 /* ---------------------------------------------------------------------------
-   Terminal / window chrome (shared)
+   Window chrome (shared, light)
 --------------------------------------------------------------------------- */
 
 .terminal-bar {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.7rem 1rem;
+  gap: 0.45rem;
+  padding: 0.75rem 1.1rem;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-raised);
+  background: var(--bg-sunken);
 }
 
 .terminal-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(32, 27, 21, 0.16);
 }
 
 .terminal-title {
   margin-left: 0.55rem;
   font-family: var(--font-mono);
   font-size: 0.72rem;
-  color: var(--muted-2);
+  color: var(--muted);
 }
 
 /* ---------------------------------------------------------------------------
-   Scroll reveal — quiet
+   Scroll reveal — CSS fallback (Framer Motion handles most reveals)
 --------------------------------------------------------------------------- */
 
 .reveal {
   opacity: 0;
-  transform: translateY(16px);
-  transition: opacity 600ms ease, transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translateY(18px);
+  transition: opacity 700ms var(--ease), transform 700ms var(--ease);
 }
 
 .reveal.in {
@@ -260,9 +333,9 @@ html {
 
 .stagger {
   opacity: 0;
-  transform: translateY(12px);
-  transition: opacity 500ms ease, transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
-  transition-delay: calc(var(--i, 0) * 70ms);
+  transform: translateY(14px);
+  transition: opacity 600ms var(--ease), transform 600ms var(--ease);
+  transition-delay: calc(var(--i, 0) * 80ms);
 }
 
 .reveal.in .stagger {
@@ -281,6 +354,6 @@ html {
 
 @media (max-width: 640px) {
   .section {
-    padding: 4.5rem 1.25rem;
+    padding: 5rem 1.25rem;
   }
 }

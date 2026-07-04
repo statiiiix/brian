@@ -6,7 +6,7 @@ const features = [
   {
     icon: icons.shield,
     title: 'Graduated autonomy',
-    body: 'Captured knowledge goes live only if the classifier is confident and every tool the skill touches is registered as reversible. Otherwise it parks as a draft.',
+    body: 'Captured knowledge only goes live when the classifier is confident and every tool it touches is reversible. Otherwise, it parks as a draft.',
   },
   {
     icon: icons.review,
@@ -16,7 +16,7 @@ const features = [
   {
     icon: icons.log,
     title: 'Execution log',
-    body: 'Every run is written down: what the agent did, which skill version it followed, and every human override along the way.',
+    body: 'Every run is logged: what the agent did, which skill version it followed, every human override along the way.',
   },
   {
     icon: icons.refresh,

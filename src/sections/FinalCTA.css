@@ -28,9 +28,12 @@
 
 .cta-inner h2 {
   position: relative;
-  font-size: clamp(1.8rem, 4vw, 2.7rem);
-  font-weight: 600;
-  letter-spacing: -0.03em;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-size: clamp(2rem, 4.4vw, 3rem);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
   margin: 0 0 1rem;
   text-wrap: balance;
 }

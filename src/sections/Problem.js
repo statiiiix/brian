@@ -4,18 +4,18 @@ import './Problem.css';
 const pains = [
   {
     n: '01',
-    title: 'System prompts are duct tape',
-    body: 'Hand-written prompts, CLAUDE.md files, SOPs pasted into chats — per agent, per tool. No versioning, no review, no enforcement.',
+    title: 'Your knowledge is scattered',
+    body: 'Refunds, deploys, vendor payments, hiring — scattered across prompts, CLAUDE.md files, and pasted-in SOPs. One copy per agent. No versioning. No review.',
   },
   {
     n: '02',
-    title: 'Agents don’t know your rules',
-    body: 'Support replies, refunds, triage — agents can do the work. But nothing binds them to this company’s limits, exceptions, and approvals.',
+    title: 'Agents don’t know your company',
+    body: 'They can draft the refund, ship the deploy, pay the invoice — nothing stops them at your limits, or tells them when to ask a human first.',
   },
   {
     n: '03',
-    title: 'So nobody actually delegates',
-    body: 'Without guardrails, escalation, and an audit trail, “let the agent handle it” is a risk no operator signs off on.',
+    title: 'So the real work never gets delegated',
+    body: 'No shared judgment. No guardrails. No audit trail. “Let the agent handle it” is a bet you only make once.',
   },
 ];
 

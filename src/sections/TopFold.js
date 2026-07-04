@@ -1,41 +1,44 @@
+import ScrollExpandMedia from '../components/ScrollExpandMedia';
 import ProductMock from '../components/ProductMock';
-import { useReveal } from '../hooks/useReveal';
+import { Reveal } from '../components/reveal';
 import './TopFold.css';
 
+const VIDEO_SRC = process.env.PUBLIC_URL + '/Brianmov.webm';
+
 export default function TopFold() {
-  const revealRef = useReveal();
   return (
     <header className="hero" id="top">
-      <div className="hero-glow" aria-hidden="true" />
-      <div className="hero-inner reveal" ref={revealRef}>
-        <div className="hero-copy">
-          <p className="hero-eyebrow">
-            <span className="hero-eyebrow-dot" aria-hidden="true" />
-            Now onboarding design partners
-          </p>
-          <h1 className="hero-title">
-            AI agents that follow
-            <br />
-            your company's rules.
-          </h1>
-          <p className="hero-sub">
-            Brian turns your processes into executable skills agents follow —
-            and stops and escalates to a human when they shouldn't act. One MCP
-            server; every agent gets your company's judgment.
-          </p>
-          <div className="hero-ctas">
+      <ScrollExpandMedia
+        mediaType="video"
+        mediaSrc={VIDEO_SRC}
+        title="Company Brain"
+      >
+        <div className="hero-reveal">
+          <Reveal as="h1" className="hero-title" delay={0.05}>
+            Give every AI agent your company's{' '}
+            <em className="hero-title-accent">brain.</em>
+          </Reveal>
+
+          <Reveal as="p" className="hero-sub" delay={0.12}>
+            Every procedure, limit, and escalation line — in one place, so any
+            agent acts with your judgment, not its own guess. Support, finance,
+            ops, on-call.
+          </Reveal>
+
+          <Reveal className="hero-ctas" delay={0.18}>
             <a href="#cta" className="btn btn--primary">
               Get a demo
             </a>
             <a href="#how-it-works" className="btn btn--ghost">
-              How it works
+              See how it works
             </a>
-          </div>
+          </Reveal>
+
+          <Reveal className="hero-mock" delay={0.24}>
+            <ProductMock />
+          </Reveal>
         </div>
-        <div className="hero-mock stagger" style={{ '--i': 2 }}>
-          <ProductMock />
-        </div>
-      </div>
+      </ScrollExpandMedia>
     </header>
   );
 }

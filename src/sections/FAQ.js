@@ -4,27 +4,27 @@ import './FAQ.css';
 const faqs = [
   {
     q: 'How is this different from Mem0, Zep, or built-in agent memory?',
-    a: 'Those store what an agent remembers. Brian governs what an agent is allowed to do. Skills carry hard rules, guardrails, and escalation targets — enforcement and audit, not just recall. Memory is a feature here; safe delegation is the product.',
+    a: 'Those store what an agent remembers. Brian governs what it’s allowed to do. Skills carry hard rules, guardrails, and escalation targets — enforcement and audit, not just recall. Memory’s a feature here. Safe delegation is the product.',
   },
   {
     q: 'What happens when a skill is wrong or goes stale?',
-    a: 'Corrections captured from any session revise the existing skill instead of duplicating it, and every revision is versioned. Skills that get overridden repeatedly, or haven’t been touched while the company changed around them, are flagged to their owner for review.',
+    a: 'A correction from any session revises the skill instead of duplicating it — every revision versioned. Skills that get overridden a lot, or haven’t been touched while the company changed, get flagged to their owner.',
   },
   {
     q: 'Can auto-extracted knowledge go live without review?',
-    a: 'No. Captured knowledge goes live automatically only when the classifier is confident and every tool the skill uses is registered as reversible. Anything touching an irreversible tool — like sending email — parks as a draft until a human approves it.',
+    a: 'No. It goes live on its own only when the classifier is confident and every tool the skill uses is reversible. Anything touching an irreversible tool — like sending email — parks as a draft until a human approves it.',
   },
   {
     q: 'Why build on MCP?',
-    a: 'MCP standardized how agents connect to tools. That means one Brian server — stdio locally, Streamable HTTP with bearer tokens hosted — works with Claude Desktop, Claude Code, Cursor, or your own agent, with no per-agent integration work.',
+    a: 'MCP standardized how agents connect to tools. One Brian server — stdio locally, Streamable HTTP hosted — works with Claude Desktop, Claude Code, Cursor, or your own agent. No per-agent integration work.',
   },
   {
     q: 'What does the agent actually see at runtime?',
-    a: 'It calls find_skill and find_context — semantic search over pgvector embeddings in your Postgres. It gets back the procedure, hard rules, and guardrails for the matching skill, executes within them, and writes the run to the execution log.',
+    a: 'It calls find_skill and find_context — semantic search over pgvector embeddings in your Postgres. Back comes the procedure, hard rules, and guardrails for the matching skill. It executes within them and logs the run.',
   },
   {
     q: 'Is this "chat with your docs"?',
-    a: 'No. Brian is not RAG over documents and not a knowledge base with a chat window. It stores executable procedures with decision logic — built so an agent can do the work, not summarize how the work is done.',
+    a: 'No. Brian isn’t RAG over documents, and it’s not a knowledge base with a chat window. It stores executable procedures with decision logic — built so an agent can do the work, not describe it.',
   },
 ];
 

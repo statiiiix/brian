@@ -5,33 +5,117 @@
 .integrations-inner {
   max-width: var(--container);
   margin: 0 auto;
-  padding: 1.6rem 1.5rem;
+  padding: 10rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3.25rem;
+}
+
+.integ-row {
   display: flex;
   align-items: center;
   gap: 2.5rem;
-  flex-wrap: wrap;
 }
 
 .integrations-label {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--muted-2);
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-style: normal;
+  font-weight: 500;
+  font-size: 1.9rem;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+  color: var(--fg);
+  flex-shrink: 0;
+  width: 15.5rem;
+}
+
+.integ-track-wrap {
+  flex: 1;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 6%,
+    #000 94%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 6%,
+    #000 94%,
+    transparent 100%
+  );
+}
+
+.integ-track {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: max-content;
+  animation: integ-scroll 48s linear infinite;
+}
+
+.integ-track--reverse {
+  animation-direction: reverse;
+}
+
+.integ-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-size: 1.12rem;
+  font-weight: 500;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  padding: 0.65rem 1.3rem;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--bg-raised);
+}
+
+.integ-chip .icon {
+  color: var(--accent-text);
   flex-shrink: 0;
 }
 
-.integrations-list {
-  display: flex;
-  align-items: center;
-  gap: 2.25rem;
-  flex-wrap: wrap;
+.integ-chip .brand-icon {
+  display: block;
+  flex-shrink: 0;
 }
 
-.integrations-item {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--muted);
-  letter-spacing: -0.01em;
-  white-space: nowrap;
+@keyframes integ-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .integ-track {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .integrations-inner {
+    padding: 6.5rem 1.25rem;
+    gap: 2.5rem;
+  }
+  .integ-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.1rem;
+  }
+  .integrations-label {
+    width: auto;
+    font-size: 2rem;
+  }
+  .integ-track-wrap {
+    width: 100%;
+  }
 }

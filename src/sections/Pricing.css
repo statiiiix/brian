@@ -15,8 +15,8 @@
 }
 
 .pricing-card--partner {
-  border-color: rgba(245, 166, 35, 0.35);
-  background: linear-gradient(180deg, rgba(245, 166, 35, 0.05), transparent 50%);
+  border-color: var(--accent-line);
+  background: linear-gradient(180deg, var(--accent-soft), transparent 50%);
 }
 
 .pricing-card h3 {
