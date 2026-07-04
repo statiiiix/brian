@@ -1,3 +1,17 @@
+# Brian — The Company Brain
+
+**Brian** gives AI agents your company's judgment: procedures, hard rules, and guardrails they must follow — with escalation when they hit a limit.
+
+Companies can't delegate real work to AI agents because agents don't know their rules. Brian turns your processes into executable skills agents follow, exposing a single MCP server that any capable agent (Claude Desktop, Claude Code, or custom clients) can connect to.
+
+## Features
+- **Executable Skills:** Procedures with `hard_rules` (non-negotiable) and `guardrails` (escalation conditions).
+- **Context:** Durable facts, decisions, and preferences.
+- **Graduated Autonomy:** Safely parks actions touching irreversible tools for human review.
+- **Memory:** Captures corrections to stay current and prevent repetitive mistakes.
+
+---
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).

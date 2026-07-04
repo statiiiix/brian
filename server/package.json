@@ -15,7 +15,8 @@
     "gmail:auth": "tsx src/gmail/authCli.ts",
     "bench": "tsx src/bench/cli.ts",
     "seed:admin": "tsx src/scripts/seedAdmin.ts",
-    "hooks:install": "node scripts/hooks/install.mjs"
+    "hooks:install": "node scripts/hooks/install.mjs",
+    "onboard": "node scripts/onboard/onboard.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
