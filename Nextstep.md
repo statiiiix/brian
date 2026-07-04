@@ -113,19 +113,41 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
   and the full e2e ("a customer asked X — handle it" → draft in Gmail).
 - Rotate the OpenAI API key.
 
-### 2. Dashboard follow-ups
+### 2. Brian onboard — one-command multi-agent install (specced, not built)
+Spec: `docs/superpowers/specs/2026-07-04-brian-onboard-design.md`. A single
+`npm run onboard` (`server/scripts/onboard/`, zero-dep ESM like the hooks
+scripts) that detects the agent platforms on a machine and wires each one:
+MCP registration + the strongest always-on layer it supports. Tier A
+(live-verifiable on this machine): Claude Code (reuse `hooks:install`),
+Claude Desktop, Cursor. Tier B (fixture-tested; confirm file formats against
+official docs at build time): Codex CLI, OpenClaw/Clawdbot. Adapter registry
+makes new platforms additive. `--url/--token` flags are the seam that makes
+onboarding tenant-ready for hosted multi-company Brian.
+
+### 3. Supabase integration — multi-tenant auth + per-client skills (designed, not built)
+**Read `SupabaseIntegration.md` carefully (start to finish) before touching
+this** — it holds the decided answers: shared tables + `tenant_id` + RLS (NOT
+per-client vector tables/schemas), Supabase Auth for dashboard humans,
+hashed per-tenant `api_tokens` for agents, `SET LOCAL app.tenant_id` +
+double enforcement (SQL + RLS), and the four rollout phases. Phases 1–2
+(migration `005_tenants.sql` + token guard; real RLS via a non-owner
+`brian_app` role) are safe to build now; phases 3–4 (Supabase Auth swap,
+hosted deploy) land with the first external design partner.
+
+### 4. Dashboard follow-ups
 The dashboard is built (see above). Remaining ideas: shareable interview links
 for non-admin experts, review-queue count badge in the sidebar, interview
 resume-from-abandoned. Next capture milestone per the 2026-07-03 brainstorm:
 **connectors** (Slack/Gmail/tickets → drafts into the same review queue).
 
-### 3. Later / deferred (intentional anti-goals until real use proves them out)
+### 5. Later / deferred (intentional anti-goals until real use proves them out)
 - Cloud hosting of the HTTP surface (Fly/Railway) — everything is transport-ready;
   deploy when a remote agent actually needs it.
 - Automated third-party connectors (Slack/Gmail/Notion schedulers) — `capture` is
   the v2 substitute.
 - Graph DB / graph UI — not happening for v1; a skill table beats it.
-- Multi-tenant scoping (tenant column + RLS policies) — only when serving many companies.
+- Multi-tenant scoping — no longer deferred as an idea: fully designed in
+  `SupabaseIntegration.md` (see step 3 above); build when prioritized.
 - Move pgvector out of `public` schema (minor security-linter WARN) — low priority.
 
 ---
@@ -145,7 +167,10 @@ agent executes; `capture` keeps it current.
 - Plans: `docs/superpowers/plans/2026-06-29-company-brain-v1.md`,
   `docs/superpowers/plans/2026-06-29-knowledge-capture-v2.md`,
   `docs/superpowers/plans/2026-07-01-roadmap-to-done.md`
-- Product source of truth: `CompanyBrain.md`
+- Product source of truth: `CompanyBrain.md` · Supabase/multi-tenant design:
+  `SupabaseIntegration.md` (mandatory reading before building tenancy)
+- Newer specs: `docs/superpowers/specs/2026-07-04-always-on-invocation-design.md`,
+  `docs/superpowers/specs/2026-07-04-brian-onboard-design.md`
 - Agent contract: `docs/agent-contract.md` · Gmail setup: `docs/gmail-setup.md`
 - Backend entry points: `server/src/api/index.ts` (REST + `/mcp` HTTP),
   `server/src/mcp/index.ts` (MCP stdio), `server/src/review/cli.ts` (review CLI),
