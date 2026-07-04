@@ -7,6 +7,10 @@ import {
   deepMerge,
   backupFile,
   writeJsonFile,
+  upsertMarkerBlock,
+  hasMarkerBlock,
+  tomlHasSection,
+  appendTomlSection,
 } from "../../scripts/onboard/lib.mjs";
 
 describe("onboard lib — json/backup", () => {
@@ -50,5 +54,47 @@ describe("onboard lib — json/backup", () => {
     expect(JSON.parse(await readFile(f, "utf8"))).toEqual({ fresh: true });
     const names = await readdir(path.join(dir, "nested"));
     expect(names.filter((n) => n.includes(".bak-brian-"))).toHaveLength(0);
+  });
+});
+
+describe("onboard lib — marker blocks & TOML", () => {
+  it("upsertMarkerBlock appends once, is idempotent, and replaces the body in place", () => {
+    const a = upsertMarkerBlock("# rules\n", "CONTRACT v1");
+    expect(a.changed).toBe(true);
+    expect(hasMarkerBlock(a.text)).toBe(true);
+    expect(a.text.startsWith("# rules")).toBe(true); // pre-existing content kept above
+
+    const b = upsertMarkerBlock(a.text, "CONTRACT v1"); // identical body -> no change
+    expect(b.changed).toBe(false);
+    expect(b.text).toBe(a.text);
+
+    const c = upsertMarkerBlock(a.text, "CONTRACT v2"); // new body -> replace in place
+    expect(c.changed).toBe(true);
+    expect(c.text).toContain("CONTRACT v2");
+    expect(c.text).not.toContain("CONTRACT v1");
+    expect(c.text.match(/>>> brian >>>/g)).toHaveLength(1); // still exactly one block
+  });
+
+  it("upsertMarkerBlock seeds an empty string with just the block", () => {
+    const a = upsertMarkerBlock("", "HELLO");
+    expect(a.changed).toBe(true);
+    expect(hasMarkerBlock(a.text)).toBe(true);
+    expect(a.text).toContain("HELLO");
+  });
+
+  it("tomlHasSection + appendTomlSection are line-scan based and preserve content", () => {
+    const base = '[mcp_servers.other]\ncommand = "x"\n';
+    expect(tomlHasSection(base, "mcp_servers.brian")).toBe(false);
+    expect(tomlHasSection(base, "mcp_servers.other")).toBe(true);
+
+    const out = appendTomlSection(base, '[mcp_servers.brian]\ncommand = "npm"\n');
+    expect(tomlHasSection(out, "mcp_servers.brian")).toBe(true);
+    expect(out).toContain("[mcp_servers.other]"); // preserved
+    expect(out).toContain('command = "x"');
+  });
+
+  it("tomlHasSection ignores commented-out sections", () => {
+    const base = '# [mcp_servers.brian]\nmodel = "gpt-5"\n';
+    expect(tomlHasSection(base, "mcp_servers.brian")).toBe(false);
   });
 });

@@ -55,3 +55,59 @@ export function writeJsonFile(file, value, { backup = true } = {}) {
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, JSON.stringify(value, null, 2) + "\n");
 }
+
+// Read a text file, or null if it doesn't exist.
+export function readText(file) {
+  try {
+    return readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+// Write text (+ backup existing, + mkdir -p). Callers gate on `changed`.
+export function writeTextFile(file, content, { backup = true } = {}) {
+  if (backup) backupFile(file);
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, content);
+}
+
+// --- Marker-block editing for text/markdown files (e.g. AGENTS.md) ----------
+// A Brian-owned region delimited by these markers; everything outside is left
+// untouched, so we never clobber a user's own rules.
+const MARK_OPEN = "# >>> brian >>>";
+const MARK_CLOSE = "# <<< brian <<<";
+const BLOCK_RE = /# >>> brian >>>[\s\S]*?# <<< brian <<</;
+
+export function hasMarkerBlock(text) {
+  return BLOCK_RE.test(text ?? "");
+}
+
+// Insert or update the Brian marker block. Idempotent: an identical existing
+// block yields { changed: false } and the original text byte-for-byte.
+export function upsertMarkerBlock(text, body) {
+  const source = text ?? "";
+  const block = `${MARK_OPEN}\n${body}\n${MARK_CLOSE}`;
+  const existing = source.match(BLOCK_RE);
+  if (existing) {
+    if (existing[0] === block) return { text: source, changed: false };
+    return { text: source.replace(BLOCK_RE, block), changed: true };
+  }
+  if (source.trim() === "") return { text: block + "\n", changed: true };
+  const sep = source.endsWith("\n") ? "\n" : "\n\n";
+  return { text: source + sep + block + "\n", changed: true };
+}
+
+// --- TOML section helpers (line-scan; no TOML parser) -----------------------
+// Detect `[section]` as a real (non-commented) table header.
+export function tomlHasSection(text, section) {
+  const target = `[${section}]`;
+  return (text ?? "").split("\n").some((line) => line.trim() === target);
+}
+
+// Append a section, separated from prior content by exactly one blank line.
+export function appendTomlSection(text, sectionText) {
+  const source = text ?? "";
+  const sep = source === "" ? "" : source.endsWith("\n\n") ? "" : source.endsWith("\n") ? "\n" : "\n\n";
+  return source + sep + sectionText;
+}
