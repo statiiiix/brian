@@ -23,6 +23,11 @@ insert into tenants (id, name, slug)
 values ('00000000-0000-0000-0000-000000000001', 'Sameh', 'sameh')
 on conflict (slug) do nothing;
 
+-- RLS on from the start (like users/interviews). No policy yet: the backend
+-- connects as the owner (which bypasses RLS), so this only denies the exposed
+-- anon/authenticated PostgREST roles. Policies land in phase 2 with brian_app.
+alter table tenants enable row level security;
+
 -- Agent credentials: one or more per tenant, revocable independently. Only the
 -- sha256 hash of the bearer is stored; the plaintext is shown once at creation.
 create table if not exists api_tokens (
@@ -34,6 +39,8 @@ create table if not exists api_tokens (
   revoked_at  timestamptz
 );
 create index if not exists api_tokens_tenant_idx on api_tokens (tenant_id);
+-- api_tokens holds token hashes — never leave it exposed to the anon role.
+alter table api_tokens enable row level security;
 
 -- Add tenant_id to every tenant-owned table, defaulting to the founding tenant
 -- so existing rows backfill and pre-tenant code keeps inserting successfully.

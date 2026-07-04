@@ -55,6 +55,16 @@ d("migration 005: tenants + api_tokens + tenant_id", () => {
     await pool.query("delete from tenants where slug = '__t005-other'");
   });
 
+  it("enables RLS on the new tenants + api_tokens tables", async () => {
+    const { rows } = await pool.query(
+      `select c.relname, c.relrowsecurity
+         from pg_class c
+        where c.oid in (to_regclass('tenants'), to_regclass('api_tokens'))`,
+    );
+    expect(rows).toHaveLength(2);
+    for (const r of rows) expect(r.relrowsecurity).toBe(true);
+  });
+
   it("is convergent (re-runs cleanly)", async () => {
     await runMigrations(pool);
   });
