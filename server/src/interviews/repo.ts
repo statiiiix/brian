@@ -85,3 +85,13 @@ export async function abandonInterview(id: string, p: Queryable = db()): Promise
      where id = $1 and tenant_id = $2 returning ${COLS}`, [id, tenantOrFounding()]);
   return hydrate(rows[0]);
 }
+
+// Reactivate an abandoned interview so the expert can pick it back up. The route
+// validates the current status is 'abandoned' before calling this.
+export async function resumeInterview(id: string, p: Queryable = db()): Promise<Interview> {
+  await mustGet(id, p);
+  const { rows } = await p.query(
+    `update interviews set status = 'active', updated_at = now()
+     where id = $1 and tenant_id = $2 returning ${COLS}`, [id, tenantOrFounding()]);
+  return hydrate(rows[0]);
+}

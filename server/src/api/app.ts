@@ -20,7 +20,7 @@ import { runTenant, FOUNDING_TENANT_ID } from "../db/tenant.js";
 import { tenantForToken } from "../auth/apiTokens.js";
 import {
   createInterview, getInterview, listInterviews, appendMessage as appendInterviewMessage,
-  completeInterview, abandonInterview,
+  completeInterview, abandonInterview, resumeInterview,
 } from "../interviews/repo.js";
 import { runTurn } from "../interviews/engine.js";
 import { defaultLlm, type LlmClient } from "../llm/complete.js";
@@ -257,6 +257,13 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     const iv = await getInterview((req.params as any).id);
     if (!iv) return reply.code(404).send({ error: "interview not found" });
     return abandonInterview(iv.id);
+  });
+
+  app.post("/api/interviews/:id/resume", async (req, reply) => {
+    const iv = await getInterview((req.params as any).id);
+    if (!iv) return reply.code(404).send({ error: "interview not found" });
+    if (iv.status !== "abandoned") return reply.code(400).send({ error: `interview is ${iv.status}` });
+    return resumeInterview(iv.id);
   });
 
   registerMcpHttp(app);
