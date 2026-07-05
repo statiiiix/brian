@@ -20,7 +20,7 @@ export async function upsertUser(
   const { rows } = await p.query(
     `insert into users (email, password_hash, name, role)
      values ($1, $2, $3, $4)
-     on conflict (email) do update
+     on conflict (tenant_id, email) do update
        set password_hash = excluded.password_hash,
            name = coalesce(excluded.name, users.name),
            role = excluded.role
