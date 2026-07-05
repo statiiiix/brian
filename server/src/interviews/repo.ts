@@ -1,5 +1,4 @@
-import type pg from "pg";
-import { pool as defaultPool } from "../db/pool.js";
+import { db, tenantOrFounding, type Queryable } from "../db/tenant.js";
 import { NotFoundError } from "../skills/repo.js";
 import type { NewSkill } from "../skills/types.js";
 import { EMPTY_COVERAGE, type Coverage, type Interview, type InterviewMessage } from "./types.js";
@@ -14,45 +13,48 @@ function hydrate(row: Record<string, unknown>): Interview {
 
 export async function createInterview(
   input: { topic: string; owner?: string | null; created_by?: string | null },
-  p: pg.Pool = defaultPool
+  p: Queryable = db()
 ): Promise<Interview> {
   const { rows } = await p.query(
-    `insert into interviews (topic, owner, created_by) values ($1,$2,$3) returning ${COLS}`,
-    [input.topic, input.owner ?? null, input.created_by ?? null]
+    `insert into interviews (topic, owner, created_by, tenant_id) values ($1,$2,$3,$4) returning ${COLS}`,
+    [input.topic, input.owner ?? null, input.created_by ?? null, tenantOrFounding()]
   );
   return hydrate(rows[0]);
 }
 
-export async function getInterview(id: string, p: pg.Pool = defaultPool): Promise<Interview | null> {
-  const { rows } = await p.query(`select ${COLS} from interviews where id = $1`, [id]);
+export async function getInterview(id: string, p: Queryable = db()): Promise<Interview | null> {
+  const { rows } = await p.query(
+    `select ${COLS} from interviews where id = $1 and tenant_id = $2`, [id, tenantOrFounding()]);
   return rows[0] ? hydrate(rows[0]) : null;
 }
 
-export async function listInterviews(p: pg.Pool = defaultPool): Promise<Interview[]> {
-  const { rows } = await p.query(`select ${COLS} from interviews order by created_at desc`);
+export async function listInterviews(p: Queryable = db()): Promise<Interview[]> {
+  const { rows } = await p.query(
+    `select ${COLS} from interviews where tenant_id = $1 order by created_at desc`, [tenantOrFounding()]);
   return rows.map(hydrate);
 }
 
-async function mustGet(id: string, p: pg.Pool): Promise<void> {
-  const { rowCount } = await p.query("select 1 from interviews where id = $1", [id]);
+async function mustGet(id: string, p: Queryable): Promise<void> {
+  const { rowCount } = await p.query(
+    "select 1 from interviews where id = $1 and tenant_id = $2", [id, tenantOrFounding()]);
   if (!rowCount) throw new NotFoundError(`interview ${id} not found`);
 }
 
 export async function appendMessage(
-  id: string, msg: { role: InterviewMessage["role"]; content: string }, p: pg.Pool = defaultPool
+  id: string, msg: { role: InterviewMessage["role"]; content: string }, p: Queryable = db()
 ): Promise<Interview> {
   await mustGet(id, p);
   const entry: InterviewMessage = { ...msg, at: new Date().toISOString() };
   const { rows } = await p.query(
     `update interviews set messages = messages || $2::jsonb, updated_at = now()
-     where id = $1 returning ${COLS}`,
-    [id, JSON.stringify([entry])]
+     where id = $1 and tenant_id = $3 returning ${COLS}`,
+    [id, JSON.stringify([entry]), tenantOrFounding()]
   );
   return hydrate(rows[0]);
 }
 
 export async function setTurnResult(
-  id: string, result: { coverage: Coverage; draft?: NewSkill }, p: pg.Pool = defaultPool
+  id: string, result: { coverage: Coverage; draft?: NewSkill }, p: Queryable = db()
 ): Promise<Interview> {
   await mustGet(id, p);
   const { rows } = await p.query(
@@ -60,26 +62,26 @@ export async function setTurnResult(
        draft = coalesce($3::jsonb, draft),
        status = case when $3::jsonb is not null then 'ready' else status end,
        updated_at = now()
-     where id = $1 returning ${COLS}`,
-    [id, JSON.stringify(result.coverage), result.draft ? JSON.stringify(result.draft) : null]
+     where id = $1 and tenant_id = $4 returning ${COLS}`,
+    [id, JSON.stringify(result.coverage), result.draft ? JSON.stringify(result.draft) : null, tenantOrFounding()]
   );
   return hydrate(rows[0]);
 }
 
 export async function completeInterview(
-  id: string, skillId: string, p: pg.Pool = defaultPool
+  id: string, skillId: string, p: Queryable = db()
 ): Promise<Interview> {
   await mustGet(id, p);
   const { rows } = await p.query(
     `update interviews set status = 'completed', resulting_skill_id = $2, updated_at = now()
-     where id = $1 returning ${COLS}`, [id, skillId]);
+     where id = $1 and tenant_id = $3 returning ${COLS}`, [id, skillId, tenantOrFounding()]);
   return hydrate(rows[0]);
 }
 
-export async function abandonInterview(id: string, p: pg.Pool = defaultPool): Promise<Interview> {
+export async function abandonInterview(id: string, p: Queryable = db()): Promise<Interview> {
   await mustGet(id, p);
   const { rows } = await p.query(
     `update interviews set status = 'abandoned', updated_at = now()
-     where id = $1 returning ${COLS}`, [id]);
+     where id = $1 and tenant_id = $2 returning ${COLS}`, [id, tenantOrFounding()]);
   return hydrate(rows[0]);
 }
