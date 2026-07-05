@@ -16,6 +16,8 @@ import type { ContextStatus } from "../context/types.js";
 import { registerMcpHttp } from "../mcp/http.js";
 import { findUserByEmail, verifyPassword } from "../auth/users.js";
 import { signUserToken, verifyUserToken, type TokenUser } from "../auth/jwt.js";
+import { runTenant, FOUNDING_TENANT_ID } from "../db/tenant.js";
+import { tenantForToken } from "../auth/apiTokens.js";
 import {
   createInterview, getInterview, listInterviews, appendMessage as appendInterviewMessage,
   completeInterview, abandonInterview,
@@ -52,14 +54,35 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   const jwtSecret = opts.jwtSecret ?? null;
 
   if (authToken || jwtSecret) {
-    app.addHook("onRequest", async (req, reply) => {
-      if (PUBLIC_PATHS.has(req.url.split("?")[0])) return;
-      if (authToken && bearerMatches(req.headers.authorization, authToken)) return;
-      if (jwtSecret && req.headers.authorization?.startsWith("Bearer ")) {
-        const u = verifyUserToken(req.headers.authorization.slice("Bearer ".length), jwtSecret);
-        if (u) { req.user = u; return; }
+    // Bind the resolved tenant for the whole downstream request via als.run
+    // wrapping done() — the reliable Fastify + AsyncLocalStorage pattern (a bare
+    // enterWith in a hook does not propagate to the route handler).
+    app.addHook("onRequest", (req, reply, done) => {
+      const proceed = (tenantId: string) => runTenant(tenantId, () => done());
+      const unauthorized = () => reply.code(401).send({ error: "unauthorized" });
+
+      if (PUBLIC_PATHS.has(req.url.split("?")[0])) return done();
+      const header = req.headers.authorization;
+      // 1) Static founding bearer (BRIAN_API_TOKEN) — the founding tenant.
+      if (authToken && bearerMatches(header, authToken)) return proceed(FOUNDING_TENANT_ID);
+      if (header?.startsWith("Bearer ")) {
+        const raw = header.slice("Bearer ".length);
+        // 2) Per-tenant agent token (api_tokens), else 3) dashboard user JWT
+        //    (founding tenant in phase 1; Supabase Auth claims carry tenant_id
+        //    in phase 3).
+        tenantForToken(raw)
+          .then((tenantId) => {
+            if (tenantId) return proceed(tenantId);
+            if (jwtSecret) {
+              const u = verifyUserToken(raw, jwtSecret);
+              if (u) { req.user = u; return proceed(FOUNDING_TENANT_ID); }
+            }
+            unauthorized();
+          })
+          .catch(() => unauthorized());
+        return;
       }
-      return reply.code(401).send({ error: "unauthorized" });
+      unauthorized();
     });
   }
 
