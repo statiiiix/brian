@@ -52,7 +52,7 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
 - **LLM:** OpenAI only (no Claude). Embeddings `text-embedding-3-small` (1536);
   generative `gpt-5.4-mini` via `LLM_MODEL`, using **Structured Outputs** (strict
   `json_schema`) because it's a reasoning model.
-- **Status:** 152/152 tests pass on the live DB (as of 2026-07-04).
+- **Status:** 169/169 tests pass on the live DB (as of 2026-07-04).
 
 ### Environment / infra facts (don't re-derive)
 - Supabase project **brian**, ref `foydcrwyakpkisxtvzgr` (Postgres 17 + pgvector).
@@ -230,15 +230,40 @@ NOT mirror copies of mailboxes/channels. Multi-tenant note: after
 `005_tenants.sql` lands (step 4 below), connector credentials and cursors are
 per-tenant rows, not env vars.
 
-### 4. Supabase integration — multi-tenant auth + per-client skills (designed, not built)
+### 4. Supabase integration — multi-tenant auth + per-client skills (Phase 1 DONE; Phase 2 remaining)
 **Read `SupabaseIntegration.md` carefully (start to finish) before touching
 this** — it holds the decided answers: shared tables + `tenant_id` + RLS (NOT
 per-client vector tables/schemas), Supabase Auth for dashboard humans,
 hashed per-tenant `api_tokens` for agents, `SET LOCAL app.tenant_id` +
-double enforcement (SQL + RLS), and the four rollout phases. Phases 1–2
-(migration `005_tenants.sql` + token guard; real RLS via a non-owner
-`brian_app` role) are safe to build now; phases 3–4 (Supabase Auth swap,
-hosted deploy) land with the first external design partner.
+double enforcement (SQL + RLS), and the four rollout phases.
+
+**Phase 1 shipped (2026-07-04, branch `supabase-tenancy`):** migration
+`005_tenants.sql` (tenants + api_tokens + `tenant_id` on every owned table,
+founding tenant `sameh` = `00000000-0000-0000-0000-000000000001`, per-tenant
+email uniqueness, RLS enabled on the new tables) — **applied to live prod** via
+the Supabase MCP; non-breaking (backfilled the 5 skills/1 user/2 interviews/1
+execution). Tenant-context infra (`src/db/tenant.ts`: `runTenant` /
+`currentTenantId` / `tenantOrFounding` / `db()` over AsyncLocalStorage) +
+token→tenant resolver (`src/auth/apiTokens.ts`, sha256 `hashToken` /
+`tenantForToken` / `ensureToken`). Every repo reads/writes scoped by
+`tenant_id`; the Fastify guard resolves the tenant (static founding bearer →
+founding, per-tenant `api_tokens`, or dashboard JWT → founding in phase 1) and
+binds it for the request via `als.run(done)` (a bare `enterWith` in a hook does
+NOT reach the handler — that bug is caught by `src/api/tenancy.test.ts`, which
+proves an Acme-token request sees only Acme's skills). Unscoped calls default to
+founding, so it's non-breaking: **169/169 tests**. API startup seeds
+`BRIAN_API_TOKEN` as the founding tenant's first `api_tokens` row.
+
+**Phase 2 remaining (RLS as a real backstop) — needs one founder step:** create
+a non-owner `brian_app` role and connect the app as it (its credential goes in
+`server/.env` — founder-provided), pin a per-request client with `SET LOCAL
+app.tenant_id` inside `db()` (repos already go through `db()`, so no repo
+change), add `tenant_isolation` RLS policies on every tenant table (+ ENABLE RLS
+on `context_entries`/`context_versions`, still flagged ERROR by the security
+advisor), and add cross-tenant leak tests that connect as `brian_app` (owner
+bypasses RLS, so enforcement can only be proven from the non-owner role).
+Phases 3–4 (Supabase Auth swap, hosted deploy) land with the first external
+design partner.
 
 ### 5. Dashboard follow-ups
 The dashboard is built (see above). Remaining ideas: shareable interview links
