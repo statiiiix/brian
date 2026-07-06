@@ -87,3 +87,15 @@ export const INTERVIEW_TURN_JSON_SCHEMA: Record<string, unknown> = {
     draft: { anyOf: [SKILL_JSON_SCHEMA, { type: "null" }] },
   },
 };
+
+// Connectors: classify one communication thread into reusable knowledge.
+export const CONNECTOR_EXTRACT_JSON_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  required: ["kind", "confidence", "summary"],
+  properties: {
+    kind: { type: "string", enum: ["skill_evidence", "context_evidence", "junk"] },
+    confidence: { type: "number" },
+    summary: { type: "string" },
+  },
+};
