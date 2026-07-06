@@ -24,6 +24,10 @@ import {
 } from "../interviews/repo.js";
 import { runTurn } from "../interviews/engine.js";
 import { defaultLlm, type LlmClient } from "../llm/complete.js";
+import { listConnectors, upsertConnector } from "../connectors/repo.js";
+import { syncConnector, type SyncSummary } from "../connectors/sync.js";
+import { CONNECTOR_TYPES } from "../connectors/adapters/index.js";
+import type { ConnectorType, ConnectorRow } from "../connectors/types.js";
 
 function bearerMatches(header: string | undefined, expected: string): boolean {
   if (!header?.startsWith("Bearer ")) return false;
@@ -36,6 +40,13 @@ export interface AppOptions {
   authToken?: string | null;
   jwtSecret?: string | null;
   llm?: LlmClient;
+  sync?: (type: ConnectorType) => Promise<SyncSummary>;
+}
+
+// Never expose stored connector credentials over the API.
+function publicConnector(c: ConnectorRow): Omit<ConnectorRow, "credentials"> & { configured: boolean } {
+  const { credentials, ...rest } = c;
+  return { ...rest, configured: Object.keys(credentials ?? {}).length > 0 };
 }
 
 declare module "fastify" {
@@ -210,6 +221,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     listContextVersions((req.params as any).id));
 
   const llm = () => opts.llm ?? defaultLlm();
+  const sync = opts.sync ?? syncConnector;
 
   app.post("/api/interviews", async (req, reply) => {
     const { topic, owner } = (req.body ?? {}) as { topic?: string; owner?: string };
@@ -264,6 +276,34 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     if (!iv) return reply.code(404).send({ error: "interview not found" });
     if (iv.status !== "abandoned") return reply.code(400).send({ error: `interview is ${iv.status}` });
     return resumeInterview(iv.id);
+  });
+
+  app.get("/api/connectors", async () => (await listConnectors()).map(publicConnector));
+
+  app.post("/api/connectors/:type/connect", async (req, reply) => {
+    const type = (req.params as { type: ConnectorType }).type;
+    if (!CONNECTOR_TYPES.includes(type)) return reply.code(400).send({ error: "unknown connector" });
+    const credentials = (req.body as { credentials?: unknown })?.credentials;
+    if (!credentials || typeof credentials !== "object") {
+      return reply.code(400).send({ error: "credentials object is required" });
+    }
+    return publicConnector(await upsertConnector(type, { status: "connected", credentials }));
+  });
+
+  app.post("/api/connectors/:type/disable", async (req, reply) => {
+    const type = (req.params as { type: ConnectorType }).type;
+    if (!CONNECTOR_TYPES.includes(type)) return reply.code(400).send({ error: "unknown connector" });
+    return publicConnector(await upsertConnector(type, { status: "disabled" }));
+  });
+
+  app.post("/api/connectors/:type/sync", async (req, reply) => {
+    const type = (req.params as { type: ConnectorType }).type;
+    if (!CONNECTOR_TYPES.includes(type)) return reply.code(400).send({ error: "unknown connector" });
+    try {
+      return await sync(type);
+    } catch (e) {
+      return reply.code(400).send({ error: e instanceof Error ? e.message : "sync failed" });
+    }
   });
 
   registerMcpHttp(app);
