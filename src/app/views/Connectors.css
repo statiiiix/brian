@@ -1,0 +1,65 @@
+.connectors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1.25rem;
+}
+
+.connectors-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.connectors-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.connectors-card-head .dash-h2 {
+  margin: 0;
+  flex: 1;
+}
+
+.connectors-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: var(--bg-raised, rgba(255, 255, 255, 0.05));
+  color: var(--accent, #f5a623);
+}
+
+.connectors-blurb {
+  margin: 0;
+  color: var(--text-muted, #9aa0aa);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.connectors-meta {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted, #9aa0aa);
+}
+
+.connectors-token {
+  width: 100%;
+}
+
+.connectors-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: auto;
+}
+
+.connectors-result {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--bg-raised, rgba(255, 255, 255, 0.05));
+  font-size: 0.82rem;
+  color: var(--text, #e6e8ec);
+}
