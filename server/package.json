@@ -16,7 +16,8 @@
     "bench": "tsx src/bench/cli.ts",
     "seed:admin": "tsx src/scripts/seedAdmin.ts",
     "hooks:install": "node scripts/hooks/install.mjs",
-    "onboard": "node scripts/onboard/onboard.mjs"
+    "onboard": "node scripts/onboard/onboard.mjs",
+    "sync": "tsx src/scripts/syncCli.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
