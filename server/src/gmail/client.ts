@@ -18,7 +18,7 @@ export function gmailConfigFromEnv(env: NodeJS.ProcessEnv = process.env): GmailC
   return { clientId: GMAIL_CLIENT_ID, clientSecret: GMAIL_CLIENT_SECRET, refreshToken: GMAIL_REFRESH_TOKEN };
 }
 
-async function getAccessToken(cfg: GmailConfig, fetchFn: FetchFn): Promise<string> {
+export async function getAccessToken(cfg: GmailConfig, fetchFn: FetchFn): Promise<string> {
   const res = await fetchFn("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
