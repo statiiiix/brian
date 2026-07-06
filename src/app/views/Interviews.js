@@ -35,6 +35,16 @@ export default function Interviews() {
     }
   }
 
+  async function resume(id) {
+    setError('');
+    try {
+      const updated = await api(`/api/interviews/${id}/resume`, { method: 'POST' });
+      setInterviews((list) => list.map((iv) => (iv.id === id ? updated : iv)));
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   return (
     <div className="interviews">
       <header className="dash-head">
@@ -101,7 +111,18 @@ export default function Interviews() {
                 <tr key={iv.id}>
                   <td><Link to={`/app/interviews/${iv.id}`}>{iv.topic}</Link></td>
                   <td>{iv.owner || '—'}</td>
-                  <td><StatusBadge status={iv.status} /></td>
+                  <td>
+                    <StatusBadge status={iv.status} />
+                    {iv.status === 'abandoned' && (
+                      <button
+                        type="button"
+                        className="dash-btn dash-btn--ghost interviews-resume"
+                        onClick={() => resume(iv.id)}
+                      >
+                        Resume
+                      </button>
+                    )}
+                  </td>
                   <td className="dash-mono">
                     {iv.messages.filter((m) => m.role === 'brian').length}
                   </td>

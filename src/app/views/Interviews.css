@@ -33,3 +33,11 @@
     width: 100%;
   }
 }
+
+/* Compact inline "Resume" action next to an abandoned interview's status badge. */
+.interviews-resume {
+  margin-left: 0.6rem;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.78rem;
+  vertical-align: middle;
+}
