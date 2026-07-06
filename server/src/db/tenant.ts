@@ -33,6 +33,14 @@ export function requireTenantId(): string {
   return t;
 }
 
+// The tenant repos should read/write against: the async-context tenant, or the
+// founding tenant when unscoped (dev scripts, seeds, and existing tests). Real
+// request entry points (HTTP guard, MCP) always set a tenant, so unscoped only
+// happens outside a request. Phase 2 RLS is the hard backstop.
+export function tenantOrFounding(): string {
+  return als.getStore()?.tenantId ?? FOUNDING_TENANT_ID;
+}
+
 // The executor repos should use. Phase 1: the shared pool. Phase 2 will return
 // the request's pinned client (SET LOCAL app.tenant_id) for RLS — repos need no
 // change because they already go through db().
