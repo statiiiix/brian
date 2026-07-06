@@ -52,7 +52,7 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
 - **LLM:** OpenAI only (no Claude). Embeddings `text-embedding-3-small` (1536);
   generative `gpt-5.4-mini` via `LLM_MODEL`, using **Structured Outputs** (strict
   `json_schema`) because it's a reasoning model.
-- **Status:** 169/169 tests pass on the live DB (as of 2026-07-04).
+- **Status:** 201/201 tests pass on the live DB (as of 2026-07-06).
 
 ### Environment / infra facts (don't re-derive)
 - Supabase project **brian**, ref `foydcrwyakpkisxtvzgr` (Postgres 17 + pgvector).
@@ -181,14 +181,22 @@ installed here — reconfirm their file formats against current docs before a
 customer relies on them); remote `--url` emits HTTP MCP entries but the Claude
 Code briefing hook still reads `BRIAN_URL` from `server/.env` (local-first).
 
-### 3. Connectors — mine Gmail/Slack for patterns & SOPs (chosen direction, needs brainstorm + spec before code)
-This was chosen as the next capture milestone in the 2026-07-03 brainstorm and
-is now a firm commitment: Brian should not depend only on interviews and
-manual `capture` — it should read the company's real communication streams,
-find the recurring processes and durable decisions hiding in them, filter the
-junk, and turn the good stuff into skill/context drafts. **Run the
-superpowers brainstorm → spec → plan flow before building; what follows is the
-agreed direction and constraints, not a finished spec.**
+### 3. Connectors — mine Gmail/Slack for SOPs & decisions ✅ DONE — backend + dashboard (2026-07-06, branch `connectors`)
+Full pipeline built: `npm run sync -- gmail|slack|all` → fetch → deterministic
+junk filter → LLM extract (Structured Outputs) → aggregate/cluster (K=3) →
+skill/context drafts in the EXISTING review queue, with provenance. Migration
+`006_connectors.sql` (tenant-scoped `connectors` + `evidence`, RLS, deduped on
+thread_id). Adapter registry (`src/connectors/adapters/`: Gmail `historyId` /
+Slack per-channel `ts` cursors; pure RawThread mappings unit-tested; live
+`realGmailApi`/`realSlackApi` HTTP impls founder-gated on tokens). REST API
+(`/api/connectors` list/connect/disable/sync — credentials redacted) + dashboard
+**Activity → Connectors** page (connect / Sync now / disable). 30 new tests;
+full suite **201/201**. Spec `docs/superpowers/specs/2026-07-06-connectors-design.md`,
+plan `docs/superpowers/plans/2026-07-06-connectors.md`, usage `docs/connectors.md`.
+**Founder-gated to go live:** apply `006` to prod (via Supabase MCP, like 005);
+add the `gmail.readonly` scope + re-run `npm run gmail:auth`; create a Slack app
++ bot token and invite it to channels. The 5-stage detail below is the original
+agreed direction — now implemented.
 
 Pipeline direction (5 stages):
 1. **Fetch** — per-connector incremental sync with stored cursors (Gmail:
