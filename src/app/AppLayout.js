@@ -18,6 +18,7 @@ const NAV_GROUPS = [
     label: 'Activity',
     items: [
       { to: '/app/capture', label: 'Capture', icon: icons.capture },
+      { to: '/app/connectors', label: 'Connectors', icon: icons.inbox },
       { to: '/app/executions', label: 'Executions', icon: icons.log },
     ],
   },

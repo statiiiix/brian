@@ -3,7 +3,7 @@ import { runMigrations } from "../db/migrate.js";
 import { pool } from "../db/pool.js";
 import {
   createInterview, getInterview, listInterviews, appendMessage,
-  setTurnResult, completeInterview, abandonInterview,
+  setTurnResult, completeInterview, abandonInterview, resumeInterview,
 } from "./repo.js";
 import { EMPTY_COVERAGE } from "./types.js";
 
@@ -69,6 +69,14 @@ d("interviews repo", () => {
     const done = await completeInterview(iv2.id, rows[0].id);
     expect(done.status).toBe("completed");
     expect(done.resulting_skill_id).toBe(rows[0].id);
+  });
+
+  it("resumes an abandoned interview back to active", async () => {
+    const iv = await createInterview({ topic: "resume-me" });
+    const ab = await abandonInterview(iv.id);
+    expect(ab.status).toBe("abandoned");
+    const resumed = await resumeInterview(iv.id);
+    expect(resumed.status).toBe("active");
   });
 
   it("getInterview returns null for unknown id", async () => {

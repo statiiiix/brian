@@ -89,4 +89,19 @@ d("interview API", () => {
     expect(list.json().length).toBeGreaterThan(0);
     await app.close();
   });
+
+  it("resume reactivates an abandoned interview; 400 when not abandoned", async () => {
+    const app = appWith([asking("q?")]);
+    const created = await app.inject({ method: "POST", url: "/api/interviews", payload: { topic: "resume-api" } });
+    const id = created.json().id;
+
+    const early = await app.inject({ method: "POST", url: `/api/interviews/${id}/resume` });
+    expect(early.statusCode).toBe(400); // still active, cannot resume
+
+    await app.inject({ method: "POST", url: `/api/interviews/${id}/abandon` });
+    const resumed = await app.inject({ method: "POST", url: `/api/interviews/${id}/resume` });
+    expect(resumed.statusCode).toBe(200);
+    expect(resumed.json().status).toBe("active");
+    await app.close();
+  });
 });

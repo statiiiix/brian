@@ -16,12 +16,18 @@ import type { ContextStatus } from "../context/types.js";
 import { registerMcpHttp } from "../mcp/http.js";
 import { findUserByEmail, verifyPassword } from "../auth/users.js";
 import { signUserToken, verifyUserToken, type TokenUser } from "../auth/jwt.js";
+import { runTenant, FOUNDING_TENANT_ID } from "../db/tenant.js";
+import { tenantForToken } from "../auth/apiTokens.js";
 import {
   createInterview, getInterview, listInterviews, appendMessage as appendInterviewMessage,
-  completeInterview, abandonInterview,
+  completeInterview, abandonInterview, resumeInterview,
 } from "../interviews/repo.js";
 import { runTurn } from "../interviews/engine.js";
 import { defaultLlm, type LlmClient } from "../llm/complete.js";
+import { listConnectors, upsertConnector, evidenceForDraft } from "../connectors/repo.js";
+import { syncConnector, type SyncSummary } from "../connectors/sync.js";
+import { CONNECTOR_TYPES } from "../connectors/adapters/index.js";
+import type { ConnectorType, ConnectorRow } from "../connectors/types.js";
 
 function bearerMatches(header: string | undefined, expected: string): boolean {
   if (!header?.startsWith("Bearer ")) return false;
@@ -34,6 +40,13 @@ export interface AppOptions {
   authToken?: string | null;
   jwtSecret?: string | null;
   llm?: LlmClient;
+  sync?: (type: ConnectorType) => Promise<SyncSummary>;
+}
+
+// Never expose stored connector credentials over the API.
+function publicConnector(c: ConnectorRow): Omit<ConnectorRow, "credentials"> & { configured: boolean } {
+  const { credentials, ...rest } = c;
+  return { ...rest, configured: Object.keys(credentials ?? {}).length > 0 };
 }
 
 declare module "fastify" {
@@ -52,14 +65,35 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
   const jwtSecret = opts.jwtSecret ?? null;
 
   if (authToken || jwtSecret) {
-    app.addHook("onRequest", async (req, reply) => {
-      if (PUBLIC_PATHS.has(req.url.split("?")[0])) return;
-      if (authToken && bearerMatches(req.headers.authorization, authToken)) return;
-      if (jwtSecret && req.headers.authorization?.startsWith("Bearer ")) {
-        const u = verifyUserToken(req.headers.authorization.slice("Bearer ".length), jwtSecret);
-        if (u) { req.user = u; return; }
+    // Bind the resolved tenant for the whole downstream request via als.run
+    // wrapping done() — the reliable Fastify + AsyncLocalStorage pattern (a bare
+    // enterWith in a hook does not propagate to the route handler).
+    app.addHook("onRequest", (req, reply, done) => {
+      const proceed = (tenantId: string) => runTenant(tenantId, () => done());
+      const unauthorized = () => reply.code(401).send({ error: "unauthorized" });
+
+      if (PUBLIC_PATHS.has(req.url.split("?")[0])) return done();
+      const header = req.headers.authorization;
+      // 1) Static founding bearer (BRIAN_API_TOKEN) — the founding tenant.
+      if (authToken && bearerMatches(header, authToken)) return proceed(FOUNDING_TENANT_ID);
+      if (header?.startsWith("Bearer ")) {
+        const raw = header.slice("Bearer ".length);
+        // 2) Per-tenant agent token (api_tokens), else 3) dashboard user JWT
+        //    (founding tenant in phase 1; Supabase Auth claims carry tenant_id
+        //    in phase 3).
+        tenantForToken(raw)
+          .then((tenantId) => {
+            if (tenantId) return proceed(tenantId);
+            if (jwtSecret) {
+              const u = verifyUserToken(raw, jwtSecret);
+              if (u) { req.user = u; return proceed(FOUNDING_TENANT_ID); }
+            }
+            unauthorized();
+          })
+          .catch(() => unauthorized());
+        return;
       }
-      return reply.code(401).send({ error: "unauthorized" });
+      unauthorized();
     });
   }
 
@@ -119,6 +153,10 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
 
   app.get("/api/skills/:id/executions", async (req) =>
     listExecutions((req.params as any).id));
+
+  // Provenance: connector evidence that produced this skill draft.
+  app.get("/api/skills/:id/evidence", async (req) =>
+    evidenceForDraft("skill", (req.params as { id: string }).id));
 
   app.get("/api/executions", async () => listExecutions());
 
@@ -187,6 +225,7 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     listContextVersions((req.params as any).id));
 
   const llm = () => opts.llm ?? defaultLlm();
+  const sync = opts.sync ?? syncConnector;
 
   app.post("/api/interviews", async (req, reply) => {
     const { topic, owner } = (req.body ?? {}) as { topic?: string; owner?: string };
@@ -234,6 +273,41 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
     const iv = await getInterview((req.params as any).id);
     if (!iv) return reply.code(404).send({ error: "interview not found" });
     return abandonInterview(iv.id);
+  });
+
+  app.post("/api/interviews/:id/resume", async (req, reply) => {
+    const iv = await getInterview((req.params as any).id);
+    if (!iv) return reply.code(404).send({ error: "interview not found" });
+    if (iv.status !== "abandoned") return reply.code(400).send({ error: `interview is ${iv.status}` });
+    return resumeInterview(iv.id);
+  });
+
+  app.get("/api/connectors", async () => (await listConnectors()).map(publicConnector));
+
+  app.post("/api/connectors/:type/connect", async (req, reply) => {
+    const type = (req.params as { type: ConnectorType }).type;
+    if (!CONNECTOR_TYPES.includes(type)) return reply.code(400).send({ error: "unknown connector" });
+    const credentials = (req.body as { credentials?: unknown })?.credentials;
+    if (!credentials || typeof credentials !== "object") {
+      return reply.code(400).send({ error: "credentials object is required" });
+    }
+    return publicConnector(await upsertConnector(type, { status: "connected", credentials }));
+  });
+
+  app.post("/api/connectors/:type/disable", async (req, reply) => {
+    const type = (req.params as { type: ConnectorType }).type;
+    if (!CONNECTOR_TYPES.includes(type)) return reply.code(400).send({ error: "unknown connector" });
+    return publicConnector(await upsertConnector(type, { status: "disabled" }));
+  });
+
+  app.post("/api/connectors/:type/sync", async (req, reply) => {
+    const type = (req.params as { type: ConnectorType }).type;
+    if (!CONNECTOR_TYPES.includes(type)) return reply.code(400).send({ error: "unknown connector" });
+    try {
+      return await sync(type);
+    } catch (e) {
+      return reply.code(400).send({ error: e instanceof Error ? e.message : "sync failed" });
+    }
   });
 
   registerMcpHttp(app);

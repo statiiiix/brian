@@ -93,6 +93,15 @@ export default function InterviewChat() {
     }
   }
 
+  async function resume() {
+    setError('');
+    try {
+      setIv(await api(`/api/interviews/${id}/resume`, { method: 'POST' }));
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
   if (error && !iv) return <p className="dash-error" role="alert">{error}</p>;
   if (!iv) {
     return (
@@ -129,6 +138,11 @@ export default function InterviewChat() {
         {iv.status === 'active' && (
           <button type="button" className="dash-btn dash-btn--ghost" onClick={abandon}>
             Abandon
+          </button>
+        )}
+        {iv.status === 'abandoned' && (
+          <button type="button" className="dash-btn dash-btn--primary" onClick={resume}>
+            Resume
           </button>
         )}
       </header>

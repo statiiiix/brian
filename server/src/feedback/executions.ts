@@ -1,5 +1,4 @@
-import type pg from "pg";
-import { pool as defaultPool } from "../db/pool.js";
+import { db, tenantOrFounding, type Queryable } from "../db/tenant.js";
 import type { Execution, ExecutionOutcome } from "../skills/types.js";
 
 export interface NewExecution {
@@ -24,27 +23,29 @@ function rowToExecution(r: any): Execution {
   };
 }
 
-export async function logExecution(row: NewExecution, p: pg.Pool = defaultPool): Promise<Execution> {
+export async function logExecution(row: NewExecution, p: Queryable = db()): Promise<Execution> {
   const { rows } = await p.query(
-    `insert into executions (skill_id, skill_version, task_input, actions_taken, outcome, human_override)
-     values ($1,$2,$3,$4,$5,$6)
+    `insert into executions (skill_id, skill_version, task_input, actions_taken, outcome, human_override, tenant_id)
+     values ($1,$2,$3,$4,$5,$6,$7)
      returning id, skill_id, skill_version, task_input, actions_taken, outcome, human_override, created_at`,
     [
       row.skill_id, row.skill_version, JSON.stringify(row.task_input),
       JSON.stringify(row.actions_taken), row.outcome,
       row.human_override === null ? null : JSON.stringify(row.human_override),
+      tenantOrFounding(),
     ]
   );
   return rowToExecution(rows[0]);
 }
 
-export async function listExecutions(skillId?: string, p: pg.Pool = defaultPool): Promise<Execution[]> {
+export async function listExecutions(skillId?: string, p: Queryable = db()): Promise<Execution[]> {
+  const tenant = tenantOrFounding();
   const { rows } = skillId
     ? await p.query(
         `select id, skill_id, skill_version, task_input, actions_taken, outcome, human_override, created_at
-         from executions where skill_id = $1 order by created_at desc limit 200`, [skillId])
+         from executions where skill_id = $1 and tenant_id = $2 order by created_at desc limit 200`, [skillId, tenant])
     : await p.query(
         `select id, skill_id, skill_version, task_input, actions_taken, outcome, human_override, created_at
-         from executions order by created_at desc limit 200`);
+         from executions where tenant_id = $1 order by created_at desc limit 200`, [tenant]);
   return rows.map(rowToExecution);
 }

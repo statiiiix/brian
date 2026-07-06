@@ -8,6 +8,7 @@ import ReviewQueue from './app/views/ReviewQueue';
 import Interviews from './app/views/Interviews';
 import InterviewChat from './app/views/InterviewChat';
 import Capture from './app/views/Capture';
+import Connectors from './app/views/Connectors';
 import Executions from './app/views/Executions';
 import { isLoggedIn } from './app/auth';
 
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="interviews" element={<Interviews />} />
           <Route path="interviews/:id" element={<InterviewChat />} />
           <Route path="capture" element={<Capture />} />
+          <Route path="connectors" element={<Connectors />} />
           <Route path="executions" element={<Executions />} />
         </Route>
       </Routes>

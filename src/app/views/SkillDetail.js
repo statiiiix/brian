@@ -12,6 +12,7 @@ export default function SkillDetail() {
   const { id } = useParams();
   const [skill, setSkill] = useState(null);
   const [versions, setVersions] = useState([]);
+  const [evidence, setEvidence] = useState([]);
   const [form, setForm] = useState(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -34,6 +35,7 @@ export default function SkillDetail() {
         examples: s.examples || [],
       });
       setVersions(await api(`/api/skills/${id}/versions`));
+      setEvidence(await api(`/api/skills/${id}/evidence`).catch(() => []));
     } catch (e) {
       setError(e.message);
     }
@@ -222,6 +224,32 @@ export default function SkillDetail() {
         </section>
 
         <aside>
+          {evidence.length > 0 && (
+            <section className="dash-card skill-detail-provenance">
+              <h2 className="dash-h2">Sourced from connectors</h2>
+              <p className="skill-detail-prov-note">
+                Drafted from {evidence.length} piece{evidence.length > 1 ? 's' : ''} of evidence.
+              </p>
+              <ul className="skill-detail-prov-list">
+                {evidence.map((e) => (
+                  <li key={e.id}>
+                    <p className="skill-detail-prov-summary">{e.summary}</p>
+                    {e.source_ref?.permalink && (
+                      <a
+                        className="skill-detail-prov-link"
+                        href={e.source_ref.permalink}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        source ↗
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section className="dash-card">
             <h2 className="dash-h2">Version history</h2>
             {versions.length === 0 && <p className="skill-detail-noversions">No prior versions.</p>}
