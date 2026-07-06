@@ -2,7 +2,7 @@
 
 > Context-preservation doc. Snapshot of where the Company Brain backend stands and
 > what to do next, so we can resume without re-deriving anything.
-> Last updated: 2026-07-04.
+> Last updated: 2026-07-06.
 
 ---
 
@@ -52,11 +52,19 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
 - **LLM:** OpenAI only (no Claude). Embeddings `text-embedding-3-small` (1536);
   generative `gpt-5.4-mini` via `LLM_MODEL`, using **Structured Outputs** (strict
   `json_schema`) because it's a reasoning model.
-- **Status:** 201/201 tests pass on the live DB (as of 2026-07-06).
+- **Status:** 202/202 tests pass on the live DB (as of 2026-07-06). Newest work
+  (multi-tenancy Phase 1 + connectors + interview resume) lives on branch
+  `connectors` (cut from `supabase-tenancy`); `main` currently has through the
+  onboard installer. Branches are **not yet merged** — see "Next steps".
 
 ### Environment / infra facts (don't re-derive)
 - Supabase project **brian**, ref `foydcrwyakpkisxtvzgr` (Postgres 17 + pgvector).
-  RLS enabled on all tables; backend connects as the `postgres` owner (bypasses RLS).
+  Migrations through **006 are applied to live prod** (via the Supabase MCP):
+  001–004 base, 005 tenancy, 006 connectors. **RLS is now enabled on every
+  owned table** (context_entries/context_versions got it 2026-07-06, closing the
+  last `rls_disabled_in_public` advisor); the backend connects as the `postgres`
+  owner, which bypasses RLS, so RLS is currently a latent backstop (see step 4).
+  Only remaining advisor is a low-priority `vector`-extension-in-public WARN.
 - DB access via the **session pooler** in gitignored `server/.env` (direct connection
   is IPv6-only and fails on the IPv4 network).
 - **Tests run in a dedicated `test` schema** (`TEST_DATABASE_URL` has
@@ -122,6 +130,34 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
   wired, backups created, second run reports "already wired". Restart each app to
   load the new MCP server; keep `npm run api` up for the Claude Code hook.
 
+- **Multi-tenancy Phase 1 (2026-07-06, branch `supabase-tenancy`):** one brian
+  project serves many client companies via shared tables + `tenant_id` + RLS
+  (design: `SupabaseIntegration.md`). Migration `005_tenants.sql` (tenants +
+  api_tokens + `tenant_id` on every owned table, founding tenant `sameh` =
+  `…0001`, per-tenant email uniqueness) **applied to live prod**, non-breaking
+  (existing rows backfilled). Tenant context in `src/db/tenant.ts`
+  (`runTenant`/`currentTenantId`/`tenantOrFounding`/`db()` over AsyncLocalStorage)
+  + token→tenant resolver (`src/auth/apiTokens.ts`, sha256). Every repo scopes by
+  `tenant_id`; the Fastify guard resolves the request tenant (static founding
+  bearer, per-tenant `api_tokens`, or dashboard JWT→founding) and binds it via
+  `als.run(done)`. Cross-tenant isolation proven (`src/api/tenancy.test.ts`). RLS
+  policies + non-owner role are Phase 2 (step 4 — optional/deferred).
+
+- **Connectors — mine Gmail/Slack for SOPs (2026-07-06, branch `connectors`):**
+  full pipeline `npm run sync -- gmail|slack|all` → fetch → deterministic junk
+  filter → LLM extract (Structured Outputs) → aggregate/cluster (K=3) →
+  skill/context drafts in the existing review queue, with provenance. Migration
+  `006_connectors.sql` (`connectors` + `evidence`, tenant-scoped, RLS, deduped on
+  thread_id) **applied to live prod**. Adapters (`src/connectors/adapters/`:
+  Gmail `historyId` / Slack `ts` cursors; live HTTP impls founder-gated on
+  tokens). REST API + dashboard **Activity → Connectors** page + "Sourced from
+  connectors" provenance panel on skill detail. Spec/plan/`docs/connectors.md`.
+  **To go live it needs source credentials only** (Gmail `readonly` re-auth;
+  Slack app/bot token) — code + tables are deployed.
+
+- **Interview resume-from-abandoned (2026-07-06):** `POST /api/interviews/:id/resume`
+  + Resume buttons on the interview detail view and list (dashboard).
+
 ---
 
 ## How any agent should resume work here (read this first)
@@ -155,140 +191,64 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
 
 ## Next steps (prioritized)
 
-### 1. Founder manual steps (unblock Gmail + verify clients)
-- Follow `docs/gmail-setup.md` (GCP OAuth client → `npm run gmail:auth` →
-  paste `GMAIL_REFRESH_TOKEN` into `server/.env`), then run
-  `npx tsx src/scripts/gmailSmoke.ts` and check the Drafts folder.
-- Restart Claude Desktop / start a Claude Code session in this repo and
-  smoke-test: `find_skill("refund")`, `capture(...)`, `find_context(...)`,
-  and the full e2e ("a customer asked X — handle it" → draft in Gmail).
-- Rotate the OpenAI API key.
-- Run `cd server && npm run hooks:install -- --user` to make every Claude Code
-  project on this machine consult Brian (the agent was permission-blocked from
-  editing its own `~/.claude/settings.json`), and keep `npm run api` running
-  so the per-prompt briefing layer actually fires.
+The big feature arc (onboard → multi-tenancy Phase 1 → connectors) is **built,
+tested, and its migrations are live on prod**. What remains is integration,
+founder credentials, and deliberately-deferred hardening.
 
-### 2. Brian onboard — one-command multi-agent MCP install ✅ DONE (2026-07-04)
-Built, tested (39 new tests), and **live-verified** on this machine — see the
-**Brian onboard** entry in the "done" list above for the full summary. Entry
-point: `cd server && npm run onboard` (`--status` / `--dry-run` / `--yes` /
-`--only a,b` / `--url --token`); usage in `docs/onboard.md`, plan in
-`docs/superpowers/plans/2026-07-04-brian-onboard.md`. Adding the next platform
-(Gemini CLI, Windsurf, …) = one new adapter file in
-`server/scripts/onboard/adapters/` registered in `onboard.mjs`'s REGISTRY array.
-Deferred edges (fine as-is): Codex/OpenClaw are Tier-B (fixture-tested, not
-installed here — reconfirm their file formats against current docs before a
-customer relies on them); remote `--url` emits HTTP MCP entries but the Claude
-Code briefing hook still reads `BRIAN_URL` from `server/.env` (local-first).
+### 1. Integrate the feature branches to `main` (do first)
+`main` currently has through the onboard installer. Two branches are built,
+green (202/202), and unmerged, in dependency order — merge `--no-ff`:
+1. `supabase-tenancy` (multi-tenancy Phase 1) → `main`.
+2. `connectors` (cut from `supabase-tenancy`; adds connectors + interview resume)
+   → `main`.
+Migrations 005 + 006 are already applied to prod, so `main` and prod already
+agree at the DB level; this just lands the code. (Kept unmerged pending founder
+go-ahead because of concurrent landing-page work on the branch.)
 
-### 3. Connectors — mine Gmail/Slack for SOPs & decisions ✅ DONE — backend + dashboard (2026-07-06, branch `connectors`)
-Full pipeline built: `npm run sync -- gmail|slack|all` → fetch → deterministic
-junk filter → LLM extract (Structured Outputs) → aggregate/cluster (K=3) →
-skill/context drafts in the EXISTING review queue, with provenance. Migration
-`006_connectors.sql` (tenant-scoped `connectors` + `evidence`, RLS, deduped on
-thread_id). Adapter registry (`src/connectors/adapters/`: Gmail `historyId` /
-Slack per-channel `ts` cursors; pure RawThread mappings unit-tested; live
-`realGmailApi`/`realSlackApi` HTTP impls founder-gated on tokens). REST API
-(`/api/connectors` list/connect/disable/sync — credentials redacted) + dashboard
-**Activity → Connectors** page (connect / Sync now / disable). 30 new tests;
-full suite **201/201**. Spec `docs/superpowers/specs/2026-07-06-connectors-design.md`,
-plan `docs/superpowers/plans/2026-07-06-connectors.md`, usage `docs/connectors.md`.
-**Founder-gated to go live:** apply `006` to prod (via Supabase MCP, like 005);
-add the `gmail.readonly` scope + re-run `npm run gmail:auth`; create a Slack app
-+ bot token and invite it to channels. The 5-stage detail below is the original
-agreed direction — now implemented.
+### 2. Founder credentials to make connectors pull real data
+Connectors code + tables are deployed; they only need source access:
+- **Gmail:** add the `gmail.readonly` scope in Google Cloud, re-run
+  `cd server && npm run gmail:auth`, paste the refreshed `GMAIL_REFRESH_TOKEN`
+  into `server/.env` (the founding tenant reuses `GMAIL_*`).
+- **Slack:** create a Slack app + bot token (`channels:history`,
+  `groups:history`, `users:read`), invite it to the target channels, paste the
+  token into the dashboard **Activity → Connectors** page.
+Then `npm run sync -- gmail|slack|all` (or "Sync now") → drafts land in review
+with provenance. Usage: `docs/connectors.md`.
 
-Pipeline direction (5 stages):
-1. **Fetch** — per-connector incremental sync with stored cursors (Gmail:
-   `historyId`; Slack: channel + `ts`), new `connector_state` table. Gmail
-   creds are half-wired already: `src/gmail/client.ts` + `npm run gmail:auth`
-   (needs the `gmail.readonly` scope added next to the send scope). Slack is
-   new: bot token, only channels the bot is invited to. Start with manual
-   `npm run sync -- gmail|slack` — NO schedulers/daemons in v1.
-2. **Junk filter, deterministic first (zero LLM cost — this is where 90%
-   dies):** drop newsletters/notifications (`List-Unsubscribe`, `noreply@`
-   senders), automated/bot messages, joins/leaves/reactions-only, one-liners
-   with no reply; keep only threads with ≥2 human participants and a company
-   member involved; dedupe by thread. Thresholds as tunable env constants.
-3. **Extract (LLM):** surviving threads → the existing OpenAI Structured
-   Outputs pattern (`gpt-5.4-mini`, strict `json_schema`, retry-once — see
-   `src/llm/` and the interview engine for the house style). Each thread
-   classifies to `skill_evidence` | `context_evidence` | `junk` + confidence +
-   a normalized summary. Tests mock the LlmClient as everywhere else.
-4. **Aggregate — one email is not an SOP:** store evidence rows with
-   embeddings; cluster by similarity; only when ≥K independent pieces of
-   evidence describe the same process does Brian draft a skill (via the
-   existing `draftFromText`/`capture` machinery). Every draft keeps
-   **provenance**: source snippets + message ids/permalinks, stored with the
-   draft. Single strong `context_evidence` items can draft directly (context
-   is low-risk; graduated-autonomy rules from v2 still apply).
-5. **Review — nothing goes active unread:** drafts land in the EXISTING
-   review queue (`needs_review`/`draft` statuses) and are approved/rejected in
-   the dashboard exactly like interview drafts. No new approval surface.
+### 3. Founder housekeeping (carried over)
+- **Rotate the OpenAI API key** (it was shared in chat).
+- Optional: `cd server && npm run onboard` on any new machine wires all its
+  agents to Brian in one command (`docs/onboard.md`); keep `npm run api` running
+  so the Claude Code per-prompt briefing hook fires.
 
-Dashboard integration (`src/app/`, follow the one-`.js`-one-`.css`-per-
-component convention): a **Connectors** page (connect/authorize per connector,
-sync status + last-cursor timestamp, per-connector enable toggle, "sync now"
-button) and a **provenance panel** on review-queue drafts (show the source
-excerpts + evidence count that produced the draft, so the reviewer can judge
-it without leaving the page).
+### 4. Supabase Phase 2 — RLS as a real backstop (OPTIONAL; defer until external clients)
+Not needed for single-company use — app-level tenant scoping already isolates
+tenants (Phase 1, done). Do this when onboarding the first **external** client
+company and you want database-level (not just app-level) isolation: create a
+non-owner `brian_app` role, connect the app as it (credential in `server/.env`),
+pin a per-request client with `SET LOCAL app.tenant_id` inside `db()` (repos
+already route through `db()`, so no repo change), add `tenant_isolation` RLS
+policies on every tenant table, and add cross-tenant leak tests that connect as
+`brian_app`. All owned tables already have RLS *enabled* (no policies yet → the
+owner bypasses; anon/authenticated are denied). Phases 3–4 (Supabase Auth for
+dashboard humans; hosted cloud deploy) land with that same first design partner.
+Design: `SupabaseIntegration.md`.
 
-Privacy constraint: store extracted knowledge + minimal provenance snippets,
-NOT mirror copies of mailboxes/channels. Multi-tenant note: after
-`005_tenants.sql` lands (step 4 below), connector credentials and cursors are
-per-tenant rows, not env vars.
-
-### 4. Supabase integration — multi-tenant auth + per-client skills (Phase 1 DONE; Phase 2 remaining)
-**Read `SupabaseIntegration.md` carefully (start to finish) before touching
-this** — it holds the decided answers: shared tables + `tenant_id` + RLS (NOT
-per-client vector tables/schemas), Supabase Auth for dashboard humans,
-hashed per-tenant `api_tokens` for agents, `SET LOCAL app.tenant_id` +
-double enforcement (SQL + RLS), and the four rollout phases.
-
-**Phase 1 shipped (2026-07-04, branch `supabase-tenancy`):** migration
-`005_tenants.sql` (tenants + api_tokens + `tenant_id` on every owned table,
-founding tenant `sameh` = `00000000-0000-0000-0000-000000000001`, per-tenant
-email uniqueness, RLS enabled on the new tables) — **applied to live prod** via
-the Supabase MCP; non-breaking (backfilled the 5 skills/1 user/2 interviews/1
-execution). Tenant-context infra (`src/db/tenant.ts`: `runTenant` /
-`currentTenantId` / `tenantOrFounding` / `db()` over AsyncLocalStorage) +
-token→tenant resolver (`src/auth/apiTokens.ts`, sha256 `hashToken` /
-`tenantForToken` / `ensureToken`). Every repo reads/writes scoped by
-`tenant_id`; the Fastify guard resolves the tenant (static founding bearer →
-founding, per-tenant `api_tokens`, or dashboard JWT → founding in phase 1) and
-binds it for the request via `als.run(done)` (a bare `enterWith` in a hook does
-NOT reach the handler — that bug is caught by `src/api/tenancy.test.ts`, which
-proves an Acme-token request sees only Acme's skills). Unscoped calls default to
-founding, so it's non-breaking: **169/169 tests**. API startup seeds
-`BRIAN_API_TOKEN` as the founding tenant's first `api_tokens` row.
-
-**Phase 2 remaining (RLS as a real backstop) — needs one founder step:** create
-a non-owner `brian_app` role and connect the app as it (its credential goes in
-`server/.env` — founder-provided), pin a per-request client with `SET LOCAL
-app.tenant_id` inside `db()` (repos already go through `db()`, so no repo
-change), add `tenant_isolation` RLS policies on every tenant table (+ ENABLE RLS
-on `context_entries`/`context_versions`, still flagged ERROR by the security
-advisor), and add cross-tenant leak tests that connect as `brian_app` (owner
-bypasses RLS, so enforcement can only be proven from the non-owner role).
-Phases 3–4 (Supabase Auth swap, hosted deploy) land with the first external
-design partner.
-
-### 5. Dashboard follow-ups
-The dashboard is built (see above). Remaining ideas: shareable interview links
-for non-admin experts (superseded by Supabase Auth invites once step 4 phase 3
-lands), review-queue count badge in the sidebar, interview
-resume-from-abandoned. The connectors work (step 3) adds its own dashboard
-pages — build those as part of step 3, not separately.
+### 5. Smaller follow-ups (nice-to-have)
+- Once real syncs run: tune the junk-filter thresholds / cluster `K` on live
+  signal; per-channel Slack selection; **encrypt `connectors.credentials`**
+  (currently plaintext in the tenant row — a noted hardening).
+- Brian-bench Phases 2–3 (500-task inbox marathon + learning curve) — specced in
+  `docs/superpowers/specs/2026-07-02-brian-bench-design.md`, not built.
+- Done already: interview resume-from-abandoned; sidebar review-count badge.
 
 ### 6. Later / deferred (intentional anti-goals until real use proves them out)
-- Cloud hosting of the HTTP surface (Fly/Railway) — everything is transport-ready;
-  deploy when a remote agent actually needs it (Supabase phase 4, step 4 above).
-- Connector *schedulers/daemons* — connectors themselves are now step 3, but
-  v1 syncs are manual `npm run sync`; automation only after the pipeline
-  proves its signal-to-noise on real data.
+- Cloud hosting of the HTTP surface (Fly/Railway) — transport-ready; deploy when
+  a remote agent needs it (with Supabase Phase 4).
+- Connector schedulers/daemons — v1 syncs are manual `npm run sync`; automate
+  only after the pipeline proves signal-to-noise on real data.
 - Graph DB / graph UI — not happening for v1; a skill table beats it.
-- Multi-tenant scoping — no longer deferred as an idea: fully designed in
-  `SupabaseIntegration.md` (see step 4 above); build when prioritized.
 - Move pgvector out of `public` schema (minor security-linter WARN) — low priority.
 
 ---
@@ -311,8 +271,12 @@ agent executes; `capture` keeps it current.
 - Product source of truth: `CompanyBrain.md` · Supabase/multi-tenant design:
   `SupabaseIntegration.md` (mandatory reading before building tenancy)
 - Newer specs: `docs/superpowers/specs/2026-07-04-always-on-invocation-design.md`,
-  `docs/superpowers/specs/2026-07-04-brian-onboard-design.md`
-- Agent contract: `docs/agent-contract.md` · Gmail setup: `docs/gmail-setup.md`
+  `docs/superpowers/specs/2026-07-04-brian-onboard-design.md`,
+  `docs/superpowers/specs/2026-07-06-connectors-design.md`
+- Docs: `docs/agent-contract.md`, `docs/gmail-setup.md`, `docs/onboard.md`,
+  `docs/connectors.md` · Multi-tenant design: `SupabaseIntegration.md`
 - Backend entry points: `server/src/api/index.ts` (REST + `/mcp` HTTP),
   `server/src/mcp/index.ts` (MCP stdio), `server/src/review/cli.ts` (review CLI),
-  `server/src/ingestion/capture.ts` (capture pipeline), `server/src/llm/` (OpenAI).
+  `server/src/ingestion/capture.ts` (capture pipeline), `server/src/llm/` (OpenAI),
+  `server/src/db/tenant.ts` (tenant context), `server/src/connectors/` (Gmail/Slack
+  pipeline; `npm run sync`), `server/scripts/onboard/` (`npm run onboard`).
