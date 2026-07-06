@@ -108,3 +108,14 @@ export async function markPromoted(
       where tenant_id=$1 and id = any($2::uuid[])`,
     [tenantOrFounding(), ids, kind, promotedId]);
 }
+
+// Provenance: the evidence rows that produced a given draft (skill/context).
+export async function evidenceForDraft(
+  kind: "skill" | "context", promotedId: string, p: Queryable = db(),
+): Promise<EvidenceRow[]> {
+  const { rows } = await p.query(
+    `select ${E_COLS} from evidence
+      where tenant_id=$1 and promoted_to_kind=$2 and promoted_to_id=$3 order by created_at`,
+    [tenantOrFounding(), kind, promotedId]);
+  return rows as EvidenceRow[];
+}

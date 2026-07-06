@@ -102,3 +102,39 @@
     grid-template-columns: 1fr;
   }
 }
+
+.skill-detail-provenance {
+  margin-bottom: 1.25rem;
+}
+
+.skill-detail-prov-note {
+  margin: 0 0 0.6rem;
+  font-size: 0.82rem;
+  color: var(--text-muted, #9aa0aa);
+}
+
+.skill-detail-prov-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.skill-detail-prov-list li {
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.5rem;
+  background: var(--bg-raised, rgba(255, 255, 255, 0.04));
+}
+
+.skill-detail-prov-summary {
+  margin: 0 0 0.3rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.skill-detail-prov-link {
+  font-size: 0.75rem;
+  color: var(--accent, #f5a623);
+}

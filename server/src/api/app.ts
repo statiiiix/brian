@@ -24,7 +24,7 @@ import {
 } from "../interviews/repo.js";
 import { runTurn } from "../interviews/engine.js";
 import { defaultLlm, type LlmClient } from "../llm/complete.js";
-import { listConnectors, upsertConnector } from "../connectors/repo.js";
+import { listConnectors, upsertConnector, evidenceForDraft } from "../connectors/repo.js";
 import { syncConnector, type SyncSummary } from "../connectors/sync.js";
 import { CONNECTOR_TYPES } from "../connectors/adapters/index.js";
 import type { ConnectorType, ConnectorRow } from "../connectors/types.js";
@@ -153,6 +153,10 @@ export function buildApp(opts: AppOptions = {}): FastifyInstance {
 
   app.get("/api/skills/:id/executions", async (req) =>
     listExecutions((req.params as any).id));
+
+  // Provenance: connector evidence that produced this skill draft.
+  app.get("/api/skills/:id/evidence", async (req) =>
+    evidenceForDraft("skill", (req.params as { id: string }).id));
 
   app.get("/api/executions", async () => listExecutions());
 

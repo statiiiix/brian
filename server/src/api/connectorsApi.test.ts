@@ -2,8 +2,10 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { buildApp } from "./app.js";
 import { pool } from "../db/pool.js";
 import { runMigrations } from "../db/migrate.js";
-import { FOUNDING_TENANT_ID } from "../db/tenant.js";
+import { FOUNDING_TENANT_ID, runTenant } from "../db/tenant.js";
 import { ensureToken } from "../auth/apiTokens.js";
+import { createSkill } from "../skills/repo.js";
+import { upsertConnector, insertEvidence, markPromoted } from "../connectors/repo.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
@@ -70,5 +72,32 @@ d("connectors API", () => {
     });
     const founding = await app.inject({ method: "GET", url: "/api/connectors", headers: H(FOUNDING_TOKEN) });
     expect((founding.json() as { type: string }[]).find((x) => x.type === "slack")).toBeUndefined();
+  });
+
+  it("exposes connector provenance for a drafted skill", async () => {
+    const skillId = await runTenant(FOUNDING_TENANT_ID, async () => {
+      const conn = await upsertConnector("gmail", { status: "connected" });
+      const skill = await createSkill({
+        name: "__conn Refund", trigger: "refund", inputs: [], procedure: "escalate",
+        hard_rules: [], tools: [], guardrails: [], escalation_target: null, examples: [], owner: null,
+      });
+      const ev = await insertEvidence({
+        connector_id: conn.id, source_ref: { thread_id: "__connEv1", permalink: "http://x" },
+        kind: "skill_evidence", summary: "__conn refund evidence", confidence: 0.8,
+        embedding: new Array(1536).fill(0.01),
+      });
+      await markPromoted([ev!.id], "skill", skill.id);
+      return skill.id;
+    });
+
+    const res = await app.inject({ method: "GET", url: `/api/skills/${skillId}/evidence`, headers: H(FOUNDING_TOKEN) });
+    expect(res.statusCode).toBe(200);
+    const evidence = res.json() as { summary: string; source_ref: { thread_id: string } }[];
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0].summary).toBe("__conn refund evidence");
+    expect(evidence[0].source_ref.thread_id).toBe("__connEv1");
+
+    await pool.query("delete from evidence where summary = '__conn refund evidence'");
+    await pool.query("delete from skills where id = $1", [skillId]);
   });
 });
