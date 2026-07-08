@@ -17,7 +17,8 @@
     "seed:admin": "tsx src/scripts/seedAdmin.ts",
     "hooks:install": "node scripts/hooks/install.mjs",
     "onboard": "node scripts/onboard/onboard.mjs",
-    "sync": "tsx src/scripts/syncCli.ts"
+    "sync": "tsx src/scripts/syncCli.ts",
+    "edge:build": "node scripts/edge-build.mjs"
   },
   "dependencies": {
     "@hono/mcp": "^0.3.0",
