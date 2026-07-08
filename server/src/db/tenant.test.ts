@@ -35,4 +35,23 @@ d("tenant context", () => {
     const { rows } = await runTenant(FOUNDING_TENANT_ID, () => db().query("select 1 as ok"));
     expect(rows[0].ok).toBe(1);
   });
+
+  it("db() binds app.tenant_id for the query so RLS policies see the tenant", async () => {
+    const OTHER = "00000000-0000-0000-0000-00000000beef";
+    const { rows } = await runTenant(OTHER, () =>
+      db().query("select current_setting('app.tenant_id', true) as t"),
+    );
+    expect(rows[0].t).toBe(OTHER);
+  });
+
+  it("db() falls back to the founding tenant outside a scope", async () => {
+    const { rows } = await db().query("select current_setting('app.tenant_id', true) as t");
+    expect(rows[0].t).toBe(FOUNDING_TENANT_ID);
+  });
+
+  it("the setting is transaction-local: a fresh pool query sees no tenant", async () => {
+    await runTenant(FOUNDING_TENANT_ID, () => db().query("select 1"));
+    const { rows } = await pool.query("select current_setting('app.tenant_id', true) as t");
+    expect(rows[0].t ?? "").toBe("");
+  });
 });
