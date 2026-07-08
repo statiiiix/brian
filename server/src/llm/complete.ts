@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { secret } from "../config/secrets.js";
 
 // Single seam for all generative LLM calls (skill drafting + capture).
 // Provider is OpenAI; model defaults to gpt-5.4-mini (override with LLM_MODEL).
@@ -19,16 +20,16 @@ export interface LlmClient {
 export const LLM_MODEL = process.env.LLM_MODEL ?? "gpt-5.4-mini";
 
 let client: OpenAI | null = null;
-function openai(): OpenAI {
-  if (!client) client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+async function openai(): Promise<OpenAI> {
+  if (!client) client = new OpenAI({ apiKey: await secret("OPENAI_API_KEY") });
   return client;
 }
 
 export function defaultLlm(): LlmClient {
   return {
     async complete({ system, user, schema }) {
-      const res = await openai().chat.completions.create({
-        model: LLM_MODEL,
+      const res = await (await openai()).chat.completions.create({
+        model: (await secret("LLM_MODEL")) ?? LLM_MODEL,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },

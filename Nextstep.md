@@ -235,14 +235,15 @@ demo that works on a clean machine. The backend is now hosted on Supabase
 (Phase 1 ✅, see done list); what remains:
 
 ### Phase F — Founder checklist (only steps an agent cannot do; ~15 min)
-0. **Enable the RLS role's login** (SQL editor, 30s):
-   `alter role brian_app login password '<long random>';` then
-   (a) add `APP_TEST_DATABASE_URL` to `server/.env` — same as
-   `TEST_DATABASE_URL` but user `brian_app.<ref>` + that password — which
-   un-skips the 6 cross-tenant leak tests (`npm test`), and
-   (b) set the edge `DATABASE_URL` secret to the **brian_app** session-pooler
-   URL so the hosted API runs with RLS enforced (it currently connects as the
-   `postgres` owner via `SUPABASE_DB_URL`, which bypasses policies).
+0. ~~Enable the RLS role's login~~ ✅ DONE 2026-07-08 (founder-authorized):
+   `brian_app` has login; `APP_TEST_DATABASE_URL` is in `server/.env`; all
+   **6 cross-tenant leak tests pass** (unfiltered selects return only the
+   bound tenant; cross-tenant insert rejected). Remaining half-step: set the
+   edge `DATABASE_URL` secret to the **brian_app** session-pooler URL
+   (user `brian_app.foydcrwyakpkisxtvzgr`, password = `brian_app` login
+   password) so the HOSTED API also runs with RLS enforced — until then it
+   connects as the `postgres` owner via `SUPABASE_DB_URL`, which bypasses
+   policies.
 1. **Edge Function secrets** (Dashboard → Project → Edge Functions → Secrets,
    or `supabase secrets set` with a PAT): `OPENAI_API_KEY` (unblocks
    find_skill/briefing/capture/interviews on the hosted API — everything else

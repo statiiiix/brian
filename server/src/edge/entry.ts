@@ -8,20 +8,23 @@
 // the pool falls back to the platform-provided SUPABASE_DB_URL (pool.ts).
 import { Hono } from "hono";
 import { buildApp } from "../api/app.js";
+import { secret } from "../config/secrets.js";
 
 declare const Deno: {
   serve: (handler: (req: Request) => Response | Promise<Response>) => void;
 };
 
-// Fail closed: if the BRIAN_API_TOKEN secret is not configured yet, enable
-// the guard with a random unguessable token — the static-bearer path then
-// never matches, but per-tenant api_tokens rows and dashboard JWTs still
-// resolve. The API is never served open on the public internet.
-const staticToken = process.env.BRIAN_API_TOKEN ?? crypto.randomUUID();
+// Config resolves env-first, then the owner-only app_config table (008) —
+// the hosted deployment needs no platform secrets at all. Fail closed: if no
+// BRIAN_API_TOKEN is configured anywhere, the guard gets a random unguessable
+// token — the static-bearer path then never matches, but per-tenant
+// api_tokens rows and Supabase/dashboard JWTs still resolve. The API is never
+// served open on the public internet.
+const staticToken = (await secret("BRIAN_API_TOKEN")) ?? crypto.randomUUID();
 
 const inner = buildApp({
   authToken: staticToken,
-  jwtSecret: process.env.AUTH_JWT_SECRET ?? null,
+  jwtSecret: (await secret("AUTH_JWT_SECRET")) ?? null,
 });
 
 // The edge runtime hands the function the path segment after /functions/v1,

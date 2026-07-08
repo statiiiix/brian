@@ -1,15 +1,16 @@
 import OpenAI from "openai";
+import { secret } from "../config/secrets.js";
 
 let client: OpenAI | null = null;
-function openai(): OpenAI {
-  if (!client) client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+async function openai(): Promise<OpenAI> {
+  if (!client) client = new OpenAI({ apiKey: await secret("OPENAI_API_KEY") });
   return client;
 }
 
 export const EMBED_DIM = 1536;
 
 export async function embed(text: string): Promise<number[]> {
-  const res = await openai().embeddings.create({
+  const res = await (await openai()).embeddings.create({
     model: "text-embedding-3-small",
     input: text,
   });

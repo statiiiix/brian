@@ -17,8 +17,11 @@ export interface SupabaseUser {
 }
 
 // Both are auto-provided on the Supabase Edge runtime; set them in server/.env
-// for local use. Null when unconfigured (feature off).
+// for local use. Null when unconfigured (feature off). Under Vitest the env
+// is ignored (like pool.ts's VITEST special-case): tests opt in by passing
+// the config to buildApp explicitly, so `buildApp()` stays an open app.
 export function supabaseAuthFromEnv(): SupabaseAuthConfig | null {
+  if (process.env.VITEST) return null;
   const url = process.env.SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY;
   return url && anonKey ? { url, anonKey } : null;
