@@ -180,6 +180,20 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
   hook SessionStart. `find_skill`/briefing/LLM routes await the
   `OPENAI_API_KEY` **edge secret** (founder step — no MCP tool for secrets).
 
+- **Self-sufficient hosted secrets + Supabase login (2026-07-08, evening):**
+  the hosted backend no longer needs platform secrets or any local process.
+  Migration `008_app_config.sql` (applied live): owner-only `app_config`
+  table (RLS on, zero policies, `brian_app` revoked); `src/config/secrets.ts`
+  resolves env → app_config; embed/LLM/edge-entry read through it. The four
+  values (`OPENAI_API_KEY`, `LLM_MODEL`, `BRIAN_API_TOKEN`,
+  `AUTH_JWT_SECRET`) are **populated in app_config on live prod**
+  (founder-authorized). Edge v4 deployed. **Live-verified end to end:**
+  hosted MCP `find_skill` returns the right skill, `/api/agent/briefing`
+  matches Refund Handling — the hosted brain is fully functional. Founder's
+  Supabase Auth account created via public signup (a7madokss@gmail.com, same
+  password as the legacy dashboard login; confirmation email pending). RLS
+  role `brian_app` has login; **all 6 cross-tenant leak tests pass**.
+
 - **RLS backstop (2026-07-08, branch `rls-backstop`):** SupabaseIntegration
   §7 Phase 2, now REQUIRED (public API). Migration `007_rls_backstop.sql`
   **applied to live prod** (via Supabase MCP): non-owner `brian_app` role
@@ -234,26 +248,26 @@ Goal: **YC-ready** — hosted product, one-command onboarding, real isolation,
 demo that works on a clean machine. The backend is now hosted on Supabase
 (Phase 1 ✅, see done list); what remains:
 
-### Phase F — Founder checklist (only steps an agent cannot do; ~15 min)
-0. ~~Enable the RLS role's login~~ ✅ DONE 2026-07-08 (founder-authorized):
-   `brian_app` has login; `APP_TEST_DATABASE_URL` is in `server/.env`; all
-   **6 cross-tenant leak tests pass** (unfiltered selects return only the
-   bound tenant; cross-tenant insert rejected). Remaining half-step: set the
-   edge `DATABASE_URL` secret to the **brian_app** session-pooler URL
-   (user `brian_app.foydcrwyakpkisxtvzgr`, password = `brian_app` login
-   password) so the HOSTED API also runs with RLS enforced — until then it
-   connects as the `postgres` owner via `SUPABASE_DB_URL`, which bypasses
-   policies.
-1. **Edge Function secrets** (Dashboard → Project → Edge Functions → Secrets,
-   or `supabase secrets set` with a PAT): `OPENAI_API_KEY` (unblocks
-   find_skill/briefing/capture/interviews on the hosted API — everything else
-   already works), `BRIAN_API_TOKEN`, `AUTH_JWT_SECRET` (same values as
-   `server/.env`), optionally `DATABASE_URL` (session-pooler URL; otherwise the
-   platform `SUPABASE_DB_URL` direct connection is used) and `LLM_MODEL`.
-   While in there: **rotate the OpenAI key** (it was shared in chat) and
-   delete the retired `brian-diag` function (410 stub).
-2. **Connector credentials** (unchanged, see `docs/connectors.md`): Gmail
-   `gmail.readonly` re-auth (`npm run gmail:auth`); Slack bot token pasted in
+### Phase F — Founder checklist (updated 2026-07-08 evening; most items DONE)
+✅ RLS role login + leak tests · ✅ hosted secrets (app_config) · ✅ hosted
+find_skill/briefing verified · ✅ Supabase Auth account created.
+Remaining:
+1. **Click the Supabase confirmation email** sent to a7madokss@gmail.com —
+   then Supabase login works everywhere (guard validates via the auth
+   server; no other setup).
+2. **Deploy the dashboard:** `npx vercel deploy --prod` at repo root (CLI is
+   logged in; `vercel.json` routes `/api/*` to the edge function; the
+   `REACT_APP_SUPABASE_*` values are in the committed root `.env`). The
+   permission classifier blocks agents from prod deploys — founder runs it
+   or explicitly instructs "deploy the frontend to Vercel production".
+3. Security housekeeping (soon, not blocking): **rotate the OpenAI key**
+   (shared in chat; update `app_config` + `server/.env`), set hosted RLS
+   enforcement by adding `DATABASE_URL` (brian_app session-pooler URL) as an
+   edge secret or app_config-driven boot (currently the edge connects as the
+   `postgres` owner, so RLS is app-level-only there), delete the retired
+   `brian-diag` function (410 stub).
+4. **Connector credentials** when ready (see `docs/connectors.md`): Gmail
+   `gmail.readonly` re-auth (`npm run gmail:auth`); Slack bot token via
    dashboard Activity → Connectors.
 
 ### Phase 2 — RLS as a real backstop ✅ BUILT (2026-07-08; live activation = Phase F step 0)
