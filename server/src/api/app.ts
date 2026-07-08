@@ -18,6 +18,10 @@ import type { ContextStatus } from "../context/types.js";
 import { registerMcpHttp } from "../mcp/http.js";
 import { findUserByEmail, verifyPassword } from "../auth/users.js";
 import { signUserToken, verifyUserToken, type TokenUser } from "../auth/jwt.js";
+import {
+  looksLikeSupabaseToken, verifySupabaseToken, supabaseAuthFromEnv,
+  type SupabaseAuthConfig,
+} from "../auth/supabase.js";
 import { runTenant, FOUNDING_TENANT_ID } from "../db/tenant.js";
 import { tenantForToken } from "../auth/apiTokens.js";
 import {
@@ -41,6 +45,7 @@ function bearerMatches(header: string | undefined, expected: string): boolean {
 export interface AppOptions {
   authToken?: string | null;
   jwtSecret?: string | null;
+  supabaseAuth?: SupabaseAuthConfig | null;
   llm?: LlmClient;
   sync?: (type: ConnectorType) => Promise<SyncSummary>;
 }
@@ -69,8 +74,9 @@ export function buildApp(opts: AppOptions = {}): App {
   const app = new Hono<AppEnv>();
   const authToken = opts.authToken ?? null;
   const jwtSecret = opts.jwtSecret ?? null;
+  const supabaseAuth = opts.supabaseAuth === undefined ? supabaseAuthFromEnv() : opts.supabaseAuth;
 
-  if (authToken || jwtSecret) {
+  if (authToken || jwtSecret || supabaseAuth) {
     // Bind the resolved tenant for the whole downstream request. Hono
     // middleware is promise-based, so als.run can wrap next() directly.
     app.use("*", async (c: Context<AppEnv>, next: Next) => {
@@ -82,9 +88,10 @@ export function buildApp(opts: AppOptions = {}): App {
       }
       if (header?.startsWith("Bearer ")) {
         const raw = header.slice("Bearer ".length);
-        // 2) Per-tenant agent token (api_tokens), else 3) dashboard user JWT
-        //    (founding tenant in phase 1; Supabase Auth claims carry tenant_id
-        //    in phase 3).
+        // 2) Per-tenant agent token (api_tokens), else dashboard humans:
+        // 3) legacy custom JWT (local verify, founding tenant; removed once
+        //    all users are migrated), 4) Supabase Auth access token —
+        //    validated by the auth server, tenant/role from app_metadata.
         const tenantId = await tenantForToken(raw).catch(() => null);
         if (tenantId) return runTenant(tenantId, () => next());
         if (jwtSecret) {
@@ -92,6 +99,13 @@ export function buildApp(opts: AppOptions = {}): App {
           if (u) {
             c.set("user", u);
             return runTenant(FOUNDING_TENANT_ID, () => next());
+          }
+        }
+        if (supabaseAuth && looksLikeSupabaseToken(raw)) {
+          const su = await verifySupabaseToken(raw, supabaseAuth);
+          if (su) {
+            c.set("user", { id: su.id, email: su.email, role: su.role });
+            return runTenant(su.tenantId ?? FOUNDING_TENANT_ID, () => next());
           }
         }
       }

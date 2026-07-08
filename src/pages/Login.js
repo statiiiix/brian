@@ -12,15 +12,36 @@ export default function Login() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // Supabase Auth when configured (hosted deployment); the access token goes
+  // in the same Authorization header — the API guard validates it against the
+  // auth server. Falls back to the legacy /api/auth/login (bcrypt+JWT) so
+  // nothing breaks before auth users are provisioned.
+  async function supabaseLogin() {
+    const url = process.env.REACT_APP_SUPABASE_URL;
+    const key = process.env.REACT_APP_SUPABASE_ANON_KEY;
+    if (!url || !key) return null;
+    const res = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: key },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.access_token ?? null;
+  }
+
   async function onSubmit(e) {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
-      const { token } = await api('/api/auth/login', {
-        method: 'POST',
-        body: { email, password },
-      });
+      let token = await supabaseLogin();
+      if (!token) {
+        ({ token } = await api('/api/auth/login', {
+          method: 'POST',
+          body: { email, password },
+        }));
+      }
       setToken(token);
       navigate('/app', { replace: true });
     } catch (err) {

@@ -259,11 +259,23 @@ demo that works on a clean machine. The backend is now hosted on Supabase
 Migration 007 + tenant-bound queries are live and tested (see done list).
 All that remains is the founder credential step above — no code left here.
 
-### Phase 3 — Supabase Auth for dashboard humans
-Per `SupabaseIntegration.md` §5a: email/password + invites via Supabase Auth,
-`tenant_id`+`role` in `app_metadata`, the guard verifies Supabase JWTs, bcrypt
-path deleted, `seed:admin` rewritten over `auth.admin.createUser`. Plus the
-dashboard **Agents & tokens** page (mint/label/revoke per-tenant `api_tokens`).
+### Phase 3 — Supabase Auth for dashboard humans ✅ BUILT (2026-07-08, branch `supabase-auth`)
+- Guard (4th auth path): Supabase access tokens validated against the auth
+  server (`GET /auth/v1/user`; `src/auth/supabase.ts` — no JWKS/secret
+  handling, works with any signing scheme), `tenant_id`/`role` read from
+  `app_metadata`, issuer pre-filter so agent bearers never trigger a network
+  call. `SUPABASE_URL`+`SUPABASE_ANON_KEY` config (auto-present on the edge;
+  added to `server/.env` locally).
+- Login page tries Supabase password grant first
+  (`REACT_APP_SUPABASE_URL/_ANON_KEY` in root `.env`, anon key is public);
+  falls back to legacy `/api/auth/login`.
+- `npm run seed:supabase-admin` creates/updates the founder auth user with
+  founding-tenant `app_metadata` — needs `SUPABASE_SERVICE_ROLE_KEY` +
+  `ADMIN_EMAIL`/`ADMIN_PASSWORD` in `server/.env` (founder: dashboard →
+  Settings → API → service_role). **Legacy bcrypt path deliberately kept**
+  until that user exists; delete `src/auth/users.ts`+`jwt.ts` and the login
+  route's bcrypt branch at cutover. Token auto-refresh (supabase-js) and the
+  invite flow + "Agents & tokens" page: Phase 4 backlog.
 
 ### Phase 4 — YC polish
 - Frontend deployed (Vercel; `vercel.json` already rewrites `/api/*` → the
