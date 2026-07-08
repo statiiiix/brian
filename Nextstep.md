@@ -277,15 +277,20 @@ All that remains is the founder credential step above — no code left here.
   route's bcrypt branch at cutover. Token auto-refresh (supabase-js) and the
   invite flow + "Agents & tokens" page: Phase 4 backlog.
 
-### Phase 4 — YC polish
-- Frontend deployed (Vercel; `vercel.json` already rewrites `/api/*` → the
-  edge function, so the CRA code stays relative-path).
-- Clean-machine demo: `npm run onboard -- --url <hosted> --token <minted>` →
-  agent uses the hosted brain end to end; script it for the YC demo.
+### Phase 4 — YC polish (remaining)
+- **Founder: deploy the frontend** — `vercel deploy` at repo root
+  (`vercel.json` rewrites `/api/*` → the edge function; set
+  `REACT_APP_SUPABASE_URL/_ANON_KEY` in Vercel env, values in root `.env`).
+- **YC demo script** (after Phase F secrets): on any machine,
+  `cd server && npm run onboard -- --url
+  https://foydcrwyakpkisxtvzgr.supabase.co/functions/v1/brian --token <TOKEN>`
+  → open Claude/Cursor → ask for a refund task → agent pulls the skill from
+  the hosted brain, respects guardrails, logs the execution → show the
+  execution + provenance in the dashboard. No laptop server anywhere.
 - Connectors live on real data (after Phase F): tune junk-filter thresholds /
   cluster K, **encrypt `connectors.credentials`**.
-- Metrics for the pitch: executions per tenant off the `executions` table;
-  brian-bench retrieval numbers (85/91.7) + Phases 2–3 if time allows.
+- Backlog: supabase-js token refresh + invite flow + "Agents & tokens" page;
+  metrics for the pitch (executions per tenant; bench 85/91.7 + Phases 2–3).
 
 ### Smaller follow-ups (nice-to-have)
 - Once real syncs run: tune the junk-filter thresholds / cluster `K` on live
