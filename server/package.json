@@ -18,7 +18,8 @@
     "hooks:install": "node scripts/hooks/install.mjs",
     "onboard": "node scripts/onboard/onboard.mjs",
     "sync": "tsx src/scripts/syncCli.ts",
-    "edge:build": "node scripts/edge-build.mjs"
+    "edge:build": "node scripts/edge-build.mjs",
+    "seed:supabase-admin": "tsx src/scripts/seedSupabaseAdmin.ts"
   },
   "dependencies": {
     "@hono/mcp": "^0.3.0",
