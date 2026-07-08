@@ -15,6 +15,13 @@ npm run onboard -- --only claude-code,cursor        # limit to named platforms
 npm run onboard -- --url https://brian.example.com --token <TOKEN>   # remote Brian
 ```
 
+For the hosted Brian (Supabase Edge Function, our production deployment) the
+remote form is:
+
+```bash
+npm run onboard -- --url https://foydcrwyakpkisxtvzgr.supabase.co/functions/v1/brian --token <TOKEN>
+```
+
 `--help` lists every flag. Exit code is `0` when everything detected is wired (or
 on `--status`/`--dry-run`), and `1` when a detected config was **refused** (see
 Safety). A `--url` remote install requires `--token` (else exit `2`).
@@ -33,11 +40,13 @@ labelled honestly because they are not equally strong:
 | **Codex CLI** | `[mcp_servers.brian]` appended to `~/.codex/config.toml` | contract marker block in `~/.codex/AGENTS.md` | contract loaded every session (tools model-pulled) |
 | **OpenClaw / Clawdbot** | manual (config format unverified — printed as a step) | contract marker block in `AGENTS.md` | best-effort |
 
-After applying, **restart each app** so it reloads its MCP config, and keep the
-Brian API running so the Claude Code per-prompt hook can fetch briefings:
+After applying, **restart each app** so it reloads its MCP config. The Claude
+Code per-prompt briefing hook talks to the backend named by `BRIAN_URL` in
+`server/.env` — with the hosted URL set (the default on this machine) no local
+process is needed. For local development against a local backend instead:
 
 ```bash
-cd server && npm run api
+cd server && npm run api   # then set BRIAN_URL=http://localhost:3001 (or unset it)
 ```
 
 ## Safety

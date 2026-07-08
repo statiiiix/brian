@@ -6,12 +6,13 @@ import { runMigrations } from "../db/migrate.js";
 import { resetDb } from "../test/resetDb.js";
 import { pool } from "../db/pool.js";
 import { buildApp } from "./app.js";
+import { testClient } from "../test/http.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
 
 d("context API", () => {
-  const app = buildApp();
+  const app = testClient(buildApp());
   beforeAll(async () => { await runMigrations(pool); await app.ready(); });
   afterAll(async () => { await app.close(); await pool.end(); });
   beforeEach(async () => { await resetDb(pool); });

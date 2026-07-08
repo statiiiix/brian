@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { buildApp } from "./app.js";
+import { testClient } from "../test/http.js";
 import { pool } from "../db/pool.js";
 import { runMigrations } from "../db/migrate.js";
 import { runTenant, FOUNDING_TENANT_ID } from "../db/tenant.js";
@@ -28,7 +29,7 @@ async function cleanup() {
 }
 
 d("tenant isolation via the HTTP guard", () => {
-  const app = buildApp({ authToken: FOUNDING_TOKEN });
+  const app = testClient(buildApp({ authToken: FOUNDING_TOKEN }));
   let foundingSkillId = "";
   let acmeSkillId = "";
 

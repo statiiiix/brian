@@ -8,6 +8,7 @@ vi.mock("../db/embed.js", () => ({
 import { runMigrations } from "../db/migrate.js";
 import { pool } from "../db/pool.js";
 import { buildApp } from "./app.js";
+import { testClient } from "../test/http.js";
 import type { LlmClient } from "../llm/complete.js";
 
 const d = process.env.TEST_DATABASE_URL ? describe : describe.skip;
@@ -33,7 +34,7 @@ const ready = JSON.stringify({
 function appWith(outputs: string[]) {
   let i = 0;
   const llm: LlmClient = { complete: vi.fn(async () => outputs[Math.min(i++, outputs.length - 1)]) };
-  return buildApp({ llm });
+  return testClient(buildApp({ llm }));
 }
 
 d("interview API", () => {

@@ -2,7 +2,7 @@
 
 > Context-preservation doc. Snapshot of where the Company Brain backend stands and
 > what to do next, so we can resume without re-deriving anything.
-> Last updated: 2026-07-06.
+> Last updated: 2026-07-08.
 
 ---
 
@@ -52,10 +52,9 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
 - **LLM:** OpenAI only (no Claude). Embeddings `text-embedding-3-small` (1536);
   generative `gpt-5.4-mini` via `LLM_MODEL`, using **Structured Outputs** (strict
   `json_schema`) because it's a reasoning model.
-- **Status:** 202/202 tests pass on the live DB (as of 2026-07-06). Newest work
-  (multi-tenancy Phase 1 + connectors + interview resume) lives on branch
-  `connectors` (cut from `supabase-tenancy`); `main` currently has through the
-  onboard installer. Branches are **not yet merged** — see "Next steps".
+- **Status:** 204/204 tests pass on the live DB (as of 2026-07-08). Multi-tenancy
+  Phase 1 + connectors + interview resume are **merged to `main`** (96f71c7).
+  Newest work (Supabase-hosted backend) is on branch `supabase-hosted-backend`.
 
 ### Environment / infra facts (don't re-derive)
 - Supabase project **brian**, ref `foydcrwyakpkisxtvzgr` (Postgres 17 + pgvector).
@@ -158,6 +157,29 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
 - **Interview resume-from-abandoned (2026-07-06):** `POST /api/interviews/:id/resume`
   + Resume buttons on the interview detail view and list (dashboard).
 
+- **Supabase-hosted backend (2026-07-08, branch `supabase-hosted-backend`):**
+  founder mandate: fully migrate the backend to Supabase; MCP stdio stays local.
+  Spec `docs/superpowers/specs/2026-07-08-supabase-hosted-backend-design.md`,
+  plan `docs/superpowers/plans/2026-07-08-supabase-hosted-backend.md`.
+  (1) HTTP layer ported **Fastify → Hono** (same routes/codes/guard; MCP over
+  `@hono/mcp` fetch-native transport; local entry on `@hono/node-server`;
+  Fastify removed; tests via `src/test/http.ts` inject shim).
+  (2) `npm run edge:build` bundles `src/edge/entry.ts` (our code only, esbuild,
+  minified) → `supabase/functions/brian/index.js` + a generated `deno.json`
+  import map pinning npm deps; **deployed via the Supabase MCP** with
+  `verify_jwt=false` (the app enforces its own bearer/JWT guard).
+  **LIVE at `https://foydcrwyakpkisxtvzgr.supabase.co/functions/v1/brian`**
+  (`/api/*`, `/mcp`, `/__build` marker). Edge-runtime gotchas (encoded in
+  comments): `process.env` READS pass through, WRITES + `Deno.env.toObject()`
+  throw NotSupported; pool falls back to platform `SUPABASE_DB_URL`; auth
+  fails closed (random token when the `BRIAN_API_TOKEN` secret is unset, so
+  only `api_tokens` rows / JWTs authenticate — verified 401).
+  (3) Clients repointed: `BRIAN_URL` in `server/.env` (hook needs no local
+  API), `vercel.json` rewrites `/api/*` → the edge function for the deployed
+  dashboard, docs updated. Live-verified: REST, MCP initialize + tools/list,
+  hook SessionStart. `find_skill`/briefing/LLM routes await the
+  `OPENAI_API_KEY` **edge secret** (founder step — no MCP tool for secrets).
+
 ---
 
 ## How any agent should resume work here (read this first)
@@ -189,53 +211,49 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
    - Client-machine files (hooks, settings, AGENTS.md blocks) stay
      tenant-neutral — pointers + generic contract only, never company data.
 
-## Next steps (prioritized)
+## Next steps — the YC-ready phase plan (2026-07-08)
 
-The big feature arc (onboard → multi-tenancy Phase 1 → connectors) is **built,
-tested, and its migrations are live on prod**. What remains is integration,
-founder credentials, and deliberately-deferred hardening.
+Goal: **YC-ready** — hosted product, one-command onboarding, real isolation,
+demo that works on a clean machine. The backend is now hosted on Supabase
+(Phase 1 ✅, see done list); what remains:
 
-### 1. Integrate the feature branches to `main` (do first)
-`main` currently has through the onboard installer. Two branches are built,
-green (202/202), and unmerged, in dependency order — merge `--no-ff`:
-1. `supabase-tenancy` (multi-tenancy Phase 1) → `main`.
-2. `connectors` (cut from `supabase-tenancy`; adds connectors + interview resume)
-   → `main`.
-Migrations 005 + 006 are already applied to prod, so `main` and prod already
-agree at the DB level; this just lands the code. (Kept unmerged pending founder
-go-ahead because of concurrent landing-page work on the branch.)
+### Phase F — Founder checklist (only steps an agent cannot do; ~15 min)
+1. **Edge Function secrets** (Dashboard → Project → Edge Functions → Secrets,
+   or `supabase secrets set` with a PAT): `OPENAI_API_KEY` (unblocks
+   find_skill/briefing/capture/interviews on the hosted API — everything else
+   already works), `BRIAN_API_TOKEN`, `AUTH_JWT_SECRET` (same values as
+   `server/.env`), optionally `DATABASE_URL` (session-pooler URL; otherwise the
+   platform `SUPABASE_DB_URL` direct connection is used) and `LLM_MODEL`.
+   While in there: **rotate the OpenAI key** (it was shared in chat) and
+   delete the retired `brian-diag` function (410 stub).
+2. **Connector credentials** (unchanged, see `docs/connectors.md`): Gmail
+   `gmail.readonly` re-auth (`npm run gmail:auth`); Slack bot token pasted in
+   dashboard Activity → Connectors.
 
-### 2. Founder credentials to make connectors pull real data
-Connectors code + tables are deployed; they only need source access:
-- **Gmail:** add the `gmail.readonly` scope in Google Cloud, re-run
-  `cd server && npm run gmail:auth`, paste the refreshed `GMAIL_REFRESH_TOKEN`
-  into `server/.env` (the founding tenant reuses `GMAIL_*`).
-- **Slack:** create a Slack app + bot token (`channels:history`,
-  `groups:history`, `users:read`), invite it to the target channels, paste the
-  token into the dashboard **Activity → Connectors** page.
-Then `npm run sync -- gmail|slack|all` (or "Sync now") → drafts land in review
-with provenance. Usage: `docs/connectors.md`.
+### Phase 2 — RLS as a real backstop (next agent task; NOW REQUIRED)
+The API is on the public internet, so database-level isolation stops being
+optional. Per `SupabaseIntegration.md` §7: non-owner `brian_app` role, app
+connects as it; `db()` pins a per-request client with `SET LOCAL
+app.tenant_id`; `tenant_isolation` policies on every tenant table; cross-tenant
+leak tests that connect as `brian_app`. Migrations keep running as `postgres`.
 
-### 3. Founder housekeeping (carried over)
-- **Rotate the OpenAI API key** (it was shared in chat).
-- Optional: `cd server && npm run onboard` on any new machine wires all its
-  agents to Brian in one command (`docs/onboard.md`); keep `npm run api` running
-  so the Claude Code per-prompt briefing hook fires.
+### Phase 3 — Supabase Auth for dashboard humans
+Per `SupabaseIntegration.md` §5a: email/password + invites via Supabase Auth,
+`tenant_id`+`role` in `app_metadata`, the guard verifies Supabase JWTs, bcrypt
+path deleted, `seed:admin` rewritten over `auth.admin.createUser`. Plus the
+dashboard **Agents & tokens** page (mint/label/revoke per-tenant `api_tokens`).
 
-### 4. Supabase Phase 2 — RLS as a real backstop (OPTIONAL; defer until external clients)
-Not needed for single-company use — app-level tenant scoping already isolates
-tenants (Phase 1, done). Do this when onboarding the first **external** client
-company and you want database-level (not just app-level) isolation: create a
-non-owner `brian_app` role, connect the app as it (credential in `server/.env`),
-pin a per-request client with `SET LOCAL app.tenant_id` inside `db()` (repos
-already route through `db()`, so no repo change), add `tenant_isolation` RLS
-policies on every tenant table, and add cross-tenant leak tests that connect as
-`brian_app`. All owned tables already have RLS *enabled* (no policies yet → the
-owner bypasses; anon/authenticated are denied). Phases 3–4 (Supabase Auth for
-dashboard humans; hosted cloud deploy) land with that same first design partner.
-Design: `SupabaseIntegration.md`.
+### Phase 4 — YC polish
+- Frontend deployed (Vercel; `vercel.json` already rewrites `/api/*` → the
+  edge function, so the CRA code stays relative-path).
+- Clean-machine demo: `npm run onboard -- --url <hosted> --token <minted>` →
+  agent uses the hosted brain end to end; script it for the YC demo.
+- Connectors live on real data (after Phase F): tune junk-filter thresholds /
+  cluster K, **encrypt `connectors.credentials`**.
+- Metrics for the pitch: executions per tenant off the `executions` table;
+  brian-bench retrieval numbers (85/91.7) + Phases 2–3 if time allows.
 
-### 5. Smaller follow-ups (nice-to-have)
+### Smaller follow-ups (nice-to-have)
 - Once real syncs run: tune the junk-filter thresholds / cluster `K` on live
   signal; per-channel Slack selection; **encrypt `connectors.credentials`**
   (currently plaintext in the tenant row — a noted hardening).

@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import Fastify from "fastify";
+import { Hono } from "hono";
+import { serve, type ServerType } from "@hono/node-server";
 
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -24,19 +25,26 @@ function runHook(input: unknown, env: Record<string, string>) {
 }
 
 describe("brian-hook", () => {
-  const stub = Fastify();
+  const stub = new Hono();
+  let server: ServerType;
   let base = "";
   const seen: { auth?: string; query?: string } = {};
-  stub.post("/api/agent/briefing", async (req) => {
-    seen.auth = req.headers.authorization;
-    seen.query = (req.body as { query: string }).query;
-    return {
+  stub.post("/api/agent/briefing", async (c) => {
+    seen.auth = c.req.header("authorization");
+    seen.query = ((await c.req.json()) as { query: string }).query;
+    return c.json({
       skill: { id: "s1", name: "Refund handling", procedure: "check order", hard_rules: ["max $200"] },
       context: { id: "c1", content: "Retention over margin" },
-    };
+    });
   });
-  beforeAll(async () => { base = await stub.listen({ port: 0, host: "127.0.0.1" }); });
-  afterAll(async () => { await stub.close(); });
+  beforeAll(async () => {
+    base = await new Promise<string>((resolve) => {
+      server = serve({ fetch: stub.fetch, port: 0, hostname: "127.0.0.1" }, (addr) =>
+        resolve(`http://${addr.address}:${addr.port}`),
+      );
+    });
+  });
+  afterAll(async () => { await new Promise((r) => server.close(r)); });
 
   it("SessionStart emits the agent contract", async () => {
     const { code, stdout } = await runHook(

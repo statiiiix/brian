@@ -9,6 +9,7 @@ import { runMigrations } from "../db/migrate.js";
 import { pool } from "../db/pool.js";
 import { upsertUser } from "../auth/users.js";
 import { buildApp } from "./app.js";
+import { testClient } from "../test/http.js";
 
 const d = process.env.TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -19,7 +20,7 @@ d("auth routes + dual-mode guard", () => {
   });
   afterAll(async () => { await pool.end(); });
 
-  const app = () => buildApp({ authToken: "static-tok", jwtSecret: "jwt-secret" });
+  const app = () => testClient(buildApp({ authToken: "static-tok", jwtSecret: "jwt-secret" }));
 
   it("logs in with correct credentials and rejects wrong ones", async () => {
     const a = app();

@@ -47,7 +47,10 @@ Install into any project (or user-wide) with:
     npm run hooks:install -- --user      # everywhere: ~/.claude/settings.json
     npm run hooks:install -- --settings /path/to/project/.claude/settings.json
 
-Requirements: the Brian API running locally (`cd server && npm run api`) and
-`BRIAN_API_TOKEN` in `server/.env` (the hook reads both the token and
-`BRIAN_URL` from there; env vars override). To uninstall, remove the two
+Requirements: a reachable Brian backend and `BRIAN_API_TOKEN` in `server/.env`
+(the hook reads both the token and `BRIAN_URL` from there; env vars override).
+In production `BRIAN_URL` points at the hosted Supabase Edge Function
+(`https://<ref>.supabase.co/functions/v1/brian`), so nothing needs to run
+locally; for local development run `cd server && npm run api` and point
+`BRIAN_URL` at `http://localhost:3001`. To uninstall, remove the two
 `brian-hook.mjs` entries from the settings file.

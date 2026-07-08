@@ -17,13 +17,12 @@ if (staticToken) {
   );
 }
 
-buildApp({
+const { serve } = await import("@hono/node-server");
+
+const app = buildApp({
   authToken: staticToken ?? null,
   jwtSecret: process.env.AUTH_JWT_SECRET ?? null,
-})
-  .listen({ port, host: "0.0.0.0" })
-  .then((addr) => console.log(`API listening on ${addr}`))
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  });
+});
+serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, (addr) =>
+  console.log(`API listening on http://${addr.address}:${addr.port}`),
+);
