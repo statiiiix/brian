@@ -41,11 +41,34 @@ export function tenantOrFounding(): string {
   return als.getStore()?.tenantId ?? FOUNDING_TENANT_ID;
 }
 
-// The executor repos should use. Phase 1: the shared pool. Phase 2 will return
-// the request's pinned client (SET LOCAL app.tenant_id) for RLS — repos need no
-// change because they already go through db().
+// Phase 2 (RLS backstop): every one-shot repo query runs inside its own
+// transaction with app.tenant_id bound via transaction-scoped set_config, so
+// the tenant_isolation policies (007) see the tenant when the app connects as
+// the non-owner brian_app role. The setting dies with the transaction —
+// nothing leaks to the next pool checkout. Repos that own multi-statement
+// transactions (updateSkill/updateContext) set it themselves after `begin`.
+const scopedPool: Queryable = {
+  query: (async (text: unknown, params?: unknown) => {
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select set_config('app.tenant_id', $1, true)", [tenantOrFounding()]);
+      const result = await (client.query as (t: unknown, p?: unknown) => Promise<unknown>)(text, params);
+      await client.query("commit");
+      return result;
+    } catch (e) {
+      try { await client.query("rollback"); } catch { /* connection-level failure */ }
+      throw e;
+    } finally {
+      client.release();
+    }
+  }) as pg.Pool["query"],
+};
+
+// The executor repos should use: a pinned client when one exists (reserved for
+// future request-pinned transactions), else the RLS-scoped pool wrapper.
 export function db(): Queryable {
-  return als.getStore()?.client ?? pool;
+  return als.getStore()?.client ?? scopedPool;
 }
 
 // Callback form — binds the tenant to the async context for `fn`. Used by MCP

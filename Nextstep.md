@@ -180,6 +180,23 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
   hook SessionStart. `find_skill`/briefing/LLM routes await the
   `OPENAI_API_KEY` **edge secret** (founder step — no MCP tool for secrets).
 
+- **RLS backstop (2026-07-08, branch `rls-backstop`):** SupabaseIntegration
+  §7 Phase 2, now REQUIRED (public API). Migration `007_rls_backstop.sql`
+  **applied to live prod** (via Supabase MCP): non-owner `brian_app` role
+  (nologin until the founder sets a password — see Phase F), DML grants +
+  default privileges per schema, RLS enabled everywhere, `tenant_isolation`
+  policies on all 10 tenant tables keyed to transaction-scoped
+  `app.tenant_id`, `pre_tenant_lookup` SELECT policies on api_tokens/tenants
+  (bearer-hash → tenant resolution happens before a tenant exists).
+  Code: `db()` in `src/db/tenant.ts` now wraps every one-shot repo query in
+  `begin; set_config('app.tenant_id', tenant, true); …; commit` (setting dies
+  with the tx — no cross-checkout leakage); updateSkill/updateContext bind it
+  after their own `begin`. Tests: `migrate007.test.ts` (4) green;
+  `rlsLeak.test.ts` (6, connect AS brian_app: unfiltered selects return only
+  the bound tenant, cross-tenant insert rejected) **skip until
+  `APP_TEST_DATABASE_URL` exists** — the agent classifier blocks granting a
+  prod login credential, deliberately left to the founder.
+
 ---
 
 ## How any agent should resume work here (read this first)
@@ -218,6 +235,14 @@ demo that works on a clean machine. The backend is now hosted on Supabase
 (Phase 1 ✅, see done list); what remains:
 
 ### Phase F — Founder checklist (only steps an agent cannot do; ~15 min)
+0. **Enable the RLS role's login** (SQL editor, 30s):
+   `alter role brian_app login password '<long random>';` then
+   (a) add `APP_TEST_DATABASE_URL` to `server/.env` — same as
+   `TEST_DATABASE_URL` but user `brian_app.<ref>` + that password — which
+   un-skips the 6 cross-tenant leak tests (`npm test`), and
+   (b) set the edge `DATABASE_URL` secret to the **brian_app** session-pooler
+   URL so the hosted API runs with RLS enforced (it currently connects as the
+   `postgres` owner via `SUPABASE_DB_URL`, which bypasses policies).
 1. **Edge Function secrets** (Dashboard → Project → Edge Functions → Secrets,
    or `supabase secrets set` with a PAT): `OPENAI_API_KEY` (unblocks
    find_skill/briefing/capture/interviews on the hosted API — everything else
@@ -230,12 +255,9 @@ demo that works on a clean machine. The backend is now hosted on Supabase
    `gmail.readonly` re-auth (`npm run gmail:auth`); Slack bot token pasted in
    dashboard Activity → Connectors.
 
-### Phase 2 — RLS as a real backstop (next agent task; NOW REQUIRED)
-The API is on the public internet, so database-level isolation stops being
-optional. Per `SupabaseIntegration.md` §7: non-owner `brian_app` role, app
-connects as it; `db()` pins a per-request client with `SET LOCAL
-app.tenant_id`; `tenant_isolation` policies on every tenant table; cross-tenant
-leak tests that connect as `brian_app`. Migrations keep running as `postgres`.
+### Phase 2 — RLS as a real backstop ✅ BUILT (2026-07-08; live activation = Phase F step 0)
+Migration 007 + tenant-bound queries are live and tested (see done list).
+All that remains is the founder credential step above — no code left here.
 
 ### Phase 3 — Supabase Auth for dashboard humans
 Per `SupabaseIntegration.md` §5a: email/password + invites via Supabase Auth,

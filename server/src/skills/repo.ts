@@ -108,6 +108,8 @@ export async function updateSkill(
   const client = await p.connect();
   try {
     await client.query("begin");
+    // RLS backstop: bind the tenant for this transaction (tenant_isolation, 007).
+    await client.query("select set_config('app.tenant_id', $1, true)", [tenant]);
     const { rows: curRows } = await client.query(
       `select ${SKILL_COLUMNS} from skills where id = $1 and tenant_id = $2`,
       [id, tenant]
