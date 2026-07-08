@@ -11,12 +11,13 @@ import { pool } from "../db/pool.js";
 import { createSkill, setStatus } from "../skills/repo.js";
 import { createContext } from "../context/repo.js";
 import { buildApp } from "./app.js";
+import { testClient } from "../test/http.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
 
 d("agent briefing API", () => {
-  const app = buildApp();
+  const app = testClient(buildApp());
   beforeAll(async () => { await runMigrations(pool); await app.ready(); });
   afterAll(async () => { await app.close(); await pool.end(); });
   beforeEach(async () => { await resetDb(pool); });

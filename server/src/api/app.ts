@@ -1,4 +1,6 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import { Hono } from "hono";
+import type { Context, Next } from "hono";
+import { Buffer } from "node:buffer";
 import { timingSafeEqual } from "node:crypto";
 import {
   createSkill, getSkill, listSkills, updateSkill, setStatus, listVersions, NotFoundError,
@@ -49,9 +51,8 @@ function publicConnector(c: ConnectorRow): Omit<ConnectorRow, "credentials"> & {
   return { ...rest, configured: Object.keys(credentials ?? {}).length > 0 };
 }
 
-declare module "fastify" {
-  interface FastifyRequest { user?: TokenUser }
-}
+export type AppEnv = { Variables: { user?: TokenUser } };
+export type App = Hono<AppEnv>;
 
 const PUBLIC_PATHS = new Set(["/api/auth/login"]);
 
@@ -59,254 +60,257 @@ const PUBLIC_PATHS = new Set(["/api/auth/login"]);
 // no-match so hooks don't inject unrelated skills into every prompt.
 const BRIEFING_MAX_DISTANCE = 0.6;
 
-export function buildApp(opts: AppOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: false });
+// Fastify parsed missing/empty JSON bodies to undefined; keep that tolerance.
+async function jsonBody(c: Context): Promise<any> {
+  return c.req.json().catch(() => undefined);
+}
+
+export function buildApp(opts: AppOptions = {}): App {
+  const app = new Hono<AppEnv>();
   const authToken = opts.authToken ?? null;
   const jwtSecret = opts.jwtSecret ?? null;
 
   if (authToken || jwtSecret) {
-    // Bind the resolved tenant for the whole downstream request via als.run
-    // wrapping done() — the reliable Fastify + AsyncLocalStorage pattern (a bare
-    // enterWith in a hook does not propagate to the route handler).
-    app.addHook("onRequest", (req, reply, done) => {
-      const proceed = (tenantId: string) => runTenant(tenantId, () => done());
-      const unauthorized = () => reply.code(401).send({ error: "unauthorized" });
-
-      if (PUBLIC_PATHS.has(req.url.split("?")[0])) return done();
-      const header = req.headers.authorization;
+    // Bind the resolved tenant for the whole downstream request. Hono
+    // middleware is promise-based, so als.run can wrap next() directly.
+    app.use("*", async (c: Context<AppEnv>, next: Next) => {
+      if (PUBLIC_PATHS.has(c.req.path)) return next();
+      const header = c.req.header("authorization");
       // 1) Static founding bearer (BRIAN_API_TOKEN) — the founding tenant.
-      if (authToken && bearerMatches(header, authToken)) return proceed(FOUNDING_TENANT_ID);
+      if (authToken && bearerMatches(header, authToken)) {
+        return runTenant(FOUNDING_TENANT_ID, () => next());
+      }
       if (header?.startsWith("Bearer ")) {
         const raw = header.slice("Bearer ".length);
         // 2) Per-tenant agent token (api_tokens), else 3) dashboard user JWT
         //    (founding tenant in phase 1; Supabase Auth claims carry tenant_id
         //    in phase 3).
-        tenantForToken(raw)
-          .then((tenantId) => {
-            if (tenantId) return proceed(tenantId);
-            if (jwtSecret) {
-              const u = verifyUserToken(raw, jwtSecret);
-              if (u) { req.user = u; return proceed(FOUNDING_TENANT_ID); }
-            }
-            unauthorized();
-          })
-          .catch(() => unauthorized());
-        return;
+        const tenantId = await tenantForToken(raw).catch(() => null);
+        if (tenantId) return runTenant(tenantId, () => next());
+        if (jwtSecret) {
+          const u = verifyUserToken(raw, jwtSecret);
+          if (u) {
+            c.set("user", u);
+            return runTenant(FOUNDING_TENANT_ID, () => next());
+          }
+        }
       }
-      unauthorized();
+      return c.json({ error: "unauthorized" }, 401);
     });
   }
 
-  app.post("/api/auth/login", async (req, reply) => {
-    if (!jwtSecret) return reply.code(500).send({ error: "auth not configured" });
-    const { email, password } = (req.body ?? {}) as { email?: string; password?: string };
-    if (!email || !password) return reply.code(400).send({ error: "email and password required" });
+  app.onError((err, c) => {
+    if (err instanceof ValidationError) return c.json({ error: err.issues.join("; ") }, 400);
+    if (err instanceof NotFoundError) return c.json({ error: err.message }, 404);
+    return c.json({ error: "internal error" }, 500);
+  });
+
+  app.post("/api/auth/login", async (c) => {
+    if (!jwtSecret) return c.json({ error: "auth not configured" }, 500);
+    const { email, password } = (await jsonBody(c)) ?? {};
+    if (!email || !password) return c.json({ error: "email and password required" }, 400);
     const u = await findUserByEmail(email);
     if (!u || !(await verifyPassword(u.password_hash, password))) {
-      return reply.code(401).send({ error: "invalid credentials" });
+      return c.json({ error: "invalid credentials" }, 401);
     }
     const token = signUserToken({ id: u.id, email: u.email, role: u.role }, jwtSecret);
-    return { token, user: { id: u.id, email: u.email, name: u.name, role: u.role } };
+    return c.json({ token, user: { id: u.id, email: u.email, name: u.name, role: u.role } });
   });
 
-  app.get("/api/auth/me", async (req, reply) => {
-    if (!req.user) return reply.code(401).send({ error: "unauthorized" });
-    return req.user;
+  app.get("/api/auth/me", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    return c.json(user);
   });
 
-  app.setErrorHandler((err, _req, reply) => {
-    if (err instanceof ValidationError) return reply.code(400).send({ error: err.issues.join("; ") });
-    if (err instanceof NotFoundError) return reply.code(404).send({ error: err.message });
-    reply.code(500).send({ error: "internal error" });
+  app.get("/api/skills", async (c) => {
+    const status = c.req.query("status") as SkillStatus | undefined;
+    return c.json(await listSkills(status));
   });
 
-  app.get("/api/skills", async (req) => {
-    const status = (req.query as any)?.status as SkillStatus | undefined;
-    return listSkills(status);
+  app.get("/api/skills/:id", async (c) => {
+    const s = await getSkill(c.req.param("id"));
+    if (!s) return c.json({ error: "skill not found" }, 404);
+    return c.json(s);
   });
 
-  app.get("/api/skills/:id", async (req, reply) => {
-    const s = await getSkill((req.params as any).id);
-    if (!s) return reply.code(404).send({ error: "skill not found" });
-    return s;
+  app.post("/api/skills", async (c) => {
+    const input = parseNewSkill(await jsonBody(c));
+    return c.json(await createSkill(input), 201);
   });
 
-  app.post("/api/skills", async (req, reply) => {
-    const input = parseNewSkill(req.body);
-    const s = await createSkill(input);
-    return reply.code(201).send(s);
+  app.put("/api/skills/:id", async (c) => {
+    const patch = parseUpdateSkill(await jsonBody(c));
+    return c.json(await updateSkill(c.req.param("id"), patch, "api", undefined));
   });
 
-  app.put("/api/skills/:id", async (req) => {
-    const patch = parseUpdateSkill(req.body);
-    return updateSkill((req.params as any).id, patch, "api", undefined);
-  });
+  app.post("/api/skills/:id/activate", async (c) =>
+    c.json(await setStatus(c.req.param("id"), "active")));
 
-  app.post("/api/skills/:id/activate", async (req) =>
-    setStatus((req.params as any).id, "active"));
+  app.post("/api/skills/:id/retire", async (c) =>
+    c.json(await setStatus(c.req.param("id"), "retired")));
 
-  app.post("/api/skills/:id/retire", async (req) =>
-    setStatus((req.params as any).id, "retired"));
+  app.get("/api/skills/:id/versions", async (c) =>
+    c.json(await listVersions(c.req.param("id"))));
 
-  app.get("/api/skills/:id/versions", async (req) =>
-    listVersions((req.params as any).id));
-
-  app.get("/api/skills/:id/executions", async (req) =>
-    listExecutions((req.params as any).id));
+  app.get("/api/skills/:id/executions", async (c) =>
+    c.json(await listExecutions(c.req.param("id"))));
 
   // Provenance: connector evidence that produced this skill draft.
-  app.get("/api/skills/:id/evidence", async (req) =>
-    evidenceForDraft("skill", (req.params as { id: string }).id));
+  app.get("/api/skills/:id/evidence", async (c) =>
+    c.json(await evidenceForDraft("skill", c.req.param("id"))));
 
-  app.get("/api/executions", async () => listExecutions());
+  app.get("/api/executions", async (c) => c.json(await listExecutions()));
 
   // One-shot skill+context lookup for agent harness hooks (see
   // docs/agent-contract.md "Guaranteed invocation").
-  app.post("/api/agent/briefing", async (req, reply) => {
-    const query = (req.body as any)?.query;
+  app.post("/api/agent/briefing", async (c) => {
+    const query = (await jsonBody(c))?.query;
     if (typeof query !== "string" || query.trim().length === 0) {
-      return reply.code(400).send({ error: "query is required" });
+      return c.json({ error: "query is required" }, 400);
     }
     const [skills, ctx] = await Promise.all([
       findSkillsWithDistance(query, 1),
       findContextWithDistance(query),
     ]);
     const skillHit = skills[0];
-    return {
+    return c.json({
       skill: skillHit && skillHit.distance <= BRIEFING_MAX_DISTANCE ? skillHit.skill : null,
       context: ctx && ctx.distance <= BRIEFING_MAX_DISTANCE ? ctx.entry : null,
-    };
+    });
   });
 
-  app.post("/api/skills/:id/draft-from-text", async (req, reply) => {
-    const text = (req.body as any)?.text;
+  app.post("/api/skills/:id/draft-from-text", async (c) => {
+    const text = (await jsonBody(c))?.text;
     if (typeof text !== "string" || text.trim().length === 0) {
-      return reply.code(400).send({ error: "text is required" });
+      return c.json({ error: "text is required" }, 400);
     }
-    const skill = await draftFromText(text);
-    return reply.code(201).send(skill);
+    return c.json(await draftFromText(text), 201);
   });
 
-  app.post("/api/capture", async (req, reply) => {
-    const text = (req.body as any)?.text;
-    if (typeof text !== "string" || text.trim().length === 0) return reply.code(400).send({ error: "text is required" });
-    return capture(text);
+  app.post("/api/capture", async (c) => {
+    const text = (await jsonBody(c))?.text;
+    if (typeof text !== "string" || text.trim().length === 0) {
+      return c.json({ error: "text is required" }, 400);
+    }
+    return c.json(await capture(text));
   });
 
-  app.post("/api/ingest/bulk", async (req, reply) => {
-    const docs = (req.body as any)?.docs;
-    if (!Array.isArray(docs)) return reply.code(400).send({ error: "docs array is required" });
-    return { results: await ingestBulk(docs) };
+  app.post("/api/ingest/bulk", async (c) => {
+    const docs = (await jsonBody(c))?.docs;
+    if (!Array.isArray(docs)) return c.json({ error: "docs array is required" }, 400);
+    return c.json({ results: await ingestBulk(docs) });
   });
 
-  app.get("/api/context", async (req) => {
-    const status = (req.query as any)?.status as ContextStatus | undefined;
-    return listContext(status);
+  app.get("/api/context", async (c) => {
+    const status = c.req.query("status") as ContextStatus | undefined;
+    return c.json(await listContext(status));
   });
 
-  app.get("/api/context/:id", async (req, reply) => {
-    const c = await getContext((req.params as any).id);
-    if (!c) return reply.code(404).send({ error: "context not found" });
-    return c;
+  app.get("/api/context/:id", async (c) => {
+    const entry = await getContext(c.req.param("id"));
+    if (!entry) return c.json({ error: "context not found" }, 404);
+    return c.json(entry);
   });
 
-  app.post("/api/context", async (req, reply) => {
-    const input = parseNewContext(req.body);
-    return reply.code(201).send(await createContext(input));
+  app.post("/api/context", async (c) => {
+    const input = parseNewContext(await jsonBody(c));
+    return c.json(await createContext(input), 201);
   });
 
-  app.put("/api/context/:id", async (req) =>
-    updateContext((req.params as any).id, parseUpdateContext(req.body), "api"));
+  app.put("/api/context/:id", async (c) =>
+    c.json(await updateContext(c.req.param("id"), parseUpdateContext(await jsonBody(c)), "api")));
 
-  app.post("/api/context/:id/retire", async (req) =>
-    retireContext((req.params as any).id));
+  app.post("/api/context/:id/retire", async (c) =>
+    c.json(await retireContext(c.req.param("id"))));
 
-  app.get("/api/context/:id/versions", async (req) =>
-    listContextVersions((req.params as any).id));
+  app.get("/api/context/:id/versions", async (c) =>
+    c.json(await listContextVersions(c.req.param("id"))));
 
   const llm = () => opts.llm ?? defaultLlm();
   const sync = opts.sync ?? syncConnector;
 
-  app.post("/api/interviews", async (req, reply) => {
-    const { topic, owner } = (req.body ?? {}) as { topic?: string; owner?: string };
-    if (!topic?.trim()) return reply.code(400).send({ error: "topic is required" });
+  app.post("/api/interviews", async (c) => {
+    const { topic, owner } = ((await jsonBody(c)) ?? {}) as { topic?: string; owner?: string };
+    if (!topic?.trim()) return c.json({ error: "topic is required" }, 400);
     const iv = await createInterview({
-      topic: topic.trim(), owner: owner ?? null, created_by: req.user?.id ?? null,
+      topic: topic.trim(), owner: owner ?? null, created_by: c.get("user")?.id ?? null,
     });
-    return reply.code(201).send(await runTurn(iv, llm()));
+    return c.json(await runTurn(iv, llm()), 201);
   });
 
-  app.get("/api/interviews", async () => listInterviews());
+  app.get("/api/interviews", async (c) => c.json(await listInterviews()));
 
-  app.get("/api/interviews/:id", async (req, reply) => {
-    const iv = await getInterview((req.params as any).id);
-    if (!iv) return reply.code(404).send({ error: "interview not found" });
-    return iv;
+  app.get("/api/interviews/:id", async (c) => {
+    const iv = await getInterview(c.req.param("id"));
+    if (!iv) return c.json({ error: "interview not found" }, 404);
+    return c.json(iv);
   });
 
-  app.post("/api/interviews/:id/messages", async (req, reply) => {
-    const content = (req.body as any)?.content;
+  app.post("/api/interviews/:id/messages", async (c) => {
+    const content = (await jsonBody(c))?.content;
     if (typeof content !== "string" || !content.trim()) {
-      return reply.code(400).send({ error: "content is required" });
+      return c.json({ error: "content is required" }, 400);
     }
-    const iv = await getInterview((req.params as any).id);
-    if (!iv) return reply.code(404).send({ error: "interview not found" });
-    if (iv.status !== "active") return reply.code(400).send({ error: `interview is ${iv.status}` });
+    const iv = await getInterview(c.req.param("id"));
+    if (!iv) return c.json({ error: "interview not found" }, 404);
+    if (iv.status !== "active") return c.json({ error: `interview is ${iv.status}` }, 400);
     const withMsg = await appendInterviewMessage(iv.id, { role: "expert", content: content.trim() });
-    return runTurn(withMsg, llm());
+    return c.json(await runTurn(withMsg, llm()));
   });
 
-  app.post("/api/interviews/:id/approve", async (req, reply) => {
-    const iv = await getInterview((req.params as any).id);
-    if (!iv) return reply.code(404).send({ error: "interview not found" });
+  app.post("/api/interviews/:id/approve", async (c) => {
+    const iv = await getInterview(c.req.param("id"));
+    if (!iv) return c.json({ error: "interview not found" }, 404);
     if (iv.status !== "ready" || !iv.draft) {
-      return reply.code(400).send({ error: "interview has no draft to approve" });
+      return c.json({ error: "interview has no draft to approve" }, 400);
     }
-    const activate = (req.body as any)?.activate !== false;
+    const activate = (await jsonBody(c))?.activate !== false;
     let skill = await createSkill(parseNewSkill(iv.draft));
     if (activate) skill = await setStatus(skill.id, "active");
     const interview = await completeInterview(iv.id, skill.id);
-    return { interview, skill };
+    return c.json({ interview, skill });
   });
 
-  app.post("/api/interviews/:id/abandon", async (req, reply) => {
-    const iv = await getInterview((req.params as any).id);
-    if (!iv) return reply.code(404).send({ error: "interview not found" });
-    return abandonInterview(iv.id);
+  app.post("/api/interviews/:id/abandon", async (c) => {
+    const iv = await getInterview(c.req.param("id"));
+    if (!iv) return c.json({ error: "interview not found" }, 404);
+    return c.json(await abandonInterview(iv.id));
   });
 
-  app.post("/api/interviews/:id/resume", async (req, reply) => {
-    const iv = await getInterview((req.params as any).id);
-    if (!iv) return reply.code(404).send({ error: "interview not found" });
-    if (iv.status !== "abandoned") return reply.code(400).send({ error: `interview is ${iv.status}` });
-    return resumeInterview(iv.id);
+  app.post("/api/interviews/:id/resume", async (c) => {
+    const iv = await getInterview(c.req.param("id"));
+    if (!iv) return c.json({ error: "interview not found" }, 404);
+    if (iv.status !== "abandoned") return c.json({ error: `interview is ${iv.status}` }, 400);
+    return c.json(await resumeInterview(iv.id));
   });
 
-  app.get("/api/connectors", async () => (await listConnectors()).map(publicConnector));
+  app.get("/api/connectors", async (c) =>
+    c.json((await listConnectors()).map(publicConnector)));
 
-  app.post("/api/connectors/:type/connect", async (req, reply) => {
-    const type = (req.params as { type: ConnectorType }).type;
-    if (!CONNECTOR_TYPES.includes(type)) return reply.code(400).send({ error: "unknown connector" });
-    const credentials = (req.body as { credentials?: unknown })?.credentials;
+  app.post("/api/connectors/:type/connect", async (c) => {
+    const type = c.req.param("type") as ConnectorType;
+    if (!CONNECTOR_TYPES.includes(type)) return c.json({ error: "unknown connector" }, 400);
+    const credentials = (await jsonBody(c))?.credentials;
     if (!credentials || typeof credentials !== "object") {
-      return reply.code(400).send({ error: "credentials object is required" });
+      return c.json({ error: "credentials object is required" }, 400);
     }
-    return publicConnector(await upsertConnector(type, { status: "connected", credentials }));
+    return c.json(publicConnector(await upsertConnector(type, { status: "connected", credentials })));
   });
 
-  app.post("/api/connectors/:type/disable", async (req, reply) => {
-    const type = (req.params as { type: ConnectorType }).type;
-    if (!CONNECTOR_TYPES.includes(type)) return reply.code(400).send({ error: "unknown connector" });
-    return publicConnector(await upsertConnector(type, { status: "disabled" }));
+  app.post("/api/connectors/:type/disable", async (c) => {
+    const type = c.req.param("type") as ConnectorType;
+    if (!CONNECTOR_TYPES.includes(type)) return c.json({ error: "unknown connector" }, 400);
+    return c.json(publicConnector(await upsertConnector(type, { status: "disabled" })));
   });
 
-  app.post("/api/connectors/:type/sync", async (req, reply) => {
-    const type = (req.params as { type: ConnectorType }).type;
-    if (!CONNECTOR_TYPES.includes(type)) return reply.code(400).send({ error: "unknown connector" });
+  app.post("/api/connectors/:type/sync", async (c) => {
+    const type = c.req.param("type") as ConnectorType;
+    if (!CONNECTOR_TYPES.includes(type)) return c.json({ error: "unknown connector" }, 400);
     try {
-      return await sync(type);
+      return c.json(await sync(type));
     } catch (e) {
-      return reply.code(400).send({ error: e instanceof Error ? e.message : "sync failed" });
+      return c.json({ error: e instanceof Error ? e.message : "sync failed" }, 400);
     }
   });
 

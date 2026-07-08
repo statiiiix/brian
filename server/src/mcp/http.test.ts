@@ -6,6 +6,7 @@ vi.mock("../db/embed.js", () => ({
 }));
 
 import { buildApp } from "../api/app.js";
+import { testClient } from "../test/http.js";
 
 const initReq = {
   jsonrpc: "2.0",
@@ -25,7 +26,7 @@ const mcpHeaders = {
 
 describe("MCP over streamable HTTP", () => {
   it("answers initialize on POST /mcp", async () => {
-    const app = buildApp();
+    const app = testClient(buildApp());
     const res = await app.inject({ method: "POST", url: "/mcp", headers: mcpHeaders, payload: initReq });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('"serverInfo"');
@@ -34,7 +35,7 @@ describe("MCP over streamable HTTP", () => {
   });
 
   it("rejects GET with 405", async () => {
-    const app = buildApp();
+    const app = testClient(buildApp());
     const res = await app.inject({
       method: "GET", url: "/mcp",
       headers: { accept: "application/json, text/event-stream" },
@@ -44,7 +45,7 @@ describe("MCP over streamable HTTP", () => {
   });
 
   it("requires the bearer token when auth is on", async () => {
-    const app = buildApp({ authToken: "sekret" });
+    const app = testClient(buildApp({ authToken: "sekret" }));
     const res = await app.inject({ method: "POST", url: "/mcp", headers: mcpHeaders, payload: initReq });
     expect(res.statusCode).toBe(401);
     await app.close();

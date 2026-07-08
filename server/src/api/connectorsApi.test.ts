@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { buildApp } from "./app.js";
+import { testClient } from "../test/http.js";
 import { pool } from "../db/pool.js";
 import { runMigrations } from "../db/migrate.js";
 import { FOUNDING_TENANT_ID, runTenant } from "../db/tenant.js";
@@ -25,7 +26,7 @@ async function clean() {
 
 d("connectors API", () => {
   const fakeSummary = { fetched: 3, kept: 2, evidence: 2, drafts: 0 };
-  const app = buildApp({ authToken: FOUNDING_TOKEN, sync: async () => fakeSummary });
+  const app = testClient(buildApp({ authToken: FOUNDING_TOKEN, sync: async () => fakeSummary }));
 
   beforeAll(async () => {
     await runMigrations(pool);

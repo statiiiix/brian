@@ -8,6 +8,7 @@ vi.mock("../db/embed.js", () => ({
 import { runMigrations } from "../db/migrate.js";
 import { pool } from "../db/pool.js";
 import { buildApp } from "./app.js";
+import { testClient } from "../test/http.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
@@ -17,7 +18,7 @@ d("bearer auth", () => {
   afterAll(async () => { await pool.end(); });
 
   it("rejects requests without or with a wrong token, accepts the right one", async () => {
-    const app = buildApp({ authToken: "sekret" });
+    const app = testClient(buildApp({ authToken: "sekret" }));
 
     const noAuth = await app.inject({ method: "GET", url: "/api/skills" });
     expect(noAuth.statusCode).toBe(401);
@@ -36,7 +37,7 @@ d("bearer auth", () => {
   });
 
   it("stays open when no token is configured", async () => {
-    const app = buildApp();
+    const app = testClient(buildApp());
     const res = await app.inject({ method: "GET", url: "/api/skills" });
     expect(res.statusCode).toBe(200);
     await app.close();
