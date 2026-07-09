@@ -28,12 +28,16 @@ export function supabaseAuthFromEnv(): SupabaseAuthConfig | null {
 }
 
 // Cheap pre-filter so we only pay a network call for tokens that are actually
-// Supabase-issued JWTs (iss ends in /auth/v1), not agent bearers or legacy JWTs.
+// Supabase-issued JWTs (iss ends in /auth/v1), not agent bearers or legacy
+// JWTs. Decodes via atob (not Buffer's "base64url" encoding, which is not
+// reliable on the Supabase Edge runtime's Node compat layer).
 export function looksLikeSupabaseToken(token: string): boolean {
   const parts = token.split(".");
   if (parts.length !== 3) return false;
   try {
-    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+    const payload = JSON.parse(new TextDecoder().decode(bytes));
     return typeof payload.iss === "string" && payload.iss.includes("/auth/v1");
   } catch {
     return false;
