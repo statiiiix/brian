@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { icons } from '../../components/Icon';
+import { msym } from '../../components/Icon';
 import { api } from '../api';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
@@ -35,9 +35,6 @@ export default function Executions() {
       <header className="dash-head">
         <div>
           <h1 className="dash-title">Executions</h1>
-          <p className="dash-subtitle">
-            Every time an agent ran a skill — including when it refused and escalated.
-          </p>
         </div>
       </header>
 
@@ -45,7 +42,7 @@ export default function Executions() {
       {!error && executions === null && <TableSkeleton rows={6} />}
 
       {executions !== null && executions.length === 0 && (
-        <EmptyState icon={icons.log} title="No executions yet">
+        <EmptyState icon={msym.executions} title="No executions yet">
           Once an agent runs a skill through Brian's MCP server, every run lands here with its
           outcome.
         </EmptyState>

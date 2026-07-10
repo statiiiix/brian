@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { icons } from '../../components/Icon';
+import { msym } from '../../components/Icon';
 import { api } from '../api';
 import EmptyState from '../components/EmptyState';
 import './Capture.css';
@@ -39,10 +39,6 @@ export default function Capture() {
       <header className="dash-head">
         <div>
           <h1 className="dash-title">Capture</h1>
-          <p className="dash-subtitle">
-            Paste anything — meeting notes, a Slack thread, a process doc. Brian files it as
-            skills and context.
-          </p>
         </div>
       </header>
 
@@ -60,7 +56,6 @@ export default function Capture() {
           />
         </div>
         <div className="capture-submit">
-          <span className="capture-hint">Brian extracts the durable rules and discards the noise.</span>
           <button type="submit" className="dash-btn dash-btn--primary" disabled={busy || !text.trim()}>
             {busy ? 'Capturing…' : 'Capture'}
           </button>
@@ -73,7 +68,7 @@ export default function Capture() {
         <section className="capture-results" aria-label="Capture results">
           <h2 className="dash-h2">Filed {items.length} item{items.length === 1 ? '' : 's'}</h2>
           {items.length === 0 && (
-            <EmptyState icon={icons.capture} title="Nothing durable found">
+            <EmptyState icon={msym.capture} title="Nothing durable found">
               Brian read the text but found no rules or context worth keeping.
             </EmptyState>
           )}

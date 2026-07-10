@@ -1,0 +1,11 @@
+[mcp_servers.brian]
+command = "npm"
+args = [
+    "--prefix",
+    "server",
+    "run",
+    "mcp",
+]
+
+[mcp_servers.brian.tools.find_context]
+approval_mode = "approve"

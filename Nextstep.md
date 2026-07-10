@@ -2,7 +2,7 @@
 
 > Context-preservation doc. Snapshot of where the Company Brain backend stands and
 > what to do next, so we can resume without re-deriving anything.
-> Last updated: 2026-07-08.
+> Last updated: 2026-07-10.
 
 ---
 
@@ -151,8 +151,22 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
   Gmail `historyId` / Slack `ts` cursors; live HTTP impls founder-gated on
   tokens). REST API + dashboard **Activity → Connectors** page + "Sourced from
   connectors" provenance panel on skill detail. Spec/plan/`docs/connectors.md`.
-  **To go live it needs source credentials only** (Gmail `readonly` re-auth;
-  Slack app/bot token) — code + tables are deployed.
+  **Initial connector implementation is deployed**; customer-facing OAuth and
+  focused source discovery are described in the 2026-07-10 product-surface
+  milestone below.
+
+- **Product control plane + focused source discovery (2026-07-10):** dashboard
+  `/app` is now an overview of active skills, review work, governed runs, and
+  connected sources; `/app/build` is a risk-aware skill builder for high-stakes
+  decisions, incidents, team processes, and customer decisions. The Sources
+  page accepts the process the user wants to teach, passes it through connector
+  extraction/drafting, and shows unpromoted evidence with source links before
+  review. Google Workspace OAuth connects Gmail + Drive in one read-only flow;
+  Google Docs/Sheets/Slides are normalized through the new `google_drive`
+  adapter. Slack now has the same OAuth installation flow; direct bot-token
+  setup remains for local development. Migration `009_google_oauth.sql` stores
+  short-lived, hashed one-time OAuth state. Frontend and backend verification:
+  `npm run build`, frontend 3/3 tests, backend 63/63 files and 232/232 tests.
 
 - **Interview resume-from-abandoned (2026-07-06):** `POST /api/interviews/:id/resume`
   + Resume buttons on the interview detail view and list (dashboard).
@@ -266,9 +280,9 @@ Remaining:
    edge secret or app_config-driven boot (currently the edge connects as the
    `postgres` owner, so RLS is app-level-only there), delete the retired
    `brian-diag` function (410 stub).
-4. **Connector credentials** when ready (see `docs/connectors.md`): Gmail
-   `gmail.readonly` re-auth (`npm run gmail:auth`); Slack bot token via
-   dashboard Activity → Connectors.
+4. **Connector OAuth configuration** when ready (see `docs/connectors.md`): set
+   the Google and Slack OAuth client credentials + HTTPS callback URLs in the
+   hosted environment, then run one focused sync from Signals → Sources.
 
 ### Phase 2 — RLS as a real backstop ✅ BUILT (2026-07-08; live activation = Phase F step 0)
 Migration 007 + tenant-bound queries are live and tested (see done list).
@@ -303,7 +317,8 @@ All that remains is the founder credential step above — no code left here.
   the hosted brain, respects guardrails, logs the execution → show the
   execution + provenance in the dashboard. No laptop server anywhere.
 - Connectors live on real data (after Phase F): tune junk-filter thresholds /
-  cluster K, **encrypt `connectors.credentials`**.
+  cluster K, **encrypt `connectors.credentials`**, and verify Google/Slack OAuth
+  callbacks in the hosted environment.
 - Backlog: supabase-js token refresh + invite flow + "Agents & tokens" page;
   metrics for the pitch (executions per tenant; bench 85/91.7 + Phases 2–3).
 

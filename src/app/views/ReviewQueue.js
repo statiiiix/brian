@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { icons } from '../../components/Icon';
+import { msym } from '../../components/Icon';
 import { api } from '../api';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
@@ -51,9 +51,6 @@ export default function ReviewQueue() {
       <header className="dash-head">
         <div>
           <h1 className="dash-title">Review queue</h1>
-          <p className="dash-subtitle">
-            Drafts and flagged skills waiting for a human decision. Nothing goes live without you.
-          </p>
         </div>
         {items !== null && items.length > 0 && (
           <span className="review-count dash-mono">
@@ -66,7 +63,7 @@ export default function ReviewQueue() {
       {!error && items === null && <TableSkeleton rows={3} cols={3} />}
 
       {items !== null && items.length === 0 && (
-        <EmptyState icon={icons.check} title="Queue is clear">
+        <EmptyState icon={msym.clear} title="Queue is clear">
           New drafts from interviews, capture, or staleness checks will land here for your sign-off.
         </EmptyState>
       )}

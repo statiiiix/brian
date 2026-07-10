@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Icon, icons } from '../../components/Icon';
+import { Icon, msym } from '../../components/Icon';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
 import './SkillDetail.css';
@@ -117,7 +117,7 @@ export default function SkillDetail() {
         <div>
           <p className="dash-back">
             <Link to="/app/skills">
-              <Icon path={icons.arrowLeft} size={14} />
+              <Icon path={msym.back} size={14} />
               Skills
             </Link>
           </p>

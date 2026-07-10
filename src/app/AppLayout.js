@@ -1,25 +1,27 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Icon, icons } from '../components/Icon';
+import { Icon, msym } from '../components/Icon';
+import brianWordmark from '../assets/brian-wordmark.webp';
 import { api } from './api';
 import { clearToken } from './auth';
 import './AppLayout.css';
 
 const NAV_GROUPS = [
   {
-    label: 'Library',
+    label: 'Workspace',
     items: [
-      { to: '/app/skills', label: 'Skills', icon: icons.rules },
-      { to: '/app/review', label: 'Review', icon: icons.shield, badge: 'review' },
-      { to: '/app/interviews', label: 'Interviews', icon: icons.review },
+      { to: '/app', label: 'Overview', icon: msym.home },
+      { to: '/app/build', label: 'Build a skill', icon: msym.build },
+      { to: '/app/skills', label: 'Skills', icon: msym.skills },
+      { to: '/app/review', label: 'Review', icon: msym.review, badge: 'review' },
     ],
   },
   {
-    label: 'Activity',
+    label: 'Signals',
     items: [
-      { to: '/app/capture', label: 'Capture', icon: icons.capture },
-      { to: '/app/connectors', label: 'Connectors', icon: icons.inbox },
-      { to: '/app/executions', label: 'Executions', icon: icons.log },
+      { to: '/app/connectors', label: 'Sources', icon: msym.connectors },
+      { to: '/app/capture', label: 'Quick capture', icon: msym.capture },
+      { to: '/app/executions', label: 'Runs', icon: msym.executions },
     ],
   },
 ];
@@ -51,10 +53,7 @@ export default function AppLayout() {
     <div className="dash">
       <aside className="dash-sidebar">
         <a href="/" className="dash-logo">
-          <span className="dash-logo-mark" aria-hidden="true">
-            <Icon path={icons.bolt} size={14} />
-          </span>
-          <span className="dash-logo-name">Brian</span>
+          <img className="dash-logo-wordmark" src={brianWordmark} alt="Brian" />
         </a>
 
         <nav className="dash-nav" aria-label="Dashboard">
@@ -65,6 +64,7 @@ export default function AppLayout() {
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  end={item.to === '/app'}
                   className={({ isActive }) => `dash-nav-item ${isActive ? 'is-active' : ''}`}
                 >
                   <span className="dash-nav-icon" aria-hidden="true">
@@ -89,7 +89,7 @@ export default function AppLayout() {
             </span>
           </div>
           <button type="button" className="dash-logout" onClick={logout}>
-            <Icon path={icons.logout} size={15} />
+            <Icon path={msym.logout} size={15} />
             Log out
           </button>
         </div>

@@ -8,16 +8,20 @@ beforeAll(() => {
     disconnect() {}
     unobserve() {}
   };
-  window.matchMedia =
-    window.matchMedia ||
-    (() => ({ matches: false, addListener: () => {}, removeListener: () => {} }));
+  window.matchMedia = () => ({
+    matches: false,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  });
 });
 
 test('renders the hero headline at /', () => {
   window.history.pushState({}, '', '/');
   render(<App />);
   expect(
-    screen.getByRole('heading', { level: 1, name: /agents that follow/i })
+    screen.getByRole('heading', { level: 1, name: /company.*judgment/i })
   ).toBeInTheDocument();
 });
 
@@ -26,12 +30,7 @@ test('renders all main landing sections', () => {
   render(<App />);
   // Some section kickers also appear as nav/footer links, hence getAllByText.
   [
-    'The problem',
     'How it works',
-    'The refusal',
-    'Under the hood',
-    'What you get',
-    "Why we're building this",
     'Pricing',
     'FAQ',
   ].forEach((kicker) => {

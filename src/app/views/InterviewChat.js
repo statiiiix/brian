@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Icon, icons } from '../../components/Icon';
+import { Icon, msym } from '../../components/Icon';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
 import './InterviewChat.css';
@@ -125,7 +125,7 @@ export default function InterviewChat() {
         <div>
           <p className="dash-back">
             <Link to="/app/interviews">
-              <Icon path={icons.arrowLeft} size={14} />
+              <Icon path={msym.back} size={14} />
               Interviews
             </Link>
           </p>
@@ -155,7 +155,7 @@ export default function InterviewChat() {
                 <span className="ivc-msg-who">
                   {m.role === 'brian' && (
                     <span className="ivc-msg-avatar" aria-hidden="true">
-                      <Icon path={icons.bolt} size={9} />
+                      <Icon path={msym.bolt} size={9} />
                     </span>
                   )}
                   {m.role === 'brian' ? 'Brian' : 'You'}
@@ -167,7 +167,7 @@ export default function InterviewChat() {
               <div className="ivc-msg ivc-msg--brian">
                 <span className="ivc-msg-who">
                   <span className="ivc-msg-avatar" aria-hidden="true">
-                    <Icon path={icons.bolt} size={9} />
+                    <Icon path={msym.bolt} size={9} />
                   </span>
                   Brian
                 </span>
@@ -213,7 +213,7 @@ export default function InterviewChat() {
                 disabled={busy || !answer.trim()}
                 aria-label="Send answer"
               >
-                <Icon path={icons.send} size={16} />
+                <Icon path={msym.send} size={16} />
               </button>
             </form>
           )}
@@ -254,7 +254,7 @@ export default function InterviewChat() {
               {COVERAGE_FIELDS.map(([key, label]) => (
                 <li key={key} className={iv.coverage[key] ? 'is-covered' : ''}>
                   <span className="ivc-check" aria-hidden="true">
-                    {iv.coverage[key] && <Icon path={icons.check} size={11} />}
+                    {iv.coverage[key] && <Icon path={msym.check} size={11} />}
                   </span>
                   {label}
                   <span className="sr-only">{iv.coverage[key] ? ' covered' : ' not yet covered'}</span>

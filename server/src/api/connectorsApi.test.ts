@@ -63,6 +63,21 @@ d("connectors API", () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it("exposes a stable authorization entrypoint for planned providers", async () => {
+    const planned = await app.inject({
+      method: "GET", url: "/api/connectors/notion/start", headers: H(FOUNDING_TOKEN),
+    });
+    expect(planned.statusCode).toBe(503);
+    expect(planned.json()).toMatchObject({
+      code: "connector_oauth_not_configured", provider: "notion",
+    });
+
+    const unknown = await app.inject({
+      method: "GET", url: "/api/connectors/not-real/start", headers: H(FOUNDING_TOKEN),
+    });
+    expect(unknown.statusCode).toBe(404);
+  });
+
   it("is tenant-isolated", async () => {
     const acme = await app.inject({ method: "GET", url: "/api/connectors", headers: H(ACME_TOKEN) });
     expect((acme.json() as { type: string }[]).find((x) => x.type === "gmail")).toBeUndefined();

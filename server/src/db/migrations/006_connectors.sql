@@ -5,7 +5,7 @@
 create table if not exists connectors (
   id             uuid primary key default gen_random_uuid(),
   tenant_id      uuid not null references tenants(id) default '00000000-0000-0000-0000-000000000001',
-  type           text not null,                 -- 'gmail' | 'slack'
+  type           text not null,                 -- 'gmail' | 'google_drive' | 'slack'
   status         text not null default 'disabled', -- disabled | connected | error
   credentials    jsonb not null default '{}',   -- refresh_token / bot_token (secret)
   cursor         jsonb not null default '{}',   -- gmail: {historyId}; slack: {channelTs:{...}}

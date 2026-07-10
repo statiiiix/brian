@@ -30,10 +30,15 @@ import {
 } from "../interviews/repo.js";
 import { runTurn } from "../interviews/engine.js";
 import { defaultLlm, type LlmClient } from "../llm/complete.js";
-import { listConnectors, upsertConnector, evidenceForDraft } from "../connectors/repo.js";
+import { listConnectors, upsertConnector, evidenceForDraft, unpromotedEvidence } from "../connectors/repo.js";
 import { syncConnector, type SyncSummary } from "../connectors/sync.js";
 import { CONNECTOR_TYPES } from "../connectors/adapters/index.js";
 import type { ConnectorType, ConnectorRow } from "../connectors/types.js";
+import {
+  consumeOAuthState, createOAuthState, exchangeGoogleCode,
+  googleAuthorizationUrl, googleOAuthConfig,
+} from "../connectors/googleOAuth.js";
+import { exchangeSlackCode, slackAuthorizationUrl, slackOAuthConfig } from "../connectors/slackOAuth.js";
 
 function bearerMatches(header: string | undefined, expected: string): boolean {
   if (!header?.startsWith("Bearer ")) return false;
@@ -47,7 +52,7 @@ export interface AppOptions {
   jwtSecret?: string | null;
   supabaseAuth?: SupabaseAuthConfig | null;
   llm?: LlmClient;
-  sync?: (type: ConnectorType) => Promise<SyncSummary>;
+  sync?: (type: ConnectorType, focus?: string) => Promise<SyncSummary>;
 }
 
 // Never expose stored connector credentials over the API.
@@ -56,10 +61,41 @@ function publicConnector(c: ConnectorRow): Omit<ConnectorRow, "credentials"> & {
   return { ...rest, configured: Object.keys(credentials ?? {}).length > 0 };
 }
 
+// These providers share the dashboard's authorization contract but do not yet
+// have a provider-specific OAuth exchange + ingestion adapter. Keeping the
+// readiness response in the API prevents the UI from pretending a connection
+// succeeded and gives deployments a stable route to implement provider by
+// provider.
+const PLANNED_OAUTH_PROVIDERS: Record<string, string> = {
+  notion: "Notion",
+  confluence: "Confluence",
+  sharepoint: "SharePoint",
+  onedrive: "OneDrive",
+  jira: "Jira",
+  linear: "Linear",
+  github: "GitHub",
+  asana: "Asana",
+  clickup: "ClickUp",
+  zendesk: "Zendesk",
+  intercom: "Intercom",
+  hubspot: "HubSpot",
+  salesforce: "Salesforce",
+  gong: "Gong",
+  microsoft_teams: "Microsoft Teams",
+  outlook: "Outlook",
+  zoom: "Zoom",
+};
+
 export type AppEnv = { Variables: { user?: TokenUser } };
 export type App = Hono<AppEnv>;
 
-const PUBLIC_PATHS = new Set(["/api/auth/login"]);
+// Paths that never require auth. Matched by suffix because the app may be
+// mounted under a prefix (e.g. the Supabase Edge Function serves it at
+// /brian/*, so c.req.path is "/brian/api/auth/login").
+const PUBLIC_PATHS = ["/api/auth/login", "/api/connectors/google/callback", "/api/connectors/slack/callback"];
+function isPublicPath(path: string): boolean {
+  return PUBLIC_PATHS.some((p) => path === p || path.endsWith(p));
+}
 
 // Vector-search hits farther than this cosine distance are treated as
 // no-match so hooks don't inject unrelated skills into every prompt.
@@ -68,6 +104,44 @@ const BRIEFING_MAX_DISTANCE = 0.6;
 // Fastify parsed missing/empty JSON bodies to undefined; keep that tolerance.
 async function jsonBody(c: Context): Promise<any> {
   return c.req.json().catch(() => undefined);
+}
+
+async function supabasePasswordLogin(
+  cfg: SupabaseAuthConfig,
+  email: string,
+  password: string,
+): Promise<{ token: string; user: { id: string; email: string; role: string } } | { error: string; status: number }> {
+  const f = cfg.fetchFn ?? fetch;
+  const res = await f(`${cfg.url}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { "content-type": "application/json", apikey: cfg.anonKey },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json().catch(() => ({})) as {
+    access_token?: string;
+    user?: { id?: string; email?: string; app_metadata?: { role?: string } };
+    error?: string;
+    error_description?: string;
+    msg?: string;
+  };
+  if (!res.ok) {
+    const message = data.error_description || data.msg || data.error || "login failed";
+    if (/confirm|verified/i.test(message)) {
+      return { error: "Please confirm your email before logging in.", status: 403 };
+    }
+    return { error: "invalid credentials", status: 401 };
+  }
+  if (!data.access_token || !data.user?.id || !data.user.email) {
+    return { error: "login failed", status: 502 };
+  }
+  return {
+    token: data.access_token,
+    user: {
+      id: data.user.id,
+      email: data.user.email,
+      role: data.user.app_metadata?.role ?? "admin",
+    },
+  };
 }
 
 export function buildApp(opts: AppOptions = {}): App {
@@ -80,7 +154,7 @@ export function buildApp(opts: AppOptions = {}): App {
     // Bind the resolved tenant for the whole downstream request. Hono
     // middleware is promise-based, so als.run can wrap next() directly.
     app.use("*", async (c: Context<AppEnv>, next: Next) => {
-      if (PUBLIC_PATHS.has(c.req.path)) return next();
+      if (isPublicPath(c.req.path)) return next();
       const header = c.req.header("authorization");
       // 1) Static founding bearer (BRIAN_API_TOKEN) — the founding tenant.
       if (authToken && bearerMatches(header, authToken)) {
@@ -120,9 +194,18 @@ export function buildApp(opts: AppOptions = {}): App {
   });
 
   app.post("/api/auth/login", async (c) => {
-    if (!jwtSecret) return c.json({ error: "auth not configured" }, 500);
     const { email, password } = (await jsonBody(c)) ?? {};
     if (!email || !password) return c.json({ error: "email and password required" }, 400);
+    if (supabaseAuth) {
+      const result = await supabasePasswordLogin(supabaseAuth, email, password);
+      if ("error" in result) return c.json({ error: result.error }, result.status as 400 | 401 | 403 | 502);
+      return c.json(result);
+    }
+    if (!jwtSecret) {
+      return c.json({
+        error: "legacy password login is not configured; use Supabase Auth",
+      }, 503);
+    }
     const u = await findUserByEmail(email);
     if (!u || !(await verifyPassword(u.password_hash, password))) {
       return c.json({ error: "invalid credentials" }, 401);
@@ -175,6 +258,11 @@ export function buildApp(opts: AppOptions = {}): App {
     c.json(await evidenceForDraft("skill", c.req.param("id"))));
 
   app.get("/api/executions", async (c) => c.json(await listExecutions()));
+
+  app.get("/api/evidence", async (c) => {
+    if (c.req.query("status") !== "unpromoted") return c.json([]);
+    return c.json(await unpromotedEvidence("skill_evidence"));
+  });
 
   // One-shot skill+context lookup for agent harness hooks (see
   // docs/agent-contract.md "Guaranteed invocation").
@@ -242,7 +330,7 @@ export function buildApp(opts: AppOptions = {}): App {
     c.json(await listContextVersions(c.req.param("id"))));
 
   const llm = () => opts.llm ?? defaultLlm();
-  const sync = opts.sync ?? syncConnector;
+  const sync = opts.sync ?? ((type: ConnectorType, focus?: string) => syncConnector(type, { focus }));
 
   app.post("/api/interviews", async (c) => {
     const { topic, owner } = ((await jsonBody(c)) ?? {}) as { topic?: string; owner?: string };
@@ -302,6 +390,99 @@ export function buildApp(opts: AppOptions = {}): App {
   app.get("/api/connectors", async (c) =>
     c.json((await listConnectors()).map(publicConnector)));
 
+  // One Google consent grants the narrow read-only Gmail + Drive scopes used
+  // by Brian. The callback stores the same refresh token in two connector
+  // rows so each source can be synced independently later.
+  app.get("/api/connectors/google/start", async (c) => {
+    const config = googleOAuthConfig();
+    if (!config) {
+      return c.json({ error: "Google OAuth is not configured on this Brian deployment" }, 503);
+    }
+    const state = await createOAuthState("google", ["gmail", "google_drive"]);
+    return c.json({ url: googleAuthorizationUrl(config, state) });
+  });
+
+  app.get("/api/connectors/google/callback", async (c) => {
+    const error = c.req.query("error");
+    const state = c.req.query("state");
+    const code = c.req.query("code");
+    if (error) return c.redirect(`/app/connectors?error=${encodeURIComponent(error)}`);
+    if (!state || !code) return c.redirect("/app/connectors?error=missing_google_oauth_response");
+
+    try {
+      const consumed = await consumeOAuthState(state);
+      if (!consumed || consumed.provider !== "google") {
+        return c.redirect("/app/connectors?error=invalid_or_expired_google_oauth_state");
+      }
+      const config = googleOAuthConfig();
+      if (!config) return c.redirect("/app/connectors?error=google_oauth_not_configured");
+      const tokens = await exchangeGoogleCode(code, config);
+      if (!tokens.refresh_token) {
+        return c.redirect("/app/connectors?error=google_refresh_token_missing_reconnect");
+      }
+      const credentials = {
+        provider: "google",
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        refresh_token: tokens.refresh_token,
+      };
+      return runTenant(consumed.tenantId, async () => {
+        for (const type of consumed.connectorTypes as ConnectorType[]) {
+          await upsertConnector(type, { status: "connected", credentials });
+        }
+        return c.redirect("/app/connectors?connected=google");
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "google_oauth_failed";
+      return c.redirect(`/app/connectors?error=${encodeURIComponent(message)}`);
+    }
+  });
+
+  app.get("/api/connectors/slack/start", async (c) => {
+    const config = slackOAuthConfig();
+    if (!config) return c.json({ error: "Slack OAuth is not configured on this Brian deployment" }, 503);
+    const state = await createOAuthState("slack", ["slack"]);
+    return c.json({ url: slackAuthorizationUrl(config, state) });
+  });
+
+  app.get("/api/connectors/slack/callback", async (c) => {
+    const error = c.req.query("error");
+    const state = c.req.query("state");
+    const code = c.req.query("code");
+    if (error) return c.redirect(`/app/connectors?error=${encodeURIComponent(error)}`);
+    if (!state || !code) return c.redirect("/app/connectors?error=missing_slack_oauth_response");
+    try {
+      const consumed = await consumeOAuthState(state);
+      if (!consumed || consumed.provider !== "slack") {
+        return c.redirect("/app/connectors?error=invalid_or_expired_slack_oauth_state");
+      }
+      const config = slackOAuthConfig();
+      if (!config) return c.redirect("/app/connectors?error=slack_oauth_not_configured");
+      const token = await exchangeSlackCode(code, config);
+      return runTenant(consumed.tenantId, async () => {
+        await upsertConnector("slack", {
+          status: "connected",
+          credentials: { provider: "slack", bot_token: token.access_token, team_id: token.team?.id, team_name: token.team?.name },
+        });
+        return c.redirect("/app/connectors?connected=slack");
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "slack_oauth_failed";
+      return c.redirect(`/app/connectors?error=${encodeURIComponent(message)}`);
+    }
+  });
+
+  app.get("/api/connectors/:provider/start", async (c) => {
+    const provider = c.req.param("provider");
+    const label = PLANNED_OAUTH_PROVIDERS[provider];
+    if (!label) return c.json({ error: "unknown connector" }, 404);
+    return c.json({
+      error: `${label} authorization is not configured on this Brian deployment yet`,
+      code: "connector_oauth_not_configured",
+      provider,
+    }, 503);
+  });
+
   app.post("/api/connectors/:type/connect", async (c) => {
     const type = c.req.param("type") as ConnectorType;
     if (!CONNECTOR_TYPES.includes(type)) return c.json({ error: "unknown connector" }, 400);
@@ -321,8 +502,9 @@ export function buildApp(opts: AppOptions = {}): App {
   app.post("/api/connectors/:type/sync", async (c) => {
     const type = c.req.param("type") as ConnectorType;
     if (!CONNECTOR_TYPES.includes(type)) return c.json({ error: "unknown connector" }, 400);
+    const body = await jsonBody(c);
     try {
-      return c.json(await sync(type));
+      return c.json(await sync(type, typeof body?.focus === "string" ? body.focus.trim() : undefined));
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "sync failed" }, 400);
     }

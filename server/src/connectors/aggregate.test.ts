@@ -26,11 +26,13 @@ async function clean() {
 
 d("connectors aggregate", () => {
   let connId = "";
+  let driveConnId = "";
   beforeAll(async () => {
     await runMigrations(pool);
     await clean();
     await runTenant(FOUNDING_TENANT_ID, async () => {
       connId = (await upsertConnector("gmail", { status: "connected" })).id;
+      driveConnId = (await upsertConnector("google_drive", { status: "connected" })).id;
     });
   });
   afterAll(async () => { await clean(); await pool.end(); });
@@ -68,6 +70,20 @@ d("connectors aggregate", () => {
       expect(res.contexts).toBeGreaterThanOrEqual(1);
       const remaining = (await unpromotedEvidence("context_evidence")).map((e) => e.source_ref.thread_id);
       expect(remaining).not.toContain("__aggCtx");
+    });
+  });
+
+  it("can draft from one explicit process document without a conversation quorum", async () => {
+    await runTenant(FOUNDING_TENANT_ID, async () => {
+      await insertEvidence({
+        connector_id: driveConnId,
+        source_ref: { thread_id: "__aggDoc", source_kind: "document", title: "Refund policy" },
+        kind: "skill_evidence", summary: "__agg documented refund procedure", confidence: 0.95, embedding: vecAt(8),
+      });
+      const res = await aggregate(mockLlm, "refund approval");
+      expect(res.skills).toBeGreaterThanOrEqual(1);
+      const remaining = (await unpromotedEvidence("skill_evidence")).map((e) => e.source_ref.thread_id);
+      expect(remaining).not.toContain("__aggDoc");
     });
   });
 

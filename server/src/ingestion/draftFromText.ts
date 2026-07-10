@@ -15,10 +15,13 @@ function extractJson(text: string): unknown {
   return JSON.parse(text.slice(start, end + 1));
 }
 
-export async function draftFromText(text: string, llm: LlmClient = defaultLlm()): Promise<Skill> {
+export async function draftFromText(text: string, llm: LlmClient = defaultLlm(), focus?: string): Promise<Skill> {
+  const focusInstruction = focus?.trim()
+    ? `\nThe target process is: ${focus.trim()}\nDraft only that process. If the source does not specify a rule, leave the field empty rather than inventing one.\n`
+    : "";
   const out = await llm.complete({
     system: SYSTEM,
-    user: `Draft a skill from this:\n\n${text}`,
+    user: `Draft a skill from this:${focusInstruction}\n${text}`,
     schema: { name: "skill", schema: SKILL_JSON_SCHEMA },
   });
   const raw = extractJson(out);

@@ -7,7 +7,7 @@ const sources = [
   { brand: 'slack', label: 'Slack' },
   { brand: 'gmail', label: 'Gmail' },
   { icon: icons.ticket, label: 'Support tickets' },
-  { icon: icons.docs, label: 'Docs' },
+  { icon: icons.docs, label: 'Google Drive + docs' },
   { icon: icons.database, label: 'Your database' },
 ];
 

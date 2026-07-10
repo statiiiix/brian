@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Icon, icons } from '../components/Icon';
+import { Icon, msym } from '../components/Icon';
+import brianWordmark from '../assets/brian-wordmark.webp';
 import { api } from '../app/api';
 import { setToken } from '../app/auth';
 import './Login.css';
@@ -13,9 +14,8 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
 
   // Supabase Auth when configured (hosted deployment); the access token goes
-  // in the same Authorization header — the API guard validates it against the
-  // auth server. Falls back to the legacy /api/auth/login (bcrypt+JWT) so
-  // nothing breaks before auth users are provisioned.
+  // in the same Authorization header, and the API guard validates it against
+  // the auth server. The legacy fallback is only for unconfigured local dev.
   async function supabaseLogin() {
     const url = process.env.REACT_APP_SUPABASE_URL;
     const key = process.env.REACT_APP_SUPABASE_ANON_KEY;
@@ -25,8 +25,17 @@ export default function Login() {
       headers: { 'Content-Type': 'application/json', apikey: key },
       body: JSON.stringify({ email, password }),
     });
-    if (!res.ok) return null;
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message = data.error_description || data.msg || data.error || 'Login failed';
+      if (/confirm|verified/i.test(message)) {
+        throw new Error('Please confirm your email before logging in.');
+      }
+      if (/invalid login credentials/i.test(message)) {
+        throw new Error('Wrong email or password.');
+      }
+      throw new Error(message);
+    }
     return data.access_token ?? null;
   }
 
@@ -53,11 +62,12 @@ export default function Login() {
 
   return (
     <div className="login">
+      <a href="/" className="login-back">
+        <Icon path={msym.back} size={16} />
+        Back to site
+      </a>
       <a href="/" className="login-logo">
-        <span className="login-logo-mark" aria-hidden="true">
-          <Icon path={icons.bolt} size={14} />
-        </span>
-        Brian
+        <img className="login-logo-wordmark" src={brianWordmark} alt="Brian" />
       </a>
       <form className="login-card" onSubmit={onSubmit}>
         <h1>Log in</h1>

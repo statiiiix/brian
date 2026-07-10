@@ -10,10 +10,21 @@ import { unpromotedEvidence, nearbyUnpromotedEvidence, markPromoted } from "./re
 const K = Number(process.env.CONNECTORS_CLUSTER_K ?? 3);
 const TAU = Number(process.env.CONNECTORS_CLUSTER_TAU ?? 0.15);
 const CONTEXT_MIN = Number(process.env.CONNECTORS_CONTEXT_MIN ?? 0.7);
+const AUTHORITATIVE_DOCUMENT_MIN = Number(process.env.CONNECTORS_DOCUMENT_MIN ?? 0.82);
 
-export async function aggregate(llm: LlmClient = defaultLlm()): Promise<{ skills: number; contexts: number }> {
+export async function aggregate(llm: LlmClient = defaultLlm(), focus?: string): Promise<{ skills: number; contexts: number }> {
   let skills = 0;
   let contexts = 0;
+
+  // An explicit process document can stand on its own. Conversations still
+  // require repeated independent evidence so one person's answer never becomes
+  // company procedure by accident.
+  for (const evidence of await unpromotedEvidence("skill_evidence")) {
+    if (evidence.source_ref.source_kind !== "document" || evidence.confidence < AUTHORITATIVE_DOCUMENT_MIN) continue;
+    const skill = await draftFromText(evidence.summary, llm, focus);
+    await markPromoted([evidence.id], "skill", skill.id);
+    skills++;
+  }
 
   // Skill evidence: greedy clustering by embedding similarity.
   const promoted = new Set<string>();
@@ -23,7 +34,7 @@ export async function aggregate(llm: LlmClient = defaultLlm()): Promise<{ skills
       .filter((e) => !promoted.has(e.id));
     if (cluster.length < K) continue;
 
-    const skill = await draftFromText(cluster.map((e) => e.summary).join("\n\n"), llm);
+    const skill = await draftFromText(cluster.map((e) => e.summary).join("\n\n"), llm, focus);
     const ids = cluster.map((e) => e.id);
     await markPromoted(ids, "skill", skill.id);
     ids.forEach((id) => promoted.add(id));

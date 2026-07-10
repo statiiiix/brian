@@ -1,6 +1,7 @@
 import { db, tenantOrFounding, type Queryable } from "../db/tenant.js";
 import { toVectorLiteral } from "../db/vector.js";
 import type { ConnectorRow, ConnectorType, EvidenceKind, EvidenceRow } from "./types.js";
+import { decryptCredentials, encryptCredentials } from "./credentials.js";
 
 const C_COLS = `id, tenant_id, type, status, credentials, cursor, last_synced_at, last_error, created_at, updated_at`;
 const E_COLS = `id, tenant_id, connector_id, source_ref, kind, summary, raw_snippet, confidence,
@@ -15,7 +16,9 @@ export async function listConnectors(p: Queryable = db()): Promise<ConnectorRow[
 export async function getConnector(type: ConnectorType, p: Queryable = db()): Promise<ConnectorRow | null> {
   const { rows } = await p.query(
     `select ${C_COLS} from connectors where tenant_id=$1 and type=$2`, [tenantOrFounding(), type]);
-  return (rows[0] as ConnectorRow) ?? null;
+  const row = rows[0] as ConnectorRow | undefined;
+  if (!row) return null;
+  return { ...row, credentials: decryptCredentials(row.credentials) };
 }
 
 // Upsert by (tenant, type), merging only the provided fields.
@@ -30,7 +33,7 @@ export async function upsertConnector(
   },
   p: Queryable = db(),
 ): Promise<ConnectorRow> {
-  const creds = patch.credentials !== undefined ? JSON.stringify(patch.credentials) : null;
+  const creds = patch.credentials !== undefined ? JSON.stringify(encryptCredentials(patch.credentials)) : null;
   const cursor = patch.cursor !== undefined ? JSON.stringify(patch.cursor) : null;
   const { rows } = await p.query(
     `insert into connectors (tenant_id, type, status, credentials, cursor, last_error, last_synced_at)

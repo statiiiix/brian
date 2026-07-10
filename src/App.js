@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import HomePage from './HomePage';
 import Login from './pages/Login';
 import AppLayout from './app/AppLayout';
+import Overview from './app/views/Overview';
+import BuildSkill from './app/views/BuildSkill';
 import SkillsList from './app/views/SkillsList';
 import SkillDetail from './app/views/SkillDetail';
 import ReviewQueue from './app/views/ReviewQueue';
@@ -30,7 +32,8 @@ export default function App() {
             </RequireAuth>
           }
         >
-          <Route index element={<Navigate to="skills" replace />} />
+          <Route index element={<Overview />} />
+          <Route path="build" element={<BuildSkill />} />
           <Route path="skills" element={<SkillsList />} />
           <Route path="skills/:id" element={<SkillDetail />} />
           <Route path="review" element={<ReviewQueue />} />

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Icon, icons } from '../components/Icon';
-import './Nav.css';
+import brianWordmark from '../assets/brian-wordmark.webp';
+import './PillNav.css';
 
-export default function Nav() {
+export default function PillNav() {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -10,27 +10,24 @@ export default function Nav() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
   return (
-    <nav className={`nav ${scrolled ? 'nav--scrolled' : ''}`}>
-      <div className="nav-inner">
-        <a href="#top" className="nav-logo">
-          <span className="nav-logo-mark" aria-hidden="true">
-            <Icon path={icons.bolt} size={13} />
-          </span>
-          Brian
+    <nav className={`pnav ${scrolled ? 'pnav--scrolled' : ''}`} aria-label="Main">
+      <div className="pnav-pill">
+        <a href="#top" className="pnav-logo">
+          <img className="pnav-logo-wordmark" src={brianWordmark} alt="Brian" />
         </a>
-        <div className="nav-links">
+        <div className="pnav-links">
           <a href="#how-it-works">How it works</a>
           <a href="#refusal">The refusal</a>
-          <a href="#under-the-hood">Under the hood</a>
           <a href="#pricing">Pricing</a>
           <a href="#faq">FAQ</a>
         </div>
-        <div className="nav-actions">
-          <a href="/login" className="nav-login">
+        <div className="pnav-actions">
+          <a href="/login" className="pnav-login">
             Log in
           </a>
-          <a href="#cta" className="btn btn--primary btn--sm">
+          <a href="#cta" className="pnav-cta">
             Get a demo
           </a>
         </div>

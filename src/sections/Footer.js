@@ -1,4 +1,4 @@
-import { Icon, icons } from '../components/Icon';
+import brianWordmark from '../assets/brian-wordmark.webp';
 import './Footer.css';
 
 const columns = [
@@ -7,15 +7,14 @@ const columns = [
     links: [
       { label: 'How it works', href: '#how-it-works' },
       { label: 'The refusal', href: '#refusal' },
-      { label: 'Under the hood', href: '#under-the-hood' },
       { label: 'Pricing', href: '#pricing' },
     ],
   },
   {
     title: 'Company',
     links: [
-      { label: 'Why we’re building this', href: '#manifesto' },
       { label: 'FAQ', href: '#faq' },
+      { label: 'Log in', href: '/login' },
       { label: 'Contact', href: 'mailto:a7madinquiries@gmail.com' },
     ],
   },
@@ -27,10 +26,7 @@ export default function Footer() {
       <div className="footer-inner">
         <div className="footer-brand">
           <span className="footer-logo">
-            <span className="nav-logo-mark" aria-hidden="true">
-              <Icon path={icons.bolt} size={13} />
-            </span>
-            Brian
+            <img className="footer-logo-wordmark" src={brianWordmark} alt="Brian" />
           </span>
           <p className="footer-tagline">
             The agent does the work.

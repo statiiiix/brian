@@ -6,18 +6,14 @@ export default function FinalCTA() {
   return (
     <section className="section cta" id="cta">
       <div className="cta-inner reveal" ref={ref}>
-        <h2>Stop pasting SOPs into system prompts.</h2>
+        <h2>Delegate the work. Keep the judgment.</h2>
         <p>
-          Give every agent at your company the same judgment — procedures,
-          hard rules, guardrails, and an escalation path when they hit a
-          limit.
+          Brian gives every agent the procedures, hard rules, and escalation
+          paths behind your company’s difficult decisions.
         </p>
         <div className="cta-actions">
           <a href="mailto:a7madinquiries@gmail.com" className="btn btn--primary">
-            Get a demo
-          </a>
-          <a href="#under-the-hood" className="btn btn--ghost">
-            Read the technical bits
+            Build your first governed skill
           </a>
         </div>
         <p className="cta-note">

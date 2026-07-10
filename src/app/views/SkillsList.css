@@ -17,6 +17,6 @@
 }
 
 .dash-chip.is-active .skills-chip-count {
-  color: var(--accent);
-  background: rgba(245, 166, 35, 0.15);
+  color: var(--accent-text);
+  background: rgba(209, 82, 26, 0.12);
 }

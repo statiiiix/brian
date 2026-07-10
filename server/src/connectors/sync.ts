@@ -19,7 +19,7 @@ export interface SyncSummary {
 // `connector` is injectable so tests bypass the live API.
 export async function syncConnector(
   type: ConnectorType,
-  opts: { llm?: LlmClient; connector?: Connector } = {},
+  opts: { llm?: LlmClient; connector?: Connector; focus?: string } = {},
 ): Promise<SyncSummary> {
   const llm = opts.llm ?? defaultLlm();
   const row = await getConnector(type);
@@ -31,11 +31,16 @@ export async function syncConnector(
 
   let evidence = 0;
   for (const thread of kept) {
-    const res = await extractThread(thread, llm);
+    const res = await extractThread(thread, llm, opts.focus);
     if (res.kind === "junk") continue;
     const inserted = await insertEvidence({
       connector_id: row.id,
-      source_ref: { thread_id: thread.thread_id, permalink: thread.permalink },
+      source_ref: {
+        thread_id: thread.thread_id,
+        permalink: thread.permalink,
+        source_kind: thread.source_kind ?? "thread",
+        ...(thread.title ? { title: thread.title } : {}),
+      },
       kind: res.kind,
       summary: res.summary,
       raw_snippet: thread.messages.map((m) => m.text).join("\n").slice(0, 2000),
@@ -51,6 +56,6 @@ export async function syncConnector(
     last_error: null,
   });
 
-  const drafted = await aggregate(llm);
+  const drafted = await aggregate(llm, opts.focus);
   return { fetched: items.length, kept: kept.length, evidence, drafts: drafted.skills + drafted.contexts };
 }

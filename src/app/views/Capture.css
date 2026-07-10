@@ -1,7 +1,5 @@
 .capture-card {
-  background:
-    radial-gradient(120% 160% at 100% 0%, rgba(245, 166, 35, 0.05), transparent 45%),
-    var(--bg-raised);
+  padding-top: 0;
 }
 
 .capture-textarea {
@@ -11,7 +9,7 @@
 .capture-submit {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 1rem;
   flex-wrap: wrap;
 }
@@ -58,13 +56,13 @@
 }
 
 .capture-kind--skill {
-  border-color: rgba(245, 166, 35, 0.35);
+  border-color: rgba(209, 82, 26, 0.3);
   background: var(--accent-dim);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .capture-kind--context {
-  border-color: rgba(61, 214, 140, 0.35);
+  border-color: rgba(28, 148, 96, 0.3);
   background: var(--green-dim);
   color: var(--green);
 }
@@ -93,11 +91,11 @@
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #d98a0f, var(--accent));
+  background: linear-gradient(90deg, #e0631f, var(--accent));
 }
 
 .capture-link {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 0.85rem;
   font-weight: 500;
   text-decoration: none;

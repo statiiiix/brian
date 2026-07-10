@@ -38,4 +38,19 @@ describe("connectors extract", () => {
     const r = await extractThread(thread, llmReturning("nope", "still nope"));
     expect(r).toEqual({ kind: "junk", confidence: 0, summary: "" });
   });
+
+  it("tells the model what the user wants and identifies document sources", async () => {
+    let seen: { system: string; user: string } | undefined;
+    const llm: LlmClient = {
+      complete: async (args) => {
+        seen = { system: args.system, user: args.user };
+        return ok("skill_evidence");
+      },
+    };
+    await extractThread({ ...thread, source_kind: "document", title: "Refund policy" }, llm, "handle refunds over $200");
+    expect(seen?.user).toContain("Document Refund policy");
+    expect(seen?.user).toContain("handle refunds over $200");
+    expect(seen?.user).toContain("missing boundary or contradiction");
+    expect(seen?.system).toContain("Trigger, Inputs, Procedure, Rules, Exceptions, Escalation, Owner");
+  });
 });

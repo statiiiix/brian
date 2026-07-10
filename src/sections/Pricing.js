@@ -7,21 +7,21 @@ export default function Pricing() {
     <section className="section" id="pricing">
       <div className="section-inner reveal" ref={ref}>
         <p className="kicker">Pricing</p>
-        <h2 className="section-title">Simple while we're early.</h2>
+        <h2 className="section-title">Start with one difficult decision.</h2>
         <div className="pricing-grid">
           <div className="pricing-card stagger" style={{ '--i': 0 }}>
             <h3>Early access</h3>
             <p className="pricing-price">
-              Free <span>while in beta</span>
+              Early access <span>hands-on onboarding</span>
             </p>
             <ul>
               <li>The full MCP server — all nine tools</li>
-              <li>Unlimited skills and context entries</li>
+              <li>Build and review your first governed skills</li>
               <li>Execution log and escalations</li>
               <li>Works with Claude Desktop, Claude Code, or your own agent</li>
             </ul>
             <a href="#cta" className="btn btn--ghost">
-              Join early access
+              Join the early group
             </a>
           </div>
           <div className="pricing-card pricing-card--partner stagger" style={{ '--i': 1 }}>
@@ -32,7 +32,7 @@ export default function Pricing() {
               Let's talk <span>hands-on onboarding</span>
             </p>
             <ul>
-              <li>We author your first 10 skills with you</li>
+              <li>We map your highest-risk processes with you</li>
               <li>Guardrail and escalation design for your real processes</li>
               <li>Direct line to the founder</li>
               <li>Locked-in pricing when we charge</li>

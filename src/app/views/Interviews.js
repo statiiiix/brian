@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { icons } from '../../components/Icon';
+import { msym } from '../../components/Icon';
 import { api } from '../api';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
@@ -50,9 +50,6 @@ export default function Interviews() {
       <header className="dash-head">
         <div>
           <h1 className="dash-title">Interviews</h1>
-          <p className="dash-subtitle">
-            Brian interviews the person who owns a process and turns their answers into a skill.
-          </p>
         </div>
       </header>
 
@@ -89,7 +86,7 @@ export default function Interviews() {
       {!error && interviews === null && <TableSkeleton rows={4} />}
 
       {interviews !== null && interviews.length === 0 && (
-        <EmptyState icon={icons.review} title="No interviews yet">
+        <EmptyState icon={msym.interviews} title="No interviews yet">
           Start one above — five minutes of questions turns tribal knowledge into a runnable skill.
         </EmptyState>
       )}

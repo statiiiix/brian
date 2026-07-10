@@ -100,7 +100,7 @@
 
 .ivc-msg--expert p {
   background: var(--accent-dim);
-  border: 1px solid rgba(245, 166, 35, 0.25);
+  border: 1px solid rgba(209, 82, 26, 0.22);
   border-top-right-radius: 4px;
   color: var(--fg);
 }
@@ -149,7 +149,7 @@
   align-items: flex-end;
   padding: 0.9rem 1.1rem;
   border-top: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.012);
+  background: var(--bg-sunken, #f1ebdf);
 }
 
 .ivc-input .dash-textarea {
@@ -190,7 +190,7 @@
 }
 
 .ivc-done a:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* --- Right rail ------------------------------------------------------------ */
@@ -215,7 +215,7 @@
 }
 
 .ivc-progress {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 0.82rem;
 }
 
@@ -231,7 +231,7 @@
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #d98a0f, var(--accent));
+  background: linear-gradient(90deg, #e0631f, var(--accent));
   transition: width 400ms var(--ease);
 }
 
@@ -272,7 +272,7 @@
 
 .is-covered .ivc-check {
   background: var(--green-dim);
-  border-color: rgba(61, 214, 140, 0.4);
+  border-color: rgba(28, 148, 96, 0.35);
 }
 
 /* --- Draft panel ------------------------------------------------------------ */

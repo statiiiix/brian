@@ -1,8 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 /* ---------------------------------------------------------------------------
    Brian — warm editorial premium (light)
-   Off-white paper, burnt-orange ink accents, Fraunces display + Inter body.
+   Off-white paper, burnt-orange ink accents, Bitcount + Space Grotesk.
 --------------------------------------------------------------------------- */
 
 :root {
@@ -36,9 +34,9 @@
   --red: #cf3f34;
   --red-soft: rgba(207, 63, 52, 0.12);
 
-  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
-  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --font-display: 'Bitcount Single', 'Space Grotesk', sans-serif;
+  --font: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Space Grotesk', ui-monospace, monospace;
   --container: 72rem;
 
   --shadow-sm: 0 1px 2px rgba(74, 50, 22, 0.06);
@@ -86,13 +84,21 @@ html {
     radial-gradient(50rem 50rem at 105% 12%, rgba(209, 82, 26, 0.05), transparent 55%);
 }
 
-.home > * {
+/* Layer page content above the fixed paper wash. Scoped to main/footer so it
+   can't override positioning on fixed chrome like the pill nav. */
+.home > main,
+.home > footer {
   position: relative;
   z-index: 1;
 }
 
 .home a {
   cursor: pointer;
+}
+
+/* Anchor targets clear the floating pill nav. */
+.home [id] {
+  scroll-margin-top: 5.5rem;
 }
 
 .home :focus-visible {
@@ -155,7 +161,7 @@ html {
 
 .section-title em,
 .gradient-text {
-  font-style: italic;
+  font-style: normal;
   font-weight: 500;
   color: var(--accent);
 }

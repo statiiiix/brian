@@ -8,7 +8,7 @@ const d = url ? describe : describe.skip;
 // Every tenant-owned table must carry the tenant_isolation policy.
 const TENANT_TABLES = [
   "skills", "skill_versions", "context_entries", "context_versions",
-  "executions", "users", "interviews", "connectors", "evidence", "api_tokens",
+  "executions", "users", "interviews", "connectors", "evidence", "api_tokens", "oauth_states",
 ];
 
 d("migration 007: RLS backstop (brian_app role + tenant_isolation policies)", () => {

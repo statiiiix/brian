@@ -1,0 +1,140 @@
+/* ---------------------------------------------------------------------------
+   Video fold — scroll-expansion film hero; the short pitch fades in under it.
+   Media motion lives in ScrollExpandMedia; this styles only the pitch.
+   Unique classes only (vfold-*).
+--------------------------------------------------------------------------- */
+
+.vfold {
+  position: relative;
+}
+
+.vfold-inner {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 4.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.vfold-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--accent-text);
+  margin: 0 0 1.2rem;
+}
+
+.vfold-kicker::before,
+.vfold-kicker::after {
+  content: '';
+  width: 1.6rem;
+  height: 1px;
+  background: var(--accent-line);
+}
+
+.vfold-title {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-size: clamp(2.6rem, 6vw, 4.6rem);
+  font-weight: 520;
+  letter-spacing: -0.025em;
+  line-height: 1.04;
+  margin: 0;
+  max-width: 17ch;
+  text-wrap: balance;
+  color: var(--fg);
+}
+
+.vfold-title em {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.vfold-sub {
+  margin: 1.3rem auto 0;
+  max-width: 34rem;
+  color: var(--fg-secondary);
+  font-size: 1.12rem;
+  line-height: 1.6;
+  text-wrap: balance;
+}
+
+.vfold-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.7rem;
+  margin-top: 2rem;
+}
+
+.vfold-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 48px;
+  padding: 0.7rem 1.5rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-family: var(--font);
+  font-weight: 600;
+  font-size: 0.97rem;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 200ms var(--ease), box-shadow 200ms var(--ease),
+    background-color 160ms ease, border-color 160ms ease;
+}
+
+.vfold-btn:active {
+  transform: scale(0.985);
+}
+
+.vfold-btn--primary {
+  background: linear-gradient(180deg, #e0631f, var(--accent));
+  color: var(--accent-ink);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 10px 24px -12px rgba(209, 82, 26, 0.65);
+}
+
+.vfold-btn--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 18px 34px -14px rgba(209, 82, 26, 0.7);
+}
+
+.vfold-btn--ghost {
+  border-color: var(--border-strong);
+  color: var(--fg);
+  background: var(--bg-raised);
+}
+
+.vfold-btn--ghost:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-line);
+  box-shadow: var(--shadow-md);
+}
+
+@media (max-width: 640px) {
+  .vfold-inner {
+    padding: 1.25rem 1.25rem 3.5rem;
+  }
+
+  .vfold-sub {
+    font-size: 1.02rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vfold-btn {
+    transition: none;
+  }
+}

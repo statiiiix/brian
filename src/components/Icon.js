@@ -1,19 +1,59 @@
-export const Icon = ({ path, size = 22 }) => (
-  <svg
-    className="icon"
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    {path}
-  </svg>
-);
+// A string `path` is a Google Material Symbols name (font loaded in index.html);
+// JSX `path` renders the legacy inline-SVG set below (still used by the landing
+// sections and for brand marks that Material Symbols doesn't cover).
+export const Icon = ({ path, size = 22 }) =>
+  typeof path === 'string' ? (
+    <span
+      className="material-symbols-rounded"
+      aria-hidden="true"
+      style={{
+        fontSize: size,
+        width: size,
+        height: size,
+        lineHeight: 1,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        userSelect: 'none',
+        fontVariationSettings: "'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24",
+      }}
+    >
+      {path}
+    </span>
+  ) : (
+    <svg
+      className="icon"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {path}
+    </svg>
+  );
+
+// Material Symbols names used by the dashboard + login (Google icons).
+export const msym = {
+  bolt: 'bolt',
+  home: 'home',
+  build: 'auto_awesome',
+  skills: 'menu_book',
+  review: 'verified_user',
+  interviews: 'forum',
+  capture: 'center_focus_strong',
+  connectors: 'hub',
+  executions: 'receipt_long',
+  logout: 'logout',
+  back: 'arrow_back',
+  check: 'check',
+  clear: 'task_alt',
+  send: 'send',
+};
 
 export const icons = {
   shield: (

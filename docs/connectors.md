@@ -1,4 +1,4 @@
-# Connectors — mine Gmail + Slack for SOPs & decisions
+# Connectors — mine Google Workspace + Slack for SOPs & decisions
 
 Brian reads a tenant's real communication, filters the noise deterministically,
 extracts durable knowledge with the LLM, clusters it, and drafts skills/context
@@ -9,11 +9,11 @@ Plan: `docs/superpowers/plans/2026-07-06-connectors.md`.
 
 ## Pipeline
 
-`npm run sync -- gmail|slack|all` (manual; no schedulers in v1), per connector,
+`npm run sync -- gmail|google_drive|slack|all` (manual; no schedulers in v1), per connector,
 in the current tenant:
 
 1. **Fetch** — incremental from the stored cursor (Gmail `historyId`; Slack
-   per-channel `ts`), via the adapter (`src/connectors/adapters/`).
+   per-channel `ts`, or Drive file metadata), via the adapter (`src/connectors/adapters/`).
 2. **Junk filter** — deterministic, zero-LLM (`junkFilter.ts`): drops
    newsletters (`List-Unsubscribe`), `no-reply@` senders, bot-tainted threads,
    sub-quorum / no-company-member threads, and one-liners; dedupes by thread.
@@ -29,30 +29,48 @@ in the current tenant:
 
 ## Dashboard
 
-**Activity → Connectors**: connect each source, **Sync now** (shows
-fetched/kept/evidence/drafts), and disable. Stored credentials are never
+**Signals → Sources**: connect each source, describe the process you want Brian
+to learn, then run a **focused sync** (shows fetched/kept/evidence/drafts).
+Stored credentials are never
 returned by the API.
 
 ## Founder setup (required before a real sync)
 
-- **Gmail:** add the `gmail.readonly` scope and re-run `npm run gmail:auth`; the
-  founding tenant's `GMAIL_*` env is reused automatically.
-- **Slack:** create a Slack app, add a bot token with `channels:history`,
-  `groups:history`, `users:read`; invite the bot to the target channels; paste
-  the token in the Connectors page (or `POST /api/connectors/slack/connect`).
+- **Google Workspace:** the dashboard starts one OAuth flow with read-only
+  Gmail + Drive scopes and stores the resulting refresh token for both sources.
+  Configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and
+  `GOOGLE_OAUTH_REDIRECT_URI` in the hosted environment. Google Docs, Sheets,
+  and Slides are exported to text before analysis.
+- **Slack:** create a Slack app with `channels:history`, `groups:history`,
+  `users:read`, and `users:read.email`; configure `SLACK_CLIENT_ID`,
+  `SLACK_CLIENT_SECRET`, and `SLACK_OAUTH_REDIRECT_URI`. The dashboard uses
+  Slack's OAuth installation flow. The direct bot-token endpoint remains
+  available for local development.
 - **DB:** apply migration `006_connectors.sql` to the live project (gated, like
   005). Until then connectors run against the `test` schema only.
 
 ## API
 
 - `GET /api/connectors` — list (credentials redacted; `configured` boolean).
+- `GET /api/connectors/google/start` — create a one-time Google OAuth state and
+  return the authorization URL.
+- `GET /api/connectors/slack/start` — create a one-time Slack OAuth state and
+  return the authorization URL.
 - `POST /api/connectors/:type/connect` — store credentials, set `connected`.
 - `POST /api/connectors/:type/disable` — toggle off.
-- `POST /api/connectors/:type/sync` — run one sync now; returns the summary.
+- `POST /api/connectors/:type/sync` — run one focused sync now; body may include
+  `{ "focus": "the process Brian should discover" }`.
+- `GET /api/evidence?status=unpromoted` — list extracted skill evidence that
+  has not yet been promoted into a draft.
 
 ## Storage (migration 006, tenant-scoped + RLS)
 
 - `connectors` — one row per (tenant, source): credentials, cursor, status.
+- `oauth_states` — short-lived, hashed Google OAuth state values; consumed once
+  and expired after ten minutes.
+- Connector credentials are encrypted at rest when `CONNECTOR_ENCRYPTION_KEY`
+  is configured. Local development remains compatible with plaintext fixtures;
+  hosted deployments should always set the key before connecting a customer.
 - `evidence` — extracted signals: `source_ref`, `kind`, `summary`, `embedding`,
   `confidence`, `promoted_to_kind`/`promoted_to_id` (provenance link). Deduped on
   `(tenant, connector, thread_id)`.

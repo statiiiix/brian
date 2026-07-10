@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { icons } from '../../components/Icon';
+import { msym } from '../../components/Icon';
 import { api } from '../api';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
@@ -40,10 +40,9 @@ export default function SkillsList() {
       <header className="dash-head">
         <div>
           <h1 className="dash-title">Skills</h1>
-          <p className="dash-subtitle">Every process Brian knows how to run.</p>
         </div>
-        <Link to="/app/interviews" className="dash-btn dash-btn--primary">
-          New interview
+        <Link to="/app/build" className="dash-btn dash-btn--primary">
+          Build a skill
         </Link>
       </header>
 
@@ -68,12 +67,12 @@ export default function SkillsList() {
 
       {skills !== null && visible.length === 0 && (
         <EmptyState
-          icon={icons.rules}
+          icon={msym.skills}
           title={filter === 'all' ? 'No skills yet' : `No ${filter.replace('_', ' ')} skills`}
           action={
             filter === 'all' ? (
-              <Link to="/app/interviews" className="dash-btn dash-btn--primary">
-                Start an interview
+              <Link to="/app/build" className="dash-btn dash-btn--primary">
+                Build a skill
               </Link>
             ) : null
           }

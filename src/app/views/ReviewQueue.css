@@ -8,6 +8,8 @@
 
 .review-item {
   margin-bottom: 0.85rem;
+  padding-bottom: 1.2rem;
+  border-bottom: 1px solid var(--border);
   transition: border-color 150ms var(--ease);
 }
 
@@ -37,7 +39,7 @@
 }
 
 .review-item-name a:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .review-item-meta {

@@ -3,11 +3,13 @@
 export interface RawThread {
   thread_id: string;
   permalink: string;
+  source_kind?: "thread" | "document";
+  title?: string;
   participants: { id: string; is_company_member: boolean; is_bot: boolean }[];
   messages: { from: string; ts: string; text: string; headers?: Record<string, string> }[];
 }
 
-export type ConnectorType = "gmail" | "slack";
+export type ConnectorType = "gmail" | "slack" | "google_drive";
 
 // Pure-fetch adapter: incremental from the stored cursor.
 export interface Connector {

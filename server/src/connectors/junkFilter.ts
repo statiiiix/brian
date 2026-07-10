@@ -15,6 +15,13 @@ function hasHeader(t: RawThread, key: string): boolean {
 
 // Keep only threads that look like a real human exchange involving the company.
 export function keepThread(t: RawThread): boolean {
+  // Documents have a different shape from conversations: one substantial
+  // document is enough to be useful evidence, while short docs are noise.
+  if (t.source_kind === "document") {
+    if (t.participants.some((p) => p.is_bot)) return false;
+    if (!t.participants.some((p) => p.is_company_member)) return false;
+    return t.messages.some((m) => m.text.trim().length >= 120);
+  }
   if (hasHeader(t, "list-unsubscribe")) return false;              // bulk/newsletter
   if (t.messages.some((m) => NOREPLY.test(m.from))) return false;  // automated senders
   if (t.participants.some((p) => p.is_bot)) return false;          // any bot taints it
