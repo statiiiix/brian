@@ -12,8 +12,8 @@ export default function FinalCTA() {
           paths behind your company’s difficult decisions.
         </p>
         <div className="cta-actions">
-          <a href="mailto:a7madinquiries@gmail.com" className="btn btn--primary">
-            Build your first governed skill
+          <a href="#pricing" className="btn btn--primary">
+            Join the waitlist
           </a>
         </div>
         <p className="cta-note">
