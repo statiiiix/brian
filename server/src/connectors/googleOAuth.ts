@@ -1,4 +1,6 @@
+import { Buffer } from "node:buffer";
 import { createHash, randomBytes } from "node:crypto";
+import { secret } from "../config/secrets.js";
 import { db, tenantOrFounding } from "../db/tenant.js";
 import { pool } from "../db/pool.js";
 
@@ -23,10 +25,26 @@ export interface GoogleTokenResponse {
   token_type?: string;
 }
 
-export function googleOAuthConfig(env: NodeJS.ProcessEnv = process.env): GoogleOAuthConfig | null {
-  const clientId = env.GOOGLE_CLIENT_ID ?? env.GMAIL_CLIENT_ID;
-  const clientSecret = env.GOOGLE_CLIENT_SECRET ?? env.GMAIL_CLIENT_SECRET;
-  const redirectUri = env.GOOGLE_OAUTH_REDIRECT_URI ?? env.GMAIL_OAUTH_REDIRECT_URI;
+type SecretReader = (key: string) => Promise<string | null | undefined>;
+
+async function firstSecret(keys: string[], read: SecretReader): Promise<string | null> {
+  for (const key of keys) {
+    const value = await read(key);
+    if (value) return value;
+  }
+  return null;
+}
+
+export async function googleOAuthConfig(read: SecretReader = secret): Promise<GoogleOAuthConfig | null> {
+  const [clientId, clientSecret, explicitRedirect, baseUrl] = await Promise.all([
+    firstSecret(["GOOGLE_CLIENT_ID", "GMAIL_CLIENT_ID"], read),
+    firstSecret(["GOOGLE_CLIENT_SECRET", "GMAIL_CLIENT_SECRET"], read),
+    firstSecret(["GOOGLE_OAUTH_REDIRECT_URI", "GMAIL_OAUTH_REDIRECT_URI"], read),
+    firstSecret(["BRIAN_OAUTH_BASE_URL", "BRIAN_URL"], read),
+  ]);
+  const redirectUri = explicitRedirect ?? (baseUrl
+    ? `${baseUrl.replace(/\/$/, "")}/api/connectors/google/callback`
+    : null);
   if (!clientId || !clientSecret || !redirectUri) return null;
   return { clientId, clientSecret, redirectUri };
 }
@@ -38,9 +56,16 @@ export function hashOAuthState(state: string): string {
 export async function createOAuthState(
   provider: string,
   connectorTypes: string[],
+  metadata: Record<string, string> = {},
   p = db(),
 ): Promise<string> {
-  const state = randomBytes(32).toString("hex");
+  const nonce = randomBytes(32).toString("hex");
+  // Metadata is non-secret routing context (for example a Zendesk subdomain).
+  // Its integrity is protected because the complete state is hashed in the DB.
+  const encoded = Object.keys(metadata).length
+    ? `.${Buffer.from(JSON.stringify(metadata)).toString("base64url")}`
+    : "";
+  const state = `${nonce}${encoded}`;
   await p.query(
     `insert into oauth_states (tenant_id, provider, connector_types, state_hash, expires_at)
      values ($1,$2,$3::jsonb,$4,now() + interval '10 minutes')`,
@@ -53,6 +78,7 @@ export async function consumeOAuthState(state: string): Promise<{
   tenantId: string;
   provider: string;
   connectorTypes: string[];
+  metadata: Record<string, string>;
 } | null> {
   const { rows } = await pool.query(
     `update oauth_states
@@ -63,7 +89,17 @@ export async function consumeOAuthState(state: string): Promise<{
   );
   const row = rows[0] as { tenant_id: string; provider: string; connector_types: string[] } | undefined;
   if (!row) return null;
-  return { tenantId: row.tenant_id, provider: row.provider, connectorTypes: row.connector_types };
+  let metadata: Record<string, string> = {};
+  const encoded = state.split(".")[1];
+  if (encoded) {
+    try {
+      const decoded = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+      if (decoded && typeof decoded === "object" && !Array.isArray(decoded)) metadata = decoded;
+    } catch {
+      metadata = {};
+    }
+  }
+  return { tenantId: row.tenant_id, provider: row.provider, connectorTypes: row.connector_types, metadata };
 }
 
 export function googleAuthorizationUrl(config: GoogleOAuthConfig, state: string): string {

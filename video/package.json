@@ -1,0 +1,24 @@
+{
+  "name": "brian-product-films",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "still:skill": "remotion still src/index.ts SkillCreation ../public/videos/brian-skill-creation-poster.png --frame=520",
+    "still:execution": "remotion still src/index.ts SkillExecution ../public/videos/brian-skill-execution-poster.png --frame=300",
+    "render:skill": "remotion render src/index.ts SkillCreation ../public/videos/brian-skill-creation.mp4 --codec=h264 --crf=17",
+    "render:execution": "remotion render src/index.ts SkillExecution ../public/videos/brian-skill-execution.mp4 --codec=h264 --crf=17",
+    "render": "npm run render:skill && npm run render:execution"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.487",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "remotion": "4.0.487"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  }
+}

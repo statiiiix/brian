@@ -2,13 +2,44 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="%PUBLIC_URL%/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="%PUBLIC_URL%/favicon-16x16.png"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f7f3ea" />
     <meta
       name="description"
-      content="Brian — the company brain. Your processes, captured once, run by agents forever."
+      content="Brian turns company procedures, hard rules, and escalation paths into governed skills that AI agents follow—so teams can delegate work safely."
     />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+    <meta name="author" content="Brian" />
+    <link rel="canonical" href="__SITE_URL__/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Brian" />
+    <meta property="og:title" content="Brian: Governed AI Agent Skills & Company Knowledge" />
+    <meta
+      property="og:description"
+      content="Turn company judgment into reviewed procedures, hard rules, and escalation paths that every AI agent can follow."
+    />
+    <meta property="og:url" content="__SITE_URL__/" />
+    <meta property="og:image" content="__SITE_URL__/logo512.png" />
+    <meta property="og:image:alt" content="Brian company brain logo" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Brian: Governed AI Agent Skills & Company Knowledge" />
+    <meta
+      name="twitter:description"
+      content="Give AI agents reviewed procedures, hard rules, and escalation paths for safe delegation."
+    />
+    <meta name="twitter:image" content="__SITE_URL__/logo512.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -30,11 +61,82 @@
       It will be replaced with the URL of the `public` folder during the build.
       Only files inside the `public` folder can be referenced from the HTML.
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
+      Using %PUBLIC_URL% keeps these assets working with client-side routing
+      and non-root public URLs.
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
-    <title>Brian — Company Brain</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "__SITE_URL__/#organization",
+            "name": "Brian",
+            "url": "__SITE_URL__/",
+            "logo": "__SITE_URL__/logo512.png",
+            "description": "Brian helps companies turn operational judgment into governed skills for AI agents."
+          },
+          {
+            "@type": "WebSite",
+            "@id": "__SITE_URL__/#website",
+            "url": "__SITE_URL__/",
+            "name": "Brian",
+            "publisher": { "@id": "__SITE_URL__/#organization" },
+            "inLanguage": "en"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "__SITE_URL__/#software",
+            "name": "Brian",
+            "url": "__SITE_URL__/",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web",
+            "description": "A company brain that turns procedures, hard rules, guardrails, and escalation paths into governed skills AI agents can follow.",
+            "publisher": { "@id": "__SITE_URL__/#organization" }
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "__SITE_URL__/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "How is this different from Mem0, Zep, or built-in agent memory?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Those store what an agent remembers. Brian governs what it’s allowed to do. Skills carry hard rules, guardrails, and escalation targets — enforcement and audit, not just recall. Memory’s a feature here. Safe delegation is the product."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What happens when a skill is wrong or goes stale?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "A correction from any session revises the skill instead of duplicating it — every revision versioned. Skills that get overridden a lot, or haven’t been touched while the company changed, get flagged to their owner."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Can automatically extracted knowledge go live without review?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. It goes live on its own only when the classifier is confident and every tool the skill uses is reversible. Anything touching an irreversible tool — like sending email — parks as a draft until a human approves it."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Is this \"chat with your docs\"?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. Brian isn’t RAG over documents, and it’s not a knowledge base with a chat window. It stores executable procedures with decision logic — built so an agent can do the work, not describe it."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+    <title>Brian - Your Company Brain</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

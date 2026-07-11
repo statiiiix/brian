@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { secret } from "../config/secrets.js";
 
 const ALGORITHM = "aes-256-gcm";
 const MARKER = "aes-256-gcm-v1";
@@ -45,4 +46,17 @@ export function decryptCredentials(value: unknown, env: NodeJS.ProcessEnv = proc
     decipher.final(),
   ]).toString("utf8");
   return JSON.parse(json) as Record<string, unknown>;
+}
+
+async function runtimeEncryptionEnv(): Promise<NodeJS.ProcessEnv> {
+  const key = await secret("CONNECTOR_ENCRYPTION_KEY");
+  return key ? { CONNECTOR_ENCRYPTION_KEY: key } : {};
+}
+
+export async function encryptStoredCredentials(value: unknown): Promise<unknown> {
+  return encryptCredentials(value, await runtimeEncryptionEnv());
+}
+
+export async function decryptStoredCredentials(value: unknown): Promise<Record<string, unknown>> {
+  return decryptCredentials(value, await runtimeEncryptionEnv());
 }

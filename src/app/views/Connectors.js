@@ -5,6 +5,7 @@ import { Icon, icons, msym } from '../../components/Icon';
 import { api } from '../api';
 import StatusBadge from '../components/StatusBadge';
 import TableSkeleton from '../components/TableSkeleton';
+import ProviderLogo from '../components/ProviderLogo';
 import './Connectors.css';
 
 const SOURCES = [
@@ -93,13 +94,24 @@ const SOURCE_CATEGORIES = [
   },
 ];
 
-function displayStatus(rows, source) {
-  const connected = source.rowTypes.some((type) => rows.find((row) => row.type === type)?.status === 'connected');
-  return connected ? 'connected' : 'disabled';
+const CONNECTABLE_SOURCES = [
+  ...SOURCES,
+  ...SOURCE_CATEGORIES.flatMap((category) => category.sources.map((source) => ({ ...source, rowTypes: [source.id] }))),
+];
+
+function rowTypesFor(source) {
+  return source.rowTypes || [source.id];
+}
+
+function displayStatus(rows, source, provider) {
+  const connected = rowTypesFor(source).some((type) => rows.find((row) => row.type === type)?.status === 'connected');
+  if (connected) return 'connected';
+  return provider?.configured ? 'ready' : 'needs_setup';
 }
 
 export default function Connectors() {
   const [rows, setRows] = useState(null);
+  const [providers, setProviders] = useState(null);
   const [evidence, setEvidence] = useState([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -109,6 +121,7 @@ export default function Connectors() {
   const [catalogFilter, setCatalogFilter] = useState('all');
   const [activeSource, setActiveSource] = useState(null);
   const [authorizationError, setAuthorizationError] = useState('');
+  const [workspace, setWorkspace] = useState('');
   const [searchParams] = useSearchParams();
 
   function load() {
@@ -118,12 +131,16 @@ export default function Connectors() {
         setEvidence(nextEvidence);
       })
       .catch((e) => setError(e.message));
+    api('/api/connectors/providers')
+      .then(setProviders)
+      .catch(() => setProviders({}));
   }
 
   useEffect(() => {
     load();
-    if (searchParams.get('connected') === 'google') setMessage('Google Workspace connected. Choose a goal, then sync a focused sample.');
-    if (searchParams.get('connected') === 'slack') setMessage('Slack connected. Choose a goal, then sync a focused sample.');
+    const connectedId = searchParams.get('connected');
+    const connectedSource = CONNECTABLE_SOURCES.find((source) => source.id === connectedId);
+    if (connectedSource) setMessage(`${connectedSource.label} connected successfully.`);
     if (searchParams.get('error')) setError(searchParams.get('error').replaceAll('_', ' '));
   // The callback query is intentionally only read on first page load.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -147,6 +164,7 @@ export default function Connectors() {
 
   function openAuthorization(source) {
     setAuthorizationError('');
+    setWorkspace('');
     setActiveSource(source);
   }
 
@@ -154,7 +172,8 @@ export default function Connectors() {
     setBusy(source.id);
     setAuthorizationError('');
     try {
-      const { url } = await api(`/api/connectors/${source.id}/start`);
+      const query = source.id === 'zendesk' ? `?workspace=${encodeURIComponent(workspace.trim())}` : '';
+      const { url } = await api(`/api/connectors/${source.id}/start${query}`);
       window.location.assign(url);
     } catch (e) {
       setAuthorizationError(e.message);
@@ -167,7 +186,7 @@ export default function Connectors() {
     setBusy(source.id);
     setError('');
     try {
-      for (const type of source.rowTypes) {
+      for (const type of rowTypesFor(source)) {
         if (byType[type]?.status === 'connected') {
           await api(`/api/connectors/${type}/disable`, { method: 'POST' });
         }
@@ -242,14 +261,16 @@ export default function Connectors() {
       {rows !== null && (
         <div className="connectors-grid">
           {SOURCES.map((source) => {
-            const status = displayStatus(rows, source);
+            const provider = providers?.[source.id];
+            const status = displayStatus(rows, source, provider);
             const connected = status === 'connected';
+            const configured = provider?.configured === true;
             const acting = busy === source.id;
             const result = results[source.id];
             return (
               <section key={source.id} className="dash-card connectors-card">
                 <div className="connectors-card-head">
-                  <span className="connectors-icon" aria-hidden="true"><Icon path={source.icon} size={18} /></span>
+                  <span className="connectors-icon"><ProviderLogo provider={source.id} label={source.label} size={19} /></span>
                   <div className="connectors-card-title"><span>Source</span><h3>{source.label}</h3></div>
                   <StatusBadge status={status} />
                 </div>
@@ -263,7 +284,7 @@ export default function Connectors() {
 
                 <div className="connectors-actions">
                   {!connected && (
-                    <button type="button" className="dash-btn dash-btn--primary" disabled={acting} onClick={() => openAuthorization(source)}>
+                    <button type="button" className="dash-btn dash-btn--primary" disabled={acting || !configured} onClick={() => openAuthorization(source)}>
                       <Icon path="lock_open" size={15} /> Authorize {source.label}
                     </button>
                   )}
@@ -272,6 +293,7 @@ export default function Connectors() {
                     <button type="button" className="dash-btn dash-btn--ghost" disabled={acting} onClick={() => disable(source)}>Disconnect</button>
                   </>}
                 </div>
+                {!connected && !configured && <p className="connectors-hint connectors-setup"><Icon path="info" size={15} /> {providers === null ? 'Checking OAuth setup…' : 'Brian’s OAuth app still needs to be registered by the Brian team.'}</p>}
                 {connected && !goal.trim() && <p className="connectors-hint">Add a process above before syncing so Brian knows what signal to prioritize.</p>}
                 {result && <p className="connectors-result" role="status">Fetched {result.fetched} · kept {result.kept} · evidence {result.evidence} · drafts {result.drafts}</p>}
               </section>
@@ -300,18 +322,33 @@ export default function Connectors() {
                 <h3>{category.label}</h3>
               </div>
               <div className="source-roadmap-grid">
-                {category.sources.map((source) => (
-                  <article className="source-roadmap-card" key={source.label}>
-                    <div className="source-roadmap-card-head">
-                      <span className="source-roadmap-icon"><Icon path={source.icon} size={18} /></span>
-                      <h4>{source.label}</h4>
-                    </div>
-                    <p>{source.signal}</p>
-                    <button type="button" className="source-authorize-btn" onClick={() => openAuthorization(source)}>
-                      <Icon path="lock_open" size={14} /> Authorize
-                    </button>
-                  </article>
-                ))}
+                {category.sources.map((source) => {
+                  const provider = providers?.[source.id];
+                  const status = displayStatus(rows || [], source, provider);
+                  const connected = status === 'connected';
+                  const configured = provider?.configured === true;
+                  const acting = busy === source.id;
+                  return (
+                    <article className="source-roadmap-card" key={source.label}>
+                      <div className="source-roadmap-card-head">
+                        <span className="source-roadmap-icon"><ProviderLogo provider={source.id} label={source.label} size={18} /></span>
+                        <h4>{source.label}</h4>
+                        <StatusBadge status={status} />
+                      </div>
+                      <p>{source.signal}</p>
+                      <p className="source-roadmap-note">{configured || connected
+                        ? 'Authorize now. Brian stores the connection securely; selecting and learning from its data comes next.'
+                        : 'Brian’s OAuth app must be registered once by the Brian team—not by each customer workspace.'}</p>
+                      {connected ? (
+                        <button type="button" className="source-authorize-btn" disabled={acting} onClick={() => disable(source)}>Disconnect</button>
+                      ) : (
+                        <button type="button" className="source-authorize-btn" disabled={acting || !configured} onClick={() => openAuthorization(source)}>
+                          <Icon path={configured ? 'lock_open' : 'settings'} size={14} /> {configured ? `Authorize ${source.label}` : 'Setup required'}
+                        </button>
+                      )}
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ))}
@@ -343,7 +380,7 @@ export default function Connectors() {
           <div className="source-auth-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setActiveSource(null); }}>
             <section className="source-auth-dialog" role="dialog" aria-modal="true" aria-labelledby="source-auth-title">
             <button type="button" className="source-auth-close" aria-label="Close authorization" onClick={() => setActiveSource(null)} autoFocus><Icon path="close" size={18} /></button>
-            <div className="source-auth-brand"><Icon path={activeSource.icon} size={23} /></div>
+            <div className="source-auth-brand"><ProviderLogo provider={activeSource.id} label={activeSource.label} size={23} /></div>
             <p className="sources-kicker">Secure connection</p>
             <h2 id="source-auth-title">Authorize {activeSource.label}</h2>
             <p className="source-auth-intro">You’ll continue to {activeSource.label} to approve read-only access. Brian never receives your password and never writes back to the source.</p>
@@ -355,18 +392,26 @@ export default function Connectors() {
 
             <div className="source-auth-scope"><Icon path="admin_panel_settings" size={18} /><span><strong>You control the scope.</strong> {activeSource.scope}</span></div>
 
+            {activeSource.id === 'zendesk' && (
+              <label className="source-auth-workspace">
+                <span>Zendesk subdomain</span>
+                <div className="source-auth-workspace-input">
+                  <input className="dash-input" value={workspace} onChange={(event) => setWorkspace(event.target.value)} placeholder="acme" autoComplete="organization" />
+                  <span>.zendesk.com</span>
+                </div>
+              </label>
+            )}
+
             <ol className="source-auth-steps">
               <li><span>1</span> Approve access</li>
               <li><span>2</span> Return to Brian</li>
-              <li><span>3</span> Select what to sync</li>
+              <li><span>3</span> Connection saved</li>
             </ol>
 
             {authorizationError && <p className="dash-error source-auth-error" role="alert">{authorizationError}</p>}
-            {!activeSource.available && !authorizationError && <p className="source-auth-readiness"><Icon path="info" size={15} /> This provider’s OAuth app must be configured on this Brian deployment before authorization can complete.</p>}
-
             <div className="source-auth-actions">
               <button type="button" className="dash-btn dash-btn--ghost" onClick={() => setActiveSource(null)}>Cancel</button>
-              <button type="button" className="dash-btn dash-btn--primary" disabled={busy === activeSource.id} onClick={() => authorizeSource(activeSource)}>
+              <button type="button" className="dash-btn dash-btn--primary" disabled={busy === activeSource.id || (activeSource.id === 'zendesk' && !workspace.trim())} onClick={() => authorizeSource(activeSource)}>
                 {busy === activeSource.id ? 'Opening authorization…' : `Continue to ${activeSource.label}`}
                 <Icon path="open_in_new" size={15} />
               </button>

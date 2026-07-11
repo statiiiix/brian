@@ -15,7 +15,6 @@ export default function VideoFold() {
         mediaType="video"
         mediaSrc={VIDEO_SRC}
         title="Company Brain"
-        scrollToExpand="Scroll to expand"
       >
         <div className="vfold-inner">
           <Reveal as="p" className="vfold-kicker" delay={0.05}>
@@ -25,15 +24,16 @@ export default function VideoFold() {
             Give every AI agent your company's <em>judgment.</em>
           </Reveal>
           <Reveal as="p" className="vfold-sub" delay={0.18}>
-            Brian turns hard-won decisions into reviewed procedures, guardrails,
-            and escalation paths — so agents know when to act and when to stop.
+            Brian is a company brain that turns hard-won decisions into reviewed
+            procedures, guardrails, and escalation paths — so AI agents know when
+            to act and when to stop.
           </Reveal>
           <Reveal className="vfold-ctas" delay={0.26}>
             <a href="#cta" className="vfold-btn vfold-btn--primary">
               Build a governed workflow
             </a>
-            <a href="#how-it-works" className="vfold-btn vfold-btn--ghost">
-              See how it works
+            <a href="#agent-guardrails" className="vfold-btn vfold-btn--ghost">
+              See why Brian
             </a>
           </Reveal>
         </div>

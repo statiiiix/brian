@@ -54,7 +54,7 @@
   align-items: center;
   gap: 1rem;
   width: max-content;
-  animation: integ-scroll 48s linear infinite;
+  animation: integ-scroll var(--integ-duration, 48s) linear infinite;
 }
 
 .integ-track--reverse {

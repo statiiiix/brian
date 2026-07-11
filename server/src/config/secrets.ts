@@ -6,21 +6,31 @@
 import { pool } from "../db/pool.js";
 
 let cache: Record<string, string> | null = null;
+let cachePromise: Promise<Record<string, string>> | null = null;
+
+function loadSecrets(): Promise<Record<string, string>> {
+  if (cache) return Promise.resolve(cache);
+  if (!cachePromise) {
+    cachePromise = pool.query("select key, value from app_config")
+      .then(({ rows }) => Object.fromEntries(
+        (rows as { key: string; value: string }[]).map((r) => [r.key, r.value]),
+      ))
+      .catch(() => ({}))
+      .then((loaded) => {
+        cache = loaded;
+        return loaded;
+      });
+  }
+  return cachePromise;
+}
 
 export async function secret(key: string): Promise<string | undefined> {
   const env = process.env[key];
   if (env) return env;
-  if (!cache) {
-    try {
-      const { rows } = await pool.query("select key, value from app_config");
-      cache = Object.fromEntries((rows as { key: string; value: string }[]).map((r) => [r.key, r.value]));
-    } catch {
-      cache = {}; // table absent (fresh install) -> env-only behavior
-    }
-  }
-  return cache[key];
+  return (await loadSecrets())[key];
 }
 
 export function resetSecretCache(): void {
   cache = null;
+  cachePromise = null;
 }

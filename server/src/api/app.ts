@@ -23,6 +23,7 @@ import {
   type SupabaseAuthConfig,
 } from "../auth/supabase.js";
 import { runTenant, FOUNDING_TENANT_ID } from "../db/tenant.js";
+import { secret } from "../config/secrets.js";
 import { tenantForToken } from "../auth/apiTokens.js";
 import {
   createInterview, getInterview, listInterviews, appendMessage as appendInterviewMessage,
@@ -33,12 +34,17 @@ import { defaultLlm, type LlmClient } from "../llm/complete.js";
 import { listConnectors, upsertConnector, evidenceForDraft, unpromotedEvidence } from "../connectors/repo.js";
 import { syncConnector, type SyncSummary } from "../connectors/sync.js";
 import { CONNECTOR_TYPES } from "../connectors/adapters/index.js";
-import type { ConnectorType, ConnectorRow } from "../connectors/types.js";
+import { AUTHORIZED_SOURCE_TYPES, type ConnectorType, type ConnectorRow, type SourceType } from "../connectors/types.js";
 import {
   consumeOAuthState, createOAuthState, exchangeGoogleCode,
   googleAuthorizationUrl, googleOAuthConfig,
 } from "../connectors/googleOAuth.js";
 import { exchangeSlackCode, slackAuthorizationUrl, slackOAuthConfig } from "../connectors/slackOAuth.js";
+import {
+  buildOAuthAuthorizationUrl, callbackMatchesProvider, exchangeOAuthCode,
+  getOAuthProviderSpec, isGenericOAuthProvider, oauthProviderAvailability as genericOAuthProviderAvailability,
+  oauthProviderConfig,
+} from "../connectors/oauthProviders.js";
 
 function bearerMatches(header: string | undefined, expected: string): boolean {
   if (!header?.startsWith("Bearer ")) return false;
@@ -61,30 +67,51 @@ function publicConnector(c: ConnectorRow): Omit<ConnectorRow, "credentials"> & {
   return { ...rest, configured: Object.keys(credentials ?? {}).length > 0 };
 }
 
-// These providers share the dashboard's authorization contract but do not yet
-// have a provider-specific OAuth exchange + ingestion adapter. Keeping the
-// readiness response in the API prevents the UI from pretending a connection
-// succeeded and gives deployments a stable route to implement provider by
-// provider.
-const PLANNED_OAUTH_PROVIDERS: Record<string, string> = {
-  notion: "Notion",
-  confluence: "Confluence",
-  sharepoint: "SharePoint",
-  onedrive: "OneDrive",
-  jira: "Jira",
-  linear: "Linear",
-  github: "GitHub",
-  asana: "Asana",
-  clickup: "ClickUp",
-  zendesk: "Zendesk",
-  intercom: "Intercom",
-  hubspot: "HubSpot",
-  salesforce: "Salesforce",
-  gong: "Gong",
-  microsoft_teams: "Microsoft Teams",
-  outlook: "Outlook",
-  zoom: "Zoom",
-};
+async function oauthProviderAvailability() {
+  return {
+    google: {
+      label: "Google Workspace",
+      supported: true,
+      configured: Boolean(await googleOAuthConfig()),
+      requires_workspace: false,
+    },
+    slack: {
+      label: "Slack",
+      supported: true,
+      configured: Boolean(await slackOAuthConfig()),
+      requires_workspace: false,
+    },
+    ...(await genericOAuthProviderAvailability()),
+  };
+}
+
+function requestReturnOrigin(c: Context): string | undefined {
+  const candidate = c.req.header("origin");
+  if (!candidate) return undefined;
+  try {
+    const url = new URL(candidate);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.origin : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function connectorRedirect(
+  c: Context,
+  key: "connected" | "error",
+  value: string,
+  returnOrigin?: string,
+) {
+  const path = `/app/connectors?${new URLSearchParams({ [key]: value }).toString()}`;
+  const appUrl = await secret("BRIAN_APP_URL");
+  const baseUrl = appUrl ?? returnOrigin;
+  return c.redirect(baseUrl ? new URL(path, `${baseUrl.replace(/\/$/, "")}/`).toString() : path);
+}
+
+async function rejectedOAuthRedirect(c: Context, state: string | undefined, error: string) {
+  const consumed = state ? await consumeOAuthState(state).catch(() => null) : null;
+  return connectorRedirect(c, "error", error, consumed?.metadata.return_origin);
+}
 
 export type AppEnv = { Variables: { user?: TokenUser } };
 export type App = Hono<AppEnv>;
@@ -94,7 +121,8 @@ export type App = Hono<AppEnv>;
 // /brian/*, so c.req.path is "/brian/api/auth/login").
 const PUBLIC_PATHS = ["/api/auth/login", "/api/connectors/google/callback", "/api/connectors/slack/callback"];
 function isPublicPath(path: string): boolean {
-  return PUBLIC_PATHS.some((p) => path === p || path.endsWith(p));
+  return PUBLIC_PATHS.some((p) => path === p || path.endsWith(p))
+    || /\/api\/connectors\/[a-z_]+\/callback$/.test(path);
 }
 
 // Vector-search hits farther than this cosine distance are treated as
@@ -390,15 +418,22 @@ export function buildApp(opts: AppOptions = {}): App {
   app.get("/api/connectors", async (c) =>
     c.json((await listConnectors()).map(publicConnector)));
 
+  // The dashboard needs to distinguish an implementation that is ready for a
+  // customer to authorize from one that still needs its deployment secrets.
+  // This exposes no credential material.
+  app.get("/api/connectors/providers", async (c) => c.json(await oauthProviderAvailability()));
+
   // One Google consent grants the narrow read-only Gmail + Drive scopes used
   // by Brian. The callback stores the same refresh token in two connector
   // rows so each source can be synced independently later.
   app.get("/api/connectors/google/start", async (c) => {
-    const config = googleOAuthConfig();
+    const config = await googleOAuthConfig();
     if (!config) {
       return c.json({ error: "Google OAuth is not configured on this Brian deployment" }, 503);
     }
-    const state = await createOAuthState("google", ["gmail", "google_drive"]);
+    const returnOrigin = requestReturnOrigin(c);
+    const state = await createOAuthState("google", ["gmail", "google_drive"],
+      returnOrigin ? { return_origin: returnOrigin } : {});
     return c.json({ url: googleAuthorizationUrl(config, state) });
   });
 
@@ -406,19 +441,21 @@ export function buildApp(opts: AppOptions = {}): App {
     const error = c.req.query("error");
     const state = c.req.query("state");
     const code = c.req.query("code");
-    if (error) return c.redirect(`/app/connectors?error=${encodeURIComponent(error)}`);
-    if (!state || !code) return c.redirect("/app/connectors?error=missing_google_oauth_response");
+    if (error) return rejectedOAuthRedirect(c, state, error);
+    if (!state || !code) return rejectedOAuthRedirect(c, state, "missing_google_oauth_response");
 
+    let returnOrigin: string | undefined;
     try {
       const consumed = await consumeOAuthState(state);
       if (!consumed || consumed.provider !== "google") {
-        return c.redirect("/app/connectors?error=invalid_or_expired_google_oauth_state");
+        return connectorRedirect(c, "error", "invalid_or_expired_google_oauth_state");
       }
-      const config = googleOAuthConfig();
-      if (!config) return c.redirect("/app/connectors?error=google_oauth_not_configured");
+      returnOrigin = consumed.metadata.return_origin;
+      const config = await googleOAuthConfig();
+      if (!config) return connectorRedirect(c, "error", "google_oauth_not_configured", returnOrigin);
       const tokens = await exchangeGoogleCode(code, config);
       if (!tokens.refresh_token) {
-        return c.redirect("/app/connectors?error=google_refresh_token_missing_reconnect");
+        return connectorRedirect(c, "error", "google_refresh_token_missing_reconnect", returnOrigin);
       }
       const credentials = {
         provider: "google",
@@ -430,18 +467,20 @@ export function buildApp(opts: AppOptions = {}): App {
         for (const type of consumed.connectorTypes as ConnectorType[]) {
           await upsertConnector(type, { status: "connected", credentials });
         }
-        return c.redirect("/app/connectors?connected=google");
+        return connectorRedirect(c, "connected", "google", returnOrigin);
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : "google_oauth_failed";
-      return c.redirect(`/app/connectors?error=${encodeURIComponent(message)}`);
+      return connectorRedirect(c, "error", message, returnOrigin);
     }
   });
 
   app.get("/api/connectors/slack/start", async (c) => {
-    const config = slackOAuthConfig();
+    const config = await slackOAuthConfig();
     if (!config) return c.json({ error: "Slack OAuth is not configured on this Brian deployment" }, 503);
-    const state = await createOAuthState("slack", ["slack"]);
+    const returnOrigin = requestReturnOrigin(c);
+    const state = await createOAuthState("slack", ["slack"],
+      returnOrigin ? { return_origin: returnOrigin } : {});
     return c.json({ url: slackAuthorizationUrl(config, state) });
   });
 
@@ -449,38 +488,87 @@ export function buildApp(opts: AppOptions = {}): App {
     const error = c.req.query("error");
     const state = c.req.query("state");
     const code = c.req.query("code");
-    if (error) return c.redirect(`/app/connectors?error=${encodeURIComponent(error)}`);
-    if (!state || !code) return c.redirect("/app/connectors?error=missing_slack_oauth_response");
+    if (error) return rejectedOAuthRedirect(c, state, error);
+    if (!state || !code) return rejectedOAuthRedirect(c, state, "missing_slack_oauth_response");
+    let returnOrigin: string | undefined;
     try {
       const consumed = await consumeOAuthState(state);
       if (!consumed || consumed.provider !== "slack") {
-        return c.redirect("/app/connectors?error=invalid_or_expired_slack_oauth_state");
+        return connectorRedirect(c, "error", "invalid_or_expired_slack_oauth_state");
       }
-      const config = slackOAuthConfig();
-      if (!config) return c.redirect("/app/connectors?error=slack_oauth_not_configured");
+      returnOrigin = consumed.metadata.return_origin;
+      const config = await slackOAuthConfig();
+      if (!config) return connectorRedirect(c, "error", "slack_oauth_not_configured", returnOrigin);
       const token = await exchangeSlackCode(code, config);
       return runTenant(consumed.tenantId, async () => {
         await upsertConnector("slack", {
           status: "connected",
           credentials: { provider: "slack", bot_token: token.access_token, team_id: token.team?.id, team_name: token.team?.name },
         });
-        return c.redirect("/app/connectors?connected=slack");
+        return connectorRedirect(c, "connected", "slack", returnOrigin);
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : "slack_oauth_failed";
-      return c.redirect(`/app/connectors?error=${encodeURIComponent(message)}`);
+      return connectorRedirect(c, "error", message, returnOrigin);
     }
   });
 
+  // Every catalog source has an authorization flow even before Brian has an
+  // ingestion adapter for it. OAuth establishes the tenant-owned connection;
+  // ingestion is a separate capability added later.
   app.get("/api/connectors/:provider/start", async (c) => {
     const provider = c.req.param("provider");
-    const label = PLANNED_OAUTH_PROVIDERS[provider];
-    if (!label) return c.json({ error: "unknown connector" }, 404);
-    return c.json({
-      error: `${label} authorization is not configured on this Brian deployment yet`,
-      code: "connector_oauth_not_configured",
-      provider,
-    }, 503);
+    if (!isGenericOAuthProvider(provider)) return c.json({ error: "unknown connector" }, 404);
+    const config = await oauthProviderConfig(provider);
+    if (!config) {
+      return c.json({
+        error: `${getOAuthProviderSpec(provider).label} OAuth is not configured on this Brian deployment`,
+        code: "connector_oauth_not_configured",
+        provider,
+      }, 503);
+    }
+    const workspace = c.req.query("workspace")?.trim();
+    const returnOrigin = requestReturnOrigin(c);
+    const metadata: Record<string, string> = {
+      ...(workspace ? { workspace } : {}),
+      ...(returnOrigin ? { return_origin: returnOrigin } : {}),
+    };
+    try {
+      const state = await createOAuthState(provider, [provider], metadata);
+      return c.json({ url: buildOAuthAuthorizationUrl(config, state, metadata) });
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "invalid authorization request" }, 400);
+    }
+  });
+
+  app.get("/api/connectors/:callback/callback", async (c) => {
+    const callback = c.req.param("callback");
+    const error = c.req.query("error") ?? c.req.query("error_description");
+    const state = c.req.query("state");
+    const code = c.req.query("code");
+    if (error) return rejectedOAuthRedirect(c, state, error);
+    if (!state || !code) return rejectedOAuthRedirect(c, state, "missing_oauth_response");
+
+    let returnOrigin: string | undefined;
+    try {
+      const consumed = await consumeOAuthState(state);
+      if (!consumed || !isGenericOAuthProvider(consumed.provider)
+        || !callbackMatchesProvider(callback, consumed.provider)) {
+        return connectorRedirect(c, "error", "invalid_or_expired_oauth_state");
+      }
+      const provider = consumed.provider;
+      returnOrigin = consumed.metadata.return_origin;
+      const config = await oauthProviderConfig(provider);
+      if (!config) return connectorRedirect(c, "error", `${provider}_oauth_not_configured`, returnOrigin);
+      const credentials = await exchangeOAuthCode(config, code, state, consumed.metadata);
+      return runTenant(consumed.tenantId, async () => {
+        await upsertConnector(provider, { status: "connected", credentials });
+        return connectorRedirect(c, "connected", provider, returnOrigin);
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "oauth_failed";
+      return connectorRedirect(c, "error", message, returnOrigin);
+    }
   });
 
   app.post("/api/connectors/:type/connect", async (c) => {
@@ -494,8 +582,10 @@ export function buildApp(opts: AppOptions = {}): App {
   });
 
   app.post("/api/connectors/:type/disable", async (c) => {
-    const type = c.req.param("type") as ConnectorType;
-    if (!CONNECTOR_TYPES.includes(type)) return c.json({ error: "unknown connector" }, 400);
+    const type = c.req.param("type") as SourceType;
+    const supported = CONNECTOR_TYPES.includes(type as ConnectorType)
+      || (AUTHORIZED_SOURCE_TYPES as readonly string[]).includes(type);
+    if (!supported) return c.json({ error: "unknown connector" }, 400);
     return c.json(publicConnector(await upsertConnector(type, { status: "disabled" })));
   });
 

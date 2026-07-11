@@ -5,11 +5,13 @@ const LABELS = {
   active: 'Active',
   needs_review: 'Needs review',
   retired: 'Retired',
-  ready: 'Ready',
   completed: 'Completed',
   abandoned: 'Abandoned',
   escalated: 'Escalated',
   failed: 'Failed',
+  connected: 'Connected',
+  ready: 'Ready to connect',
+  needs_setup: 'Setup required',
 };
 
 export default function StatusBadge({ status }) {

@@ -21,14 +21,16 @@
 }
 
 .status-badge--active,
-.status-badge--completed {
+.status-badge--completed,
+.status-badge--connected {
   border-color: rgba(28, 148, 96, 0.3);
   background: var(--green-dim);
   color: var(--green);
 }
 
 .status-badge--needs_review,
-.status-badge--ready {
+.status-badge--ready,
+.status-badge--needs_setup {
   border-color: rgba(209, 82, 26, 0.3);
   background: var(--accent-dim);
   color: var(--accent-text, var(--accent));

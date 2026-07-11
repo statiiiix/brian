@@ -1,4 +1,5 @@
 import { createOAuthState, consumeOAuthState } from "./googleOAuth.js";
+import { secret } from "../config/secrets.js";
 
 const AUTH_URL = "https://slack.com/oauth/v2/authorize";
 const TOKEN_URL = "https://slack.com/api/oauth.v2.access";
@@ -10,10 +11,18 @@ export interface SlackOAuthConfig {
   redirectUri: string;
 }
 
-export function slackOAuthConfig(env: NodeJS.ProcessEnv = process.env): SlackOAuthConfig | null {
-  const clientId = env.SLACK_CLIENT_ID;
-  const clientSecret = env.SLACK_CLIENT_SECRET;
-  const redirectUri = env.SLACK_OAUTH_REDIRECT_URI;
+type SecretReader = (key: string) => Promise<string | null | undefined>;
+
+export async function slackOAuthConfig(read: SecretReader = secret): Promise<SlackOAuthConfig | null> {
+  const [clientId, clientSecret, explicitRedirect, baseUrl] = await Promise.all([
+    read("SLACK_CLIENT_ID"),
+    read("SLACK_CLIENT_SECRET"),
+    read("SLACK_OAUTH_REDIRECT_URI"),
+    read("BRIAN_OAUTH_BASE_URL").then((value) => value || read("BRIAN_URL")),
+  ]);
+  const redirectUri = explicitRedirect ?? (baseUrl
+    ? `${baseUrl.replace(/\/$/, "")}/api/connectors/slack/callback`
+    : null);
   if (!clientId || !clientSecret || !redirectUri) return null;
   return { clientId, clientSecret, redirectUri };
 }

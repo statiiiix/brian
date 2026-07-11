@@ -78,6 +78,16 @@ d("connectors API", () => {
     expect(unknown.statusCode).toBe(404);
   });
 
+  it("reports whether supported OAuth providers are configured without exposing secrets", async () => {
+    const providers = await app.inject({ method: "GET", url: "/api/connectors/providers", headers: H(FOUNDING_TOKEN) });
+    expect(providers.statusCode).toBe(200);
+    expect(providers.json()).toMatchObject({
+      google: { label: "Google Workspace", supported: true, configured: expect.any(Boolean) },
+      slack: { label: "Slack", supported: true, configured: expect.any(Boolean) },
+    });
+    expect(JSON.stringify(providers.json())).not.toContain("CLIENT_SECRET");
+  });
+
   it("is tenant-isolated", async () => {
     const acme = await app.inject({ method: "GET", url: "/api/connectors", headers: H(ACME_TOKEN) });
     expect((acme.json() as { type: string }[]).find((x) => x.type === "gmail")).toBeUndefined();

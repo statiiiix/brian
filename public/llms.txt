@@ -1,0 +1,25 @@
+# Brian
+
+> Brian is a company brain for governed AI-agent execution. It turns a company's procedures, hard rules, guardrails, and escalation paths into reviewed skills that agents can follow.
+
+Brian is designed for teams delegating real operational work to AI agents. Unlike generic agent memory or chat-with-your-docs products, Brian focuses on safe action: it retrieves the right procedure, enforces non-negotiable rules, stops when a guardrail is reached, escalates to a human, and logs the outcome.
+
+## Core product concepts
+
+- Company brain: shared operational judgment available to every connected AI agent.
+- Skills: versioned, executable procedures with triggers, inputs, hard rules, guardrails, tools, examples, owners, and escalation targets.
+- Safe delegation: agents act within approved limits and stop when a human decision is required.
+- Review and audit: risky knowledge stays in draft for human approval; executions and overrides are logged.
+- Open integration: Brian uses MCP and works with compatible agent clients and custom agents.
+
+## Key pages and files
+
+- [Product overview](/)
+- [How Brian works](/#how-it-works)
+- [Coming soon and waitlist](/#pricing)
+- [Frequently asked questions](/#faq)
+- [Machine-readable pricing](/pricing.md)
+
+## Contact
+
+- Email: a7madinquiries@gmail.com

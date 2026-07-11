@@ -34,7 +34,12 @@ to learn, then run a **focused sync** (shows fetched/kept/evidence/drafts).
 Stored credentials are never
 returned by the API.
 
-## Founder setup (required before a real sync)
+Every catalog source offers authorization. Authorization stores a secure,
+tenant-owned connection first; source-specific data selection and ingestion are
+implemented as the next layer. The OAuth registrations Brian must own are
+listed in `docs/oauth-app-registrations.md`.
+
+## Brian team setup (required before customers connect)
 
 - **Google Workspace:** the dashboard starts one OAuth flow with read-only
   Gmail + Drive scopes and stores the resulting refresh token for both sources.
@@ -46,16 +51,25 @@ returned by the API.
   `SLACK_CLIENT_SECRET`, and `SLACK_OAUTH_REDIRECT_URI`. The dashboard uses
   Slack's OAuth installation flow. The direct bot-token endpoint remains
   available for local development.
+- **All other sources:** register Brian as the public/multitenant OAuth app for
+  each provider family, add the callback URL, and store its client ID and secret
+  in the protected hosted configuration. See `oauth-app-registrations.md`.
 - **DB:** apply migration `006_connectors.sql` to the live project (gated, like
   005). Until then connectors run against the `test` schema only.
 
 ## API
 
 - `GET /api/connectors` — list (credentials redacted; `configured` boolean).
+- `GET /api/connectors/providers` — report readiness for every catalog source;
+  it never returns client IDs, client secrets, or customer tokens.
 - `GET /api/connectors/google/start` — create a one-time Google OAuth state and
   return the authorization URL.
 - `GET /api/connectors/slack/start` — create a one-time Slack OAuth state and
   return the authorization URL.
+- `GET /api/connectors/:provider/start` — start any other catalog provider's
+  OAuth flow; Zendesk additionally accepts its tenant subdomain as `workspace`.
+- `GET /api/connectors/:provider/callback` — validate one-time state, exchange
+  the provider code, save the tenant connection, and return to the Brian app.
 - `POST /api/connectors/:type/connect` — store credentials, set `connected`.
 - `POST /api/connectors/:type/disable` — toggle off.
 - `POST /api/connectors/:type/sync` — run one focused sync now; body may include

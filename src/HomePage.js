@@ -1,7 +1,9 @@
 import PillNav from './sections/PillNav';
 import VideoFold from './sections/VideoFold';
 import IntegrationStrip from './sections/IntegrationStrip';
-import BrianLoop from './sections/BrianLoop';
+import SkillCreationFilm from './sections/SkillCreationFilm';
+import AgentGuardrails from './sections/AgentGuardrails';
+import ExecutionFilm from './sections/ExecutionFilm';
 import Pricing from './sections/Pricing';
 import FAQ from './sections/FAQ';
 import FinalCTA from './sections/FinalCTA';
@@ -15,7 +17,9 @@ export default function HomePage() {
       <main>
         <VideoFold />
         <IntegrationStrip />
-        <BrianLoop />
+        <SkillCreationFilm />
+        <AgentGuardrails />
+        <ExecutionFilm />
         <Pricing />
         <FAQ />
         <FinalCTA />

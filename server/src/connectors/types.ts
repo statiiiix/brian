@@ -11,6 +11,15 @@ export interface RawThread {
 
 export type ConnectorType = "gmail" | "slack" | "google_drive";
 
+export const AUTHORIZED_SOURCE_TYPES = [
+  "notion", "confluence", "sharepoint", "onedrive", "jira", "linear", "github",
+  "asana", "clickup", "zendesk", "intercom", "hubspot", "salesforce", "gong",
+  "microsoft_teams", "outlook", "zoom",
+] as const;
+
+export type AuthorizedSourceType = (typeof AUTHORIZED_SOURCE_TYPES)[number];
+export type SourceType = ConnectorType | AuthorizedSourceType;
+
 // Pure-fetch adapter: incremental from the stored cursor.
 export interface Connector {
   type: ConnectorType;
@@ -29,7 +38,7 @@ export interface ExtractResult {
 export interface ConnectorRow {
   id: string;
   tenant_id: string;
-  type: ConnectorType;
+  type: SourceType;
   status: string;
   credentials: Record<string, unknown>;
   cursor: Record<string, unknown>;

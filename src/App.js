@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import HomePage from './HomePage';
 import Login from './pages/Login';
 import AppLayout from './app/AppLayout';
@@ -18,9 +19,38 @@ function RequireAuth({ children }) {
   return isLoggedIn() ? children : <Navigate to="/login" replace />;
 }
 
+function RouteMeta() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    const isPublicHome = pathname === '/';
+    document.title = isPublicHome
+      ? 'Brian - Your Company Brain'
+      : pathname === '/login'
+        ? 'Log in | Brian'
+        : 'Brian App';
+
+    let robots = document.querySelector('meta[name="robots"]');
+    if (!robots) {
+      robots = document.createElement('meta');
+      robots.setAttribute('name', 'robots');
+      document.head.appendChild(robots);
+    }
+    robots.setAttribute(
+      'content',
+      isPublicHome
+        ? 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1'
+        : 'noindex,nofollow'
+    );
+  }, [pathname]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <RouteMeta />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
