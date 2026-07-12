@@ -2,7 +2,7 @@
 
 > Context-preservation doc. Snapshot of where the Company Brain backend stands and
 > what to do next, so we can resume without re-deriving anything.
-> Last updated: 2026-07-10.
+> Last updated: 2026-07-12.
 
 ---
 
@@ -58,8 +58,11 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
 
 ### Environment / infra facts (don't re-derive)
 - Supabase project **brian**, ref `foydcrwyakpkisxtvzgr` (Postgres 17 + pgvector).
-  Migrations through **006 are applied to live prod** (via the Supabase MCP):
-  001–004 base, 005 tenancy, 006 connectors. **RLS is now enabled on every
+  Migrations through **009 are applied to live prod** (via the Supabase MCP):
+  001–004 base, 005 tenancy, 006 connectors, 007 rls-backstop, 008 app_config,
+  009 oauth_states (**009 applied 2026-07-12** — it had silently been missing on
+  live; 006 shipped connectors+evidence but 009's `oauth_states` never ran, so the
+  OAuth authorize flow would have 500'd). **RLS is now enabled on every
   owned table** (context_entries/context_versions got it 2026-07-06, closing the
   last `rls_disabled_in_public` advisor); the backend connects as the `postgres`
   owner, which bypasses RLS, so RLS is currently a latent backstop (see step 4).
@@ -225,6 +228,31 @@ pg, pgvector). The repo root is a separate Create-React-App UI the founder owns.
   `APP_TEST_DATABASE_URL` exists** — the agent classifier blocks granting a
   prod login credential, deliberately left to the founder.
 
+- **Connector OAuth — hosted config wired + Google registered (2026-07-12):**
+  made the connectors readiness path real on live prod. Root cause of a source
+  showing **"Setup required"** / **"Brian's OAuth app still needs to be registered
+  by the Brian team"**: `GET /api/connectors/providers` reports `configured:true`
+  for a source only when that provider's `*_CLIENT_ID`+`*_CLIENT_SECRET` **plus**
+  `BRIAN_OAUTH_BASE_URL` are readable via `secret()` (env → `app_config`). Live
+  `app_config` had **zero** OAuth config, so every source read as not-configured
+  (expected, not a bug). Done this session (Supabase MCP): **applied migration
+  `009` (`oauth_states`)** to live; set in `app_config` — `BRIAN_OAUTH_BASE_URL`
+  (edge function base), `BRIAN_APP_URL` = `https://brianthebrain.app` (production
+  frontend domain, confirmed by founder), and a fresh 64-hex
+  `CONNECTOR_ENCRYPTION_KEY` (**record it** — losing/rotating it makes encrypted
+  connector tokens unreadable). **Google OAuth app registered** by the founder in
+  the new **Google Auth Platform** (project "Brian", Web client; redirect
+  `…/functions/v1/brian/api/connectors/google/callback`; JS origin
+  `https://brianthebrain.app`); `GOOGLE_CLIENT_ID`+`GOOGLE_CLIENT_SECRET` stored in
+  `app_config` → **Google is now `configured:true`** (hosted edge picks it up on
+  next cold start). Google is deliberately in **Testing** publishing status for now
+  (pilots): works for allow-listed test users. Because Gmail/Drive read are Google
+  **restricted** scopes, a public launch requires Google verification + an annual
+  **CASA** security assessment (~$1–3k/yr typical) — deferred by decision. Gotcha:
+  Testing mode expires Google refresh tokens after **7 days**, so it is not a
+  launch state. Only Google + Slack have ingestion adapters; the other 15 catalog
+  providers can authorize but not yet ingest.
+
 ---
 
 ## How any agent should resume work here (read this first)
@@ -280,9 +308,23 @@ Remaining:
    edge secret or app_config-driven boot (currently the edge connects as the
    `postgres` owner, so RLS is app-level-only there), delete the retired
    `brian-diag` function (410 stub).
-4. **Connector OAuth configuration** when ready (see `docs/connectors.md`): set
-   the Google and Slack OAuth client credentials + HTTPS callback URLs in the
-   hosted environment, then run one focused sync from Signals → Sources.
+4. **Connector OAuth configuration** — *in progress* (see the 2026-07-12 done
+   bullet). Google is registered + `configured:true`; base URL, app URL, and
+   encryption key are set in `app_config`; migration 009 (`oauth_states`) is live.
+   Remaining:
+   - **Google, to authorize without "Access blocked":** in the Google console add
+     the founder's email under **Audience → Test users**, and register the
+     `gmail.readonly` + `drive.readonly` scopes under **Data Access**.
+   - **Slack (still unregistered):** create the app at api.slack.com/apps, store
+     `SLACK_CLIENT_ID`/`SLACK_CLIENT_SECRET` in `app_config`, add bot scopes
+     (`channels:history`, `groups:history`, `users:read`, `users:read.email`) +
+     the `…/slack/callback` redirect URL, and activate public distribution.
+   - **Frictionless-launch strategy:** lead with Slack (and later Notion / Linear /
+     GitHub — no security assessment) while Google verification/CASA runs in
+     parallel; the other 15 catalog providers remain unregistered.
+   - **Frontend must be deployed to `https://brianthebrain.app`** (Phase F step 2)
+     so OAuth callbacks return to the real domain.
+   - Then run one focused sync from **Sources**.
 
 ### Phase 2 — RLS as a real backstop ✅ BUILT (2026-07-08; live activation = Phase F step 0)
 Migration 007 + tenant-bound queries are live and tested (see done list).
