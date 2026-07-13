@@ -80,11 +80,11 @@ export async function consumeOAuthState(state: string): Promise<{
   connectorTypes: string[];
   metadata: Record<string, string>;
 } | null> {
+  // Callback requests have no authenticated tenant yet. Resolve and consume
+  // only the exact one-time hash through the narrow SECURITY DEFINER function;
+  // brian_app never gets a broad pre-tenant oauth_states policy.
   const { rows } = await pool.query(
-    `update oauth_states
-        set used_at=now()
-      where state_hash=$1 and used_at is null and expires_at > now()
-      returning tenant_id, provider, connector_types`,
+    "select * from consume_oauth_state($1::text)",
     [hashOAuthState(state)],
   );
   const row = rows[0] as { tenant_id: string; provider: string; connector_types: string[] } | undefined;

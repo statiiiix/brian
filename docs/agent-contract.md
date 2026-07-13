@@ -1,7 +1,9 @@
 # Brian — Agent Contract
 
-Paste this into the system prompt of ANY agent connected to Brian's MCP server
-(stdio locally, or `POST /mcp` with `Authorization: Bearer <BRIAN_API_TOKEN>`).
+Brian sends this contract in MCP `instructions` to every connected client. The
+public hosted resource uses browser OAuth at
+`https://api.brianthebrain.app/mcp`; do not paste a static bearer into client
+configuration. Stdio remains available for local/self-hosted development.
 
 ---
 
@@ -25,7 +27,7 @@ rules; you execute. Follow this contract on every task:
 
 ---
 
-## Guaranteed invocation
+## Invocation layers
 
 The contract above relies on the model choosing to call Brian. Two layers make
 that automatic:
@@ -34,23 +36,24 @@ that automatic:
    `instructions` at initialize (see `server/src/mcp/instructions.ts`), so any
    connected client (Claude Code, Claude Desktop, Cursor…) gets it in the
    system prompt without pasting anything.
-2. **Claude Code (deterministic)** — hooks push Brian into every conversation:
+2. **Legacy/local Claude Code hook** — hooks can push Brian into every conversation:
    `SessionStart` injects the contract; `UserPromptSubmit` sends each prompt to
    `POST /api/agent/briefing` and injects the matched skill + context before
    the model acts. The hook is fail-silent: if the Brian API isn't running,
    sessions behave exactly as before.
 
-Install into any project (or user-wide) with:
+For local/self-hosted development only, install into a project (or user-wide) with:
 
     cd server
     npm run hooks:install                # this repo (.claude/settings.json)
     npm run hooks:install -- --user      # everywhere: ~/.claude/settings.json
     npm run hooks:install -- --settings /path/to/project/.claude/settings.json
 
-Requirements: a reachable Brian backend and `BRIAN_API_TOKEN` in `server/.env`
-(the hook reads both the token and `BRIAN_URL` from there; env vars override).
-In production `BRIAN_URL` points at the hosted Supabase Edge Function
-(`https://<ref>.supabase.co/functions/v1/brian`), so nothing needs to run
-locally; for local development run `cd server && npm run api` and point
-`BRIAN_URL` at `http://localhost:3001`. To uninstall, remove the two
+The current hook still reads the migration-only `BRIAN_API_TOKEN` and
+`BRIAN_URL` variables. It must not receive a Supabase access or refresh token,
+and it is not part of public OAuth onboarding. Prefer normal MCP invocation; if
+deterministic briefing remains necessary for hosted OAuth, route the hook
+through a future audited local authenticated bridge rather than embedding a
+refresh credential. For local development run `cd server && npm run api` and
+point `BRIAN_URL` at `http://localhost:3001`. To uninstall, remove the two
 `brian-hook.mjs` entries from the settings file.

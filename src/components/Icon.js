@@ -48,6 +48,8 @@ export const msym = {
   capture: 'center_focus_strong',
   connectors: 'hub',
   executions: 'receipt_long',
+  agents: 'smart_toy',
+  settings: 'settings',
   logout: 'logout',
   back: 'arrow_back',
   check: 'check',

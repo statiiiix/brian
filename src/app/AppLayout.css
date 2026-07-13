@@ -258,6 +258,9 @@
 .dash-user-note {
   font-size: 0.68rem;
   color: var(--muted-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dash-logout {

@@ -1,0 +1,39 @@
+{
+  "name": "@brianthebrain/cli",
+  "version": "0.1.0",
+  "description": "Install and diagnose Brian's hosted MCP connection for supported AI clients.",
+  "type": "module",
+  "bin": {
+    "brian": "./src/index.mjs"
+  },
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check src/index.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/statiiiix/brian.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://brianthebrain.app",
+  "bugs": {
+    "url": "https://github.com/statiiiix/brian/issues"
+  },
+  "keywords": [
+    "brian",
+    "mcp",
+    "oauth",
+    "ai-agents"
+  ],
+  "license": "UNLICENSED"
+}

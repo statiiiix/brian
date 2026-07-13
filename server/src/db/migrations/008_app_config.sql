@@ -1,9 +1,8 @@
--- Owner-only runtime config for the hosted deployment (src/config/secrets.ts).
--- The Supabase Edge Function connects with the platform-provided owner
--- credential and reads its secrets (OpenAI key, static bearer, JWT secret)
--- from here, making the hosted backend self-sufficient without dashboard
--- secret management. RLS is enabled with NO policies: the owner bypasses RLS,
--- everyone else (brian_app, anon, authenticated) is denied.
+-- Owner-only configuration and migration-era secret fallback
+-- (src/config/secrets.ts). The production application connects as brian_app
+-- and receives secrets from its deployment environment; it cannot read this
+-- table. Security-definer database triggers may read operational flags such as
+-- PUBLIC_SIGNUP_ENABLED. RLS has NO broad policies: only the owner bypasses it.
 create table if not exists app_config (
   key        text primary key,
   value      text not null,

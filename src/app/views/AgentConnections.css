@@ -1,0 +1,261 @@
+.agents-kicker {
+  margin: 0 0 0.35rem;
+  color: var(--accent-text);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.agents-connect-card {
+  padding: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.agents-connect-copy {
+  display: flex;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.agents-connect-copy > span,
+.agent-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.agents-connect-copy h2,
+.agents-legacy h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.agents-connect-copy p,
+.agents-legacy p {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.agents-copy-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  margin-top: 0.55rem;
+}
+
+.agents-copy-row code {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--fg-secondary);
+  overflow-x: auto;
+}
+
+.agents-copy-row button,
+.agent-rename button {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--fg-secondary);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.agents-warning {
+  margin: 0.9rem 0 0;
+  color: var(--red);
+  font-size: 0.8rem;
+}
+
+.agents-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.agents-section-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.agents-section-head span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.agents-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.agent-card {
+  padding: 1.05rem 1.15rem;
+}
+
+.agent-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.agent-card-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.agent-card-title {
+  min-width: 0;
+  flex: 1;
+}
+
+.agent-card-title h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.agent-card-title > span {
+  display: block;
+  color: var(--muted-2);
+  font-size: 0.68rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-status {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: capitalize;
+}
+
+.agent-status--active {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.agent-status--revoked,
+.agent-status--denied {
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+.agent-meta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.agent-meta div {
+  min-width: 0;
+}
+
+.agent-meta dt {
+  color: var(--muted-2);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.agent-meta dd {
+  margin: 0.1rem 0 0;
+  color: var(--fg-secondary);
+  font-size: 0.78rem;
+}
+
+.agent-permissions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.agent-permissions span {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.67rem;
+}
+
+.agent-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.agent-actions p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.agent-rename {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.agent-rename input {
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--fg);
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  flex: 1;
+}
+
+.agents-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.agents-empty h3 {
+  margin: 0.5rem 0 0.2rem;
+  color: var(--fg);
+}
+
+.agents-empty p {
+  margin: 0 auto;
+  max-width: 34rem;
+}
+
+.agents-legacy {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-color: rgba(209, 82, 26, 0.25);
+}
+
+@media (max-width: 720px) {
+  .agent-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .agents-copy-row {
+    grid-template-columns: 1fr;
+  }
+
+  .agents-copy-row button {
+    min-height: 38px;
+  }
+}

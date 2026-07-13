@@ -4,36 +4,80 @@ import { testClient } from "../test/http.js";
 import { pool } from "../db/pool.js";
 import { runMigrations } from "../db/migrate.js";
 import { FOUNDING_TENANT_ID, runTenant } from "../db/tenant.js";
-import { ensureToken } from "../auth/apiTokens.js";
+import type { PrincipalStore } from "../auth/principal.js";
 import { createSkill } from "../skills/repo.js";
-import { upsertConnector, insertEvidence, markPromoted } from "../connectors/repo.js";
+import { getConnector, upsertConnector, insertEvidence, markPromoted } from "../connectors/repo.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
 
 const ACME = "00000000-0000-0000-0000-0000000c0009";
-const FOUNDING_TOKEN = "founding-__conn";
-const ACME_TOKEN = "acme-__conn";
+const FOUNDING_USER = "c0900000-0000-4000-8000-000000000001";
+const ACME_USER = "c0900000-0000-4000-8000-000000000002";
+const b64 = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+const dashboardToken = (userId: string) => `${b64({ alg: "ES256" })}.${b64({
+  iss: "https://connectors-test.supabase.co/auth/v1", sub: userId, aud: "authenticated",
+})}.sig`;
+const FOUNDING_TOKEN = dashboardToken(FOUNDING_USER);
+const ACME_TOKEN = dashboardToken(ACME_USER);
 const H = (t: string) => ({ authorization: `Bearer ${t}` });
+
+const principalStore: PrincipalStore = {
+  async resolveDashboard(userId) {
+    const tenantId = userId === FOUNDING_USER ? FOUNDING_TENANT_ID : userId === ACME_USER ? ACME : null;
+    return tenantId ? {
+      tenantId, userId, role: "admin", membershipId: userId,
+    } : null;
+  },
+  async listMemberships() { return []; },
+  async resolveMcp() { return null; },
+  async resolveLegacy() { return null; },
+  async touchConnection() {},
+};
+
+const supabaseFetch = async (_input: string | URL | Request, init?: RequestInit) => {
+  const bearer = new Headers(init?.headers).get("authorization")?.replace(/^Bearer /, "");
+  const userId = bearer === FOUNDING_TOKEN ? FOUNDING_USER : bearer === ACME_TOKEN ? ACME_USER : null;
+  return userId
+    ? new Response(JSON.stringify({ id: userId, email: `${userId}@example.test` }))
+    : new Response("{}", { status: 401 });
+};
 
 async function clean() {
   await pool.query(
+    `delete from evidence where connector_id in (
+       select id from connectors where type in ('gmail','slack') and tenant_id in ($1,$2)
+     )`,
+    [FOUNDING_TENANT_ID, ACME],
+  );
+  await pool.query(
+    "delete from skills where name='__conn Refund' and tenant_id in ($1,$2)",
+    [FOUNDING_TENANT_ID, ACME],
+  );
+  await pool.query(
     "delete from connectors where type in ('gmail','slack') and tenant_id in ($1,$2)",
     [FOUNDING_TENANT_ID, ACME]);
-  await pool.query("delete from api_tokens where label like '__conn%'");
+  await pool.query("delete from api_tokens where tenant_id=$1 or label like '__conn%'", [ACME]);
   await pool.query("delete from tenants where id=$1", [ACME]);
 }
 
 d("connectors API", () => {
   const fakeSummary = { fetched: 3, kept: 2, evidence: 2, drafts: 0 };
-  const app = testClient(buildApp({ authToken: FOUNDING_TOKEN, sync: async () => fakeSummary }));
+  const app = testClient(buildApp({
+    supabaseAuth: {
+      url: "https://connectors-test.supabase.co",
+      anonKey: "anon",
+      fetchFn: supabaseFetch as typeof fetch,
+    },
+    principalStore,
+    sync: async () => fakeSummary,
+  }));
 
   beforeAll(async () => {
     await runMigrations(pool);
     await clean();
     await pool.query(
       "insert into tenants (id,name,slug) values ($1,'Acme','__conn-acme') on conflict (id) do nothing", [ACME]);
-    await ensureToken(ACME, ACME_TOKEN, "__conn acme");
     await app.ready();
   });
   afterAll(async () => { await clean(); await app.close(); await pool.end(); });
@@ -98,6 +142,32 @@ d("connectors API", () => {
     });
     const founding = await app.inject({ method: "GET", url: "/api/connectors", headers: H(FOUNDING_TOKEN) });
     expect((founding.json() as { type: string }[]).find((x) => x.type === "slack")).toBeUndefined();
+  });
+
+  it("cannot execute a connector action with another tenant's connector", async () => {
+    await runTenant(FOUNDING_TENANT_ID, () => upsertConnector("gmail", {
+      status: "connected",
+      credentials: { refresh_token: "foreign-secret" },
+      cursor: { page: "foreign-cursor" },
+    }));
+    const before = await runTenant(FOUNDING_TENANT_ID, () => getConnector("gmail"));
+    const actionApp = testClient(buildApp({
+      supabaseAuth: {
+        url: "https://connectors-test.supabase.co",
+        anonKey: "anon",
+        fetchFn: supabaseFetch as typeof fetch,
+      },
+      principalStore,
+    }));
+    const response = await actionApp.inject({
+      method: "POST", url: "/api/connectors/gmail/sync", headers: H(ACME_TOKEN),
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe("connector gmail is not configured");
+    const after = await runTenant(FOUNDING_TENANT_ID, () => getConnector("gmail"));
+    expect(after?.credentials).toEqual(before?.credentials);
+    expect(after?.cursor).toEqual(before?.cursor);
+    await actionApp.close();
   });
 
   it("exposes connector provenance for a drafted skill", async () => {

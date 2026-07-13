@@ -1,67 +1,76 @@
-# Brian Onboard — one-command multi-agent install
+# Connect local AI clients to Brian
 
-Wire every AI-agent platform on a machine to Brian (the company brain) with a
-single command. The onboarder detects installed platforms, shows exactly what it
-will change, then registers Brian's MCP server and installs the strongest
-always-on layer each platform supports.
+The public onboarding path is the standalone Brian CLI:
 
 ```bash
-cd server
-npm run onboard                 # detect → show plan → confirm → apply
-npm run onboard -- --status     # table: platform / detected / mcp / always-on
-npm run onboard -- --dry-run    # print the plan, change nothing
-npm run onboard -- --yes        # apply without the confirmation prompt
-npm run onboard -- --only claude-code,cursor        # limit to named platforms
-npm run onboard -- --url https://brian.example.com --token <TOKEN>   # remote Brian
+npx @brianthebrain/cli connect
 ```
 
-For the hosted Brian (Supabase Edge Function, our production deployment) the
-remote form is:
+It detects Claude Code, Claude Desktop, Cursor, and Codex, previews every change, backs up existing configuration, and writes only the hosted OAuth resource:
+
+```text
+https://api.brianthebrain.app/mcp
+```
+
+The package is implemented under `packages/cli` but must be published before a clean machine can resolve the `npx` command from npm.
+
+## Common commands
 
 ```bash
-npm run onboard -- --url https://foydcrwyakpkisxtvzgr.supabase.co/functions/v1/brian --token <TOKEN>
+npx @brianthebrain/cli signup
+npx @brianthebrain/cli connect
+npx @brianthebrain/cli connect --dry-run
+npx @brianthebrain/cli connect --only claude-code,codex
+npx @brianthebrain/cli status
+npx @brianthebrain/cli doctor
+npx @brianthebrain/cli disconnect
 ```
 
-`--help` lists every flag. Exit code is `0` when everything detected is wired (or
-on `--status`/`--dry-run`), and `1` when a detected config was **refused** (see
-Safety). A `--url` remote install requires `--token` (else exit `2`).
+For noninteractive mutation, pass both `--yes` and `--json`. The public CLI rejects `--token`; the MCP client performs browser OAuth and stores its own access/refresh credentials.
 
-## Platforms and layers
+After connection:
 
-Each platform gets an **MCP registration** (the tools) plus an **always-on
-layer** (how reliably the Brian contract reaches the model). The layers are
-labelled honestly because they are not equally strong:
-
-| Platform | MCP registration | Always-on layer | Layer strength |
-|---|---|---|---|
-| **Claude Code** | `mcpServers.brian` merged into `~/.claude.json` | SessionStart + UserPromptSubmit hooks in `~/.claude/settings.json` (delegated to `scripts/hooks/install.mjs`) | **guaranteed per-prompt briefing** |
-| **Claude Desktop** | `mcpServers.brian` merged into `claude_desktop_config.json` (or the `mcp.json` present) | MCP `instructions` | contract delivered at connect |
-| **Cursor** | `mcpServers.brian` merged into `~/.cursor/mcp.json` | Brian contract marker block in `~/.cursor/AGENTS.md` | contract always in context (tools still model-pulled) |
-| **Codex CLI** | `[mcp_servers.brian]` appended to `~/.codex/config.toml` | contract marker block in `~/.codex/AGENTS.md` | contract loaded every session (tools model-pulled) |
-| **OpenClaw / Clawdbot** | manual (config format unverified — printed as a step) | contract marker block in `AGENTS.md` | best-effort |
-
-After applying, **restart each app** so it reloads its MCP config. The Claude
-Code per-prompt briefing hook talks to the backend named by `BRIAN_URL` in
-`server/.env` — with the hosted URL set (the default on this machine) no local
-process is needed. For local development against a local backend instead:
-
-```bash
-cd server && npm run api   # then set BRIAN_URL=http://localhost:3001 (or unset it)
-```
+- Claude Code: run `claude mcp login brian` (or `--no-browser` over SSH).
+- Codex: run `codex mcp login brian`.
+- Claude Desktop and Cursor: restart, then use the client's Brian connection UI. Treat OAuth as version-dependent until its exact version is in [the compatibility matrix](mcp-client-compatibility.md).
 
 ## Safety
 
-- **Backups:** the first time the onboarder modifies any existing file it copies
-  it to `<file>.bak-brian-<YYYYMMDD-HHmmss>` beside it.
-- **Refuse, don't guess:** an unparseable JSON/TOML config is never rewritten —
-  the platform is skipped, reported, and the run exits non-zero.
-- **Idempotent:** re-running reports "already wired" and writes nothing.
-- **Non-destructive:** unrelated keys, other MCP servers, and your own
-  `AGENTS.md` content are preserved (Brian owns only its marker block).
+- Existing files receive a timestamped `.bak-brian-*` sibling backup.
+- Malformed/scalar JSON, unsafe TOML, duplicate Brian entries, symlinks, and read-only files are refused.
+- Preflight covers every selected client before any file is written.
+- Re-running a completed install is byte-idempotent.
+- Disconnect removes only Brian-owned entries/marker blocks and preserves unrelated configuration.
+- Status/doctor report credential presence and paths, never values.
 
-## Adding a platform
+See [docs/cli.md](cli.md) for paths, exit codes, and release verification.
 
-Add one module to `server/scripts/onboard/adapters/` exporting
-`{ name, label, detect, status, plan, apply }` and register it in the `REGISTRY`
-array in `onboard.mjs`. Shared config-editing primitives live in
-`server/scripts/onboard/lib.mjs`; tests go in `server/src/onboard/`.
+## Migrating an old static-token installation
+
+Old instructions used `npm run onboard -- --url <raw-edge-url> --token <token>`. Do not use that flow for public hosted Brian.
+
+1. Run `brian status` or `brian doctor`; it reports the raw Supabase endpoint or static auth without printing the credential.
+2. Run `brian connect` and review the URL-only replacement. The old config is preserved in the timestamped backup until OAuth is proven.
+3. Complete browser OAuth immediately and verify a tenant-scoped `find_skill` call.
+4. Revoke the old server-side `api_tokens` credential.
+5. Delete backups containing the old bearer according to the organization's credential-retention policy.
+
+Never copy a Supabase access/refresh token into JSON/TOML, `.env`, `AGENTS.md`, or a shell command.
+
+## Internal compatibility command
+
+`cd server && npm run onboard` is now a thin compatibility alias for the checked-in public CLI implementation under `packages/cli`. It no longer has a separate mutation path or platform registry.
+
+The original flag-only forms continue to work:
+
+```bash
+npm run onboard -- --dry-run
+npm run onboard -- --yes --only cursor,codex
+npm run onboard -- --status
+```
+
+They delegate to `brian connect --dry-run`, `brian connect --yes --only ...`, and `brian status`, respectively. Explicit public commands also pass through, for example `npm run onboard -- doctor --json`.
+
+The compatibility command always targets the canonical hosted OAuth resource. It rejects `--url` and `--token` with exit code 2 before delegation, never prints the supplied credential, and never writes it to client configuration. It no longer installs local stdio, arbitrary self-hosted URLs, or static-token configurations. Existing self-hosted installations should keep their current configuration until they have a deliberate migration path; do not use the compatibility command to overwrite them.
+
+New onboarding behavior, platform adapters, and safety fixes belong only in `packages/cli`.

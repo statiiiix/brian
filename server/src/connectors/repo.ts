@@ -96,7 +96,7 @@ export async function nearbyUnpromotedEvidence(
 ): Promise<EvidenceRow[]> {
   const { rows } = await p.query(
     `select ${E_COLS.split(",").map((c) => "e." + c.trim()).join(", ")}
-       from evidence e, (select embedding from evidence where id=$2) seed
+       from evidence e, (select embedding from evidence where id=$2 and tenant_id=$1) seed
       where e.tenant_id=$1 and e.kind=$3 and e.promoted_to_id is null
         and e.embedding is not null and seed.embedding is not null
         and (e.embedding <=> seed.embedding) <= $4

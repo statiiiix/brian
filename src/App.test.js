@@ -1,5 +1,19 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import App from './App';
+import { supabase } from './lib/supabase';
+
+jest.mock('./lib/supabase', () => ({
+  BRIAN_MCP_URL: 'https://api.brianthebrain.app/mcp',
+  isSupabaseConfigured: true,
+  supabase: {
+    auth: {
+      getSession: jest.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })),
+      refreshSession: jest.fn(),
+      signOut: jest.fn().mockResolvedValue({ error: null }),
+    },
+  },
+}));
 
 beforeAll(() => {
   // jsdom lacks IntersectionObserver and matchMedia used by the landing page.
@@ -17,17 +31,25 @@ beforeAll(() => {
   });
 });
 
-test('renders the hero headline at /', () => {
+beforeEach(() => {
+  supabase.auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  supabase.auth.signOut.mockResolvedValue({ error: null });
+});
+
+test('renders the hero headline at /', async () => {
   window.history.pushState({}, '', '/');
   render(<App />);
+  await act(async () => {});
   expect(
     screen.getByRole('heading', { level: 1, name: /company.*judgment/i })
   ).toBeInTheDocument();
 });
 
-test('renders all main landing sections', () => {
+test('renders all main landing sections', async () => {
   window.history.pushState({}, '', '/');
   render(<App />);
+  await act(async () => {});
   // Some section kickers also appear as nav/footer links, hence getAllByText.
   [
     'Why Brian',
@@ -57,9 +79,10 @@ test('renders all main landing sections', () => {
   expect(screen.queryByText('How it works')).not.toBeInTheDocument();
 });
 
-test('/app redirects to login when logged out', () => {
+test('/app redirects to login when logged out', async () => {
   localStorage.clear();
   window.history.pushState({}, '', '/app');
   render(<App />);
-  expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+  expect(screen.getByText(/restoring your secure session/i)).toBeInTheDocument();
+  expect(await screen.findByLabelText(/email/i)).toBeInTheDocument();
 });

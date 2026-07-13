@@ -12,15 +12,19 @@ import { createSkill } from "../skills/repo.js";
 import { buildApp } from "./app.js";
 import { testClient } from "../test/http.js";
 import type { NewSkill } from "../skills/types.js";
+import type { PrincipalStore } from "../auth/principal.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
 
 const ACME = "00000000-0000-0000-0000-0000000a0703";
+const USER = "10000000-0000-0000-0000-000000000001";
 const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
 // Shaped like a Supabase access token (issuer pre-filter); signature unchecked
 // because validation happens at the (mocked) auth server.
-const sbToken = `${b64({ alg: "ES256" })}.${b64({ iss: "https://x.supabase.co/auth/v1", sub: "u1" })}.sig`;
+const sbToken = `${b64({ alg: "ES256" })}.${b64({
+  iss: "https://x.supabase.co/auth/v1", sub: USER, aud: "authenticated",
+})}.sig`;
 
 function newSkill(name: string): NewSkill {
   return {
@@ -43,9 +47,24 @@ d("Supabase Auth on the guard", () => {
       ? new Response(JSON.stringify(user), { status: 200 })
       : new Response("{}", { status: 401 }));
 
-  const app = (fetchFn: any) => testClient(buildApp({
+  const store = (active = true): PrincipalStore => ({
+    resolveDashboard: async (userId) => active ? ({
+      tenantId: ACME,
+      userId,
+      role: "expert",
+      membershipId: "40000000-0000-0000-0000-000000000004",
+    }) : null,
+    listMemberships: async () => [],
+    resolveMcp: async () => null,
+    resolveLegacy: async () => null,
+    touchConnection: async () => undefined,
+  });
+
+  const app = (fetchFn: any, active = true) => testClient(buildApp({
     authToken: "static-__sbauth",
     supabaseAuth: { url: "https://x.supabase.co", anonKey: "anon", fetchFn },
+    principalStore: store(active),
+    authRequired: true,
   }));
 
   beforeAll(async () => {
@@ -62,7 +81,7 @@ d("Supabase Auth on the guard", () => {
 
   it("accepts a Supabase token and binds the app_metadata tenant", async () => {
     const a = app(authServer({
-      id: "u1", email: "expert@acme.io", app_metadata: { tenant_id: ACME, role: "expert" },
+      id: USER, email: "expert@acme.io", app_metadata: { tenant_id: "ignored", role: "owner" },
     }));
     const res = await a.inject({
       method: "GET", url: "/api/skills", headers: { authorization: `Bearer ${sbToken}` },
@@ -75,16 +94,16 @@ d("Supabase Auth on the guard", () => {
     const me = await a.inject({
       method: "GET", url: "/api/auth/me", headers: { authorization: `Bearer ${sbToken}` },
     });
-    expect(me.json()).toEqual({ id: "u1", email: "expert@acme.io", role: "expert" });
+    expect(me.json()).toEqual({ id: USER, email: "expert@acme.io", role: "expert" });
   });
 
-  it("falls back to the founding tenant when app_metadata has no tenant", async () => {
-    const a = app(authServer({ id: "u2", email: "founder@x.io", app_metadata: {} }));
+  it("fails closed when a valid user has no active membership", async () => {
+    const a = app(authServer({ id: USER, email: "founder@x.io", app_metadata: {} }), false);
     const res = await a.inject({
       method: "GET", url: "/api/skills", headers: { authorization: `Bearer ${sbToken}` },
     });
-    const ids = (res.json() as { id: string }[]).map((s) => s.id);
-    expect(ids).toContain(foundingSkillId);
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("membership_required");
   });
 
   it("rejects a token the auth server does not recognize", async () => {
@@ -95,13 +114,13 @@ d("Supabase Auth on the guard", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("never calls the auth server for non-Supabase bearers", async () => {
+  it("never treats a legacy agent bearer as dashboard authentication", async () => {
     const fetchFn = authServer(null);
     const a = app(fetchFn);
     const res = await a.inject({
       method: "GET", url: "/api/skills", headers: { authorization: "Bearer static-__sbauth" },
     });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(401);
     expect(fetchFn).not.toHaveBeenCalled();
   });
 });

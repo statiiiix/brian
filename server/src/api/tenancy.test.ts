@@ -4,7 +4,7 @@ import { testClient } from "../test/http.js";
 import { pool } from "../db/pool.js";
 import { runMigrations } from "../db/migrate.js";
 import { runTenant, FOUNDING_TENANT_ID } from "../db/tenant.js";
-import { createSkill } from "../skills/repo.js";
+import { createSkill, setStatus } from "../skills/repo.js";
 import { ensureToken } from "../auth/apiTokens.js";
 import type { NewSkill } from "../skills/types.js";
 
@@ -40,9 +40,20 @@ d("tenant isolation via the HTTP guard", () => {
       "insert into tenants (id, name, slug) values ($1,'Acme','__tenancy-acme') on conflict (id) do nothing",
       [ACME],
     );
-    await ensureToken(ACME, ACME_TOKEN, "__tenancy acme");
-    foundingSkillId = (await runTenant(FOUNDING_TENANT_ID, () => createSkill(newSkill("__tenancy-founding")))).id;
-    acmeSkillId = (await runTenant(ACME, () => createSkill(newSkill("__tenancy-acme")))).id;
+    await ensureToken(
+      ACME,
+      ACME_TOKEN,
+      "__tenancy acme",
+      new Date(Date.now() + 60 * 60 * 1000),
+    );
+    foundingSkillId = (await runTenant(FOUNDING_TENANT_ID, async () => {
+      const skill = await createSkill(newSkill("__tenancy-founding"));
+      return setStatus(skill.id, "active");
+    })).id;
+    acmeSkillId = (await runTenant(ACME, async () => {
+      const skill = await createSkill(newSkill("__tenancy-acme"));
+      return setStatus(skill.id, "active");
+    })).id;
     await app.ready();
   });
 
@@ -52,31 +63,29 @@ d("tenant isolation via the HTTP guard", () => {
     await pool.end();
   });
 
-  it("a founding-token request sees founding skills, never acme's", async () => {
+  it("a founding agent token resolves only founding knowledge", async () => {
     const res = await app.inject({
-      method: "GET", url: "/api/skills",
+      method: "POST", url: "/api/agent/briefing", payload: { query: "tenant skill" },
       headers: { authorization: `Bearer ${FOUNDING_TOKEN}` },
     });
     expect(res.statusCode).toBe(200);
-    const ids = (res.json() as { id: string }[]).map((s) => s.id);
-    expect(ids).toContain(foundingSkillId);
-    expect(ids).not.toContain(acmeSkillId);
+    expect(res.json().skill?.id).toBe(foundingSkillId);
+    expect(res.json().skill?.id).not.toBe(acmeSkillId);
   });
 
-  it("an acme-token request sees acme skills, never founding's", async () => {
+  it("an acme agent token resolves only acme knowledge", async () => {
     const res = await app.inject({
-      method: "GET", url: "/api/skills",
+      method: "POST", url: "/api/agent/briefing", payload: { query: "tenant skill" },
       headers: { authorization: `Bearer ${ACME_TOKEN}` },
     });
     expect(res.statusCode).toBe(200);
-    const ids = (res.json() as { id: string }[]).map((s) => s.id);
-    expect(ids).toContain(acmeSkillId);
-    expect(ids).not.toContain(foundingSkillId);
+    expect(res.json().skill?.id).toBe(acmeSkillId);
+    expect(res.json().skill?.id).not.toBe(foundingSkillId);
   });
 
   it("rejects an unknown bearer", async () => {
     const res = await app.inject({
-      method: "GET", url: "/api/skills",
+      method: "POST", url: "/api/agent/briefing", payload: { query: "tenant skill" },
       headers: { authorization: "Bearer not-a-real-token" },
     });
     expect(res.statusCode).toBe(401);

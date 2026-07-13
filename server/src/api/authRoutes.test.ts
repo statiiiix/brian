@@ -14,13 +14,38 @@ import { testClient } from "../test/http.js";
 const d = process.env.TEST_DATABASE_URL ? describe : describe.skip;
 
 d("auth routes + dual-mode guard", () => {
+  const FOUNDING_TENANT = "00000000-0000-0000-0000-000000000001";
+  let founderId: string;
+
   beforeAll(async () => {
     await runMigrations(pool);
-    await upsertUser({ email: "founder@test.io", password: "hunter22", name: "Founder" });
+    const founder = await upsertUser({ email: "founder@test.io", password: "hunter22", name: "Founder" });
+    founderId = founder.id;
+    // Since migration 010 the dashboard is fail-closed on memberships: a
+    // legacy JWT is honored only when its user id has an active membership
+    // (mirroring the trusted founding-user backfill). Seed that link here.
+    await pool.query(
+      "insert into brian_auth_users_test(id,email) values ($1,'founder@test.io') on conflict (id) do nothing",
+      [founderId],
+    );
+    await pool.query(
+      `insert into tenant_memberships(tenant_id,user_id,role,status,is_default)
+         values ($1,$2,'owner','active',true)
+       on conflict (tenant_id,user_id) do update set role='owner', status='active'`,
+      [FOUNDING_TENANT, founderId],
+    );
   });
-  afterAll(async () => { await pool.end(); });
+  afterAll(async () => {
+    await pool.query("delete from tenant_memberships where user_id=$1", [founderId]);
+    await pool.query("delete from brian_auth_users_test where id=$1", [founderId]);
+    await pool.end();
+  });
 
-  const app = () => testClient(buildApp({ authToken: "static-tok", jwtSecret: "jwt-secret" }));
+  const app = () => testClient(buildApp({
+    authToken: "static-tok",
+    jwtSecret: "jwt-secret",
+    legacyPasswordLoginEnabled: true,
+  }));
 
   it("logs in with correct credentials and rejects wrong ones", async () => {
     const a = app();
@@ -36,7 +61,7 @@ d("auth routes + dual-mode guard", () => {
     await a.close();
   });
 
-  it("JWT works on /api routes; /me returns the user; static token still works", async () => {
+  it("human JWT works on dashboard routes while the static agent token is rejected there", async () => {
     const a = app();
     const login = await a.inject({ method: "POST", url: "/api/auth/login",
       payload: { email: "founder@test.io", password: "hunter22" } });
@@ -52,7 +77,7 @@ d("auth routes + dual-mode guard", () => {
 
     const viaStatic = await a.inject({ method: "GET", url: "/api/skills",
       headers: { authorization: "Bearer static-tok" } });
-    expect(viaStatic.statusCode).toBe(200);
+    expect(viaStatic.statusCode).toBe(401);
 
     const meStatic = await a.inject({ method: "GET", url: "/api/auth/me",
       headers: { authorization: "Bearer static-tok" } });

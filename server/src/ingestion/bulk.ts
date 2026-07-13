@@ -1,5 +1,4 @@
-import type pg from "pg";
-import { pool as defaultPool } from "../db/pool.js";
+import type { TenantTransactionSource } from "../db/tenant.js";
 import { capture, type CaptureResult } from "./capture.js";
 import type { LlmClient } from "../llm/complete.js";
 
@@ -7,7 +6,7 @@ export interface BulkDoc { source: string; text: string }
 export interface BulkResult { source: string; ok: boolean; result?: CaptureResult; error?: string }
 
 export async function ingestBulk(
-  docs: BulkDoc[], llm?: LlmClient, p: pg.Pool = defaultPool
+  docs: BulkDoc[], llm?: LlmClient, p?: TenantTransactionSource,
 ): Promise<BulkResult[]> {
   const out: BulkResult[] = [];
   for (const doc of docs) {

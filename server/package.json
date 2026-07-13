@@ -19,6 +19,8 @@
     "onboard": "node scripts/onboard/onboard.mjs",
     "sync": "tsx src/scripts/syncCli.ts",
     "edge:build": "node scripts/edge-build.mjs",
+    "smoke:mcp-oauth": "node scripts/smoke-mcp-oauth.mjs",
+    "privacy:maintain": "tsx src/privacy/maintenanceCli.ts",
     "seed:supabase-admin": "tsx src/scripts/seedSupabaseAdmin.ts"
   },
   "dependencies": {
@@ -27,6 +29,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "bcryptjs": "^3.0.3",
     "hono": "^4.12.28",
+    "jose": "6.2.3",
     "jsonwebtoken": "^9.0.3",
     "openai": "^6.7.0",
     "pg": "^8.16.0",

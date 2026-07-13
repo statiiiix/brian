@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+const CANONICAL_MCP_URL = "https://api.brianthebrain.app/mcp";
+
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../scripts/onboard/onboard.mjs",
@@ -33,33 +35,35 @@ async function cursorHome(prefix: string, mcp = '{"mcpServers":{}}') {
 }
 
 describe("onboard CLI", () => {
-  it("--dry-run detects platforms but writes nothing", async () => {
+  it("legacy --dry-run shorthand delegates to the public CLI without writing", async () => {
     const home = await cursorHome("ob-");
-    const { code, stdout } = await run(["--dry-run"], home);
+    const { code, stdout, stderr } = await run(["--dry-run"], home);
     expect(code).toBe(0);
     expect(stdout.toLowerCase()).toContain("cursor");
+    expect(stderr).toContain("compatibility alias");
     const m = JSON.parse(await readFile(path.join(home, ".cursor", "mcp.json"), "utf8"));
     expect(m.mcpServers.brian).toBeUndefined(); // nothing written
   });
 
-  it("--yes applies, and a later --status reports wired", async () => {
+  it("legacy --yes applies the canonical OAuth URL, and --status reports connected", async () => {
     const home = await cursorHome("ob-");
     const applied = await run(["--yes", "--only", "cursor"], home);
     expect(applied.code).toBe(0);
     const m = JSON.parse(await readFile(path.join(home, ".cursor", "mcp.json"), "utf8"));
-    expect(m.mcpServers.brian).toBeTruthy();
+    expect(m.mcpServers.brian).toEqual({ type: "http", url: CANONICAL_MCP_URL });
+    expect(m.mcpServers.brian.headers).toBeUndefined();
     const status = await run(["--status", "--only", "cursor"], home);
-    expect(status.stdout).toMatch(/cursor.*wired/i);
+    expect(status.stdout).toMatch(/cursor[\s\S]*connected/i);
   });
 
-  it("exits 1 and reports the refusal when a detected config is unparseable", async () => {
+  it("exits 1 and reports the refusal when a detected config is malformed", async () => {
     const home = await cursorHome("ob-", "{broken");
     const { code, stdout } = await run(["--yes", "--only", "cursor"], home);
     expect(code).toBe(1);
-    expect(stdout.toLowerCase()).toContain("unparseable");
+    expect(stdout.toLowerCase()).toContain("malformed json");
   });
 
-  it("--status shows a table with all platforms and detection state", async () => {
+  it("--status preserves the legacy shorthand and inspects all public platforms", async () => {
     const home = await cursorHome("ob-");
     const { code, stdout } = await run(["--status"], home);
     expect(code).toBe(0);
@@ -68,17 +72,37 @@ describe("onboard CLI", () => {
     expect(stdout.toLowerCase()).toContain("detected");
   });
 
-  it("--only with an unknown platform detects nothing (exit 0)", async () => {
+  it("uses the public CLI's strict client-name validation", async () => {
     const home = await cursorHome("ob-");
-    const { code, stdout } = await run(["--yes", "--only", "nope"], home);
-    expect(code).toBe(0);
-    expect(stdout.toLowerCase()).toContain("no supported");
+    const { code, stderr } = await run(["--yes", "--only", "nope"], home);
+    expect(code).toBe(2);
+    expect(stderr).toContain("unknown client name");
   });
 
-  it("--url without --token errors with exit 2", async () => {
+  it("retires remote static-token flags before delegation and never echoes the secret", async () => {
     const home = await cursorHome("ob-");
-    const { code, stderr } = await run(["--yes", "--url", "https://x.example.com"], home);
+    const secret = "legacy-secret-must-not-leak";
+    const { code, stdout, stderr } = await run([
+      "--yes",
+      "--url",
+      "https://x.example.com",
+      "--token",
+      secret,
+    ], home);
     expect(code).toBe(2);
-    expect(stderr.toLowerCase()).toContain("token");
+    expect(stderr).toContain("hosted OAuth flow");
+    expect(`${stdout}${stderr}`).not.toContain(secret);
+    const m = JSON.parse(await readFile(path.join(home, ".cursor", "mcp.json"), "utf8"));
+    expect(m.mcpServers.brian).toBeUndefined();
+  });
+
+  it("passes explicit public CLI commands through and keeps JSON stdout parseable", async () => {
+    const home = await cursorHome("ob-");
+    const { code, stdout, stderr } = await run(["status", "--only", "cursor", "--json"], home);
+    expect(code).toBe(0);
+    expect(stderr).toContain("compatibility alias");
+    const result = JSON.parse(stdout);
+    expect(result.command).toBe("status");
+    expect(result.canonicalMcpUrl).toBe(CANONICAL_MCP_URL);
   });
 });

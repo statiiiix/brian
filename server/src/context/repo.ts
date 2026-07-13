@@ -1,6 +1,7 @@
-import type pg from "pg";
-import { pool as defaultPool } from "../db/pool.js";
-import { db, tenantOrFounding, type Queryable } from "../db/tenant.js";
+import {
+  db, tenantOrFounding, withTenantTransaction,
+  type Queryable, type TenantTransactionSource,
+} from "../db/tenant.js";
 import { embed } from "../db/embed.js";
 import { toVectorLiteral } from "../db/vector.js";
 import { NotFoundError } from "../skills/repo.js";
@@ -68,14 +69,10 @@ export async function listContextVersions(id: string, p: Queryable = db()): Prom
 }
 
 export async function updateContext(
-  id: string, patch: Partial<NewContext>, changedBy: string | null, p: pg.Pool = defaultPool
+  id: string, patch: Partial<NewContext>, changedBy: string | null, p?: TenantTransactionSource,
 ): Promise<ContextEntry> {
   const tenant = tenantOrFounding();
-  const client = await p.connect();
-  try {
-    await client.query("begin");
-    // RLS backstop: bind the tenant for this transaction (tenant_isolation, 007).
-    await client.query("select set_config('app.tenant_id', $1, true)", [tenant]);
+  return withTenantTransaction(async (client) => {
     const { rows: curRows } = await client.query(
       `select ${COLUMNS} from context_entries where id=$1 and tenant_id=$2`, [id, tenant]);
     if (!curRows[0]) throw new NotFoundError(id);
@@ -91,14 +88,8 @@ export async function updateContext(
          version=version+1, updated_at=now(), embedding = coalesce($7::vector, embedding)
        where id=$1 and tenant_id=$8 returning ${COLUMNS}`,
       [id, next.content, next.summary, JSON.stringify(next.tags), next.source, next.owner, vec, tenant]);
-    await client.query("commit");
     return rowToContext(rows[0]);
-  } catch (e) {
-    await client.query("rollback");
-    throw e;
-  } finally {
-    client.release();
-  }
+  }, p);
 }
 
 export async function retireContext(id: string, p: Queryable = db()): Promise<ContextEntry> {

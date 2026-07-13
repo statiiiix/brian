@@ -1,6 +1,7 @@
-import type pg from "pg";
-import { pool as defaultPool } from "../db/pool.js";
-import { db, tenantOrFounding, type Queryable } from "../db/tenant.js";
+import {
+  db, tenantOrFounding, withTenantTransaction,
+  type Queryable, type TenantTransactionSource,
+} from "../db/tenant.js";
 import { embed } from "../db/embed.js";
 import { toVectorLiteral } from "../db/vector.js";
 import type { NewSkill, Skill, SkillStatus, SkillVersion } from "./types.js";
@@ -102,14 +103,10 @@ export async function updateSkill(
   id: string,
   patch: Partial<NewSkill>,
   changedBy: string | null,
-  p: pg.Pool = defaultPool
+  p?: TenantTransactionSource,
 ): Promise<Skill> {
   const tenant = tenantOrFounding();
-  const client = await p.connect();
-  try {
-    await client.query("begin");
-    // RLS backstop: bind the tenant for this transaction (tenant_isolation, 007).
-    await client.query("select set_config('app.tenant_id', $1, true)", [tenant]);
+  return withTenantTransaction(async (client) => {
     const { rows: curRows } = await client.query(
       `select ${SKILL_COLUMNS} from skills where id = $1 and tenant_id = $2`,
       [id, tenant]
@@ -144,14 +141,8 @@ export async function updateSkill(
         JSON.stringify(next.examples), next.owner, vec, tenant,
       ]
     );
-    await client.query("commit");
     return rowToSkill(rows[0]);
-  } catch (e) {
-    await client.query("rollback");
-    throw e;
-  } finally {
-    client.release();
-  }
+  }, p);
 }
 
 export async function setStatus(

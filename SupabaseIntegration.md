@@ -1,236 +1,119 @@
-# Supabase Integration — how Brian serves many companies from one brain
+# Supabase integration — implemented multi-tenant and OAuth architecture
 
-> Design doc for taking Brian from "one company's brain on the founder's
-> machine" to "hosted product where every client company has its own set of
-> skills, context, users, and agents." Companion to `CompanyBrain.md` (product)
-> and `docs/superpowers/specs/2026-07-04-brian-onboard-design.md` (client-side
-> onboarding). Nothing here is built yet; this is the agreed target.
+> Updated: 2026-07-13
+> Status: migrations and application code are implemented locally. Migrations 010-014, OAuth provider configuration, branded-domain routing, and the non-owner production runtime still require staging and production deployment.
 
----
+## 1. Architecture
 
-## 1. Where we are today (facts, not plans)
+Brian uses one Supabase/Postgres project with shared tenant-owned tables. Every owned row has `tenant_id`; every repository query has an explicit tenant predicate; RLS uses transaction-local `app.tenant_id` as a backstop. Enterprise dedicated projects remain possible later because the same migrations are replayable.
 
-- Supabase project **brian** (ref `foydcrwyakpkisxtvzgr`), Postgres 17 +
-  pgvector. One tenant: us. Tables: `skills`, `skill_versions`,
-  `context_entries`, `context_versions`, `executions`, `users`, `interviews`.
-- Embeddings are `vector(1536)` columns (`text-embedding-3-small`) on `skills`
-  and `context_entries`, searched with HNSW indexes (migration `003_hnsw.sql`).
-- RLS is *enabled* on every table but not *doing* anything: the backend
-  connects as the `postgres` owner role, which bypasses RLS.
-- Two auth planes, both custom: humans log into the dashboard with
-  bcrypt+JWT (`server/src/auth/`); agents hit `/api/*` and `POST /mcp` with a
-  single static bearer `BRIAN_API_TOKEN`.
-- The MCP server (stdio locally, Streamable HTTP at `POST /mcp`) is the whole
-  integration surface for agents.
+The browser talks directly to Supabase only for Auth/OAuth session lifecycle. All company data goes through Brian's Hono API. Supabase authenticates humans and runs the OAuth 2.1 authorization server; Brian remains authoritative for tenants, memberships, roles, agent grants, permissions, and revocation.
 
-## 2. The core decision: how client data is separated
+## 2. Migration history
 
-The question "does each client get their own vector table?" has four possible
-answers. Comparison:
+| Migration | Purpose |
+|---|---|
+| 005 | Tenants, legacy hashed API tokens, `tenant_id` backfill |
+| 006-009 | Tenant-owned connectors/evidence, RLS backstop, owner-only config, connector OAuth state |
+| 010 | Memberships, invitations, agent connections, audit events, onboarding, ownership/permission constraints, RLS/grants |
+| 011 | Supabase Auth provisioning trigger, trusted founder backfill, public-signup gate, identity report |
+| 012 | Narrow principal/invitation resolvers and custom MCP access-token hook |
+| 013 | Legacy-token expiry/usage tracking, narrow resolution, migration report, retirement controls |
+| 014 | Account/company deletion lifecycle, creator attribution, immediate revocation, retention support |
 
-| Model | Isolation | Ops cost | Verdict |
-|---|---|---|---|
-| **Supabase project per client** | Strongest (separate DB, keys, region) | New project, migrations, monitoring, billing *per client*; no cross-client queries; onboarding stops being one command | Only as a paid "dedicated" tier for enterprise, later |
-| **Postgres schema per client** | Strong-ish | Migrations × N schemas, connection search_path juggling, pgvector indexes × N; we already learned migrations must stay convergent — multiplying them is asking for drift | No |
-| **Table per client** (`skills_acme`, …) | Weak, messy | Dynamic SQL everywhere, no FK sanity, index sprawl | No |
-| **Shared tables + `tenant_id` + RLS** | Good (enforced in the DB, not just app code) | One set of migrations, one set of indexes, one query path; standard Postgres multi-tenancy | **Yes — this is the design** |
+Migrations are convergent and schema-aware: tests substitute a schema-local Auth users table; production binds the trigger to `auth.users`. A session advisory lock serializes the complete ordered replay so concurrent deploys cannot interleave files.
 
-**Decision: shared tables, a `tenant_id` column on every tenant-owned table,
-and RLS policies that make cross-tenant reads impossible at the database
-layer.** No per-client vector tables. A client's "set of skills" is simply
-`skills where tenant_id = <their id>`, versioned and vector-indexed exactly as
-today.
+## 3. Human identity and company provisioning
 
-When a future enterprise client demands physical isolation, we spin them a
-dedicated Supabase project running the *same* migrations — the shared-schema
-design degrades gracefully into model 1 because nothing in the code assumes
-single-tenancy once `tenant_id` exists.
+Dashboard tokens must have the exact Supabase issuer, expected `authenticated` audience, no OAuth `client_id`, and no Brian MCP token type. Brian refetches `/auth/v1/user`, then resolves an active default `tenant_memberships` row. A valid identity with no membership fails `403`; it never falls back to the founding tenant.
 
-## 3. Data model changes (migration `005_tenants.sql`)
+Self-signup is disabled by default in `app_config`. When enabled, the Auth trigger accepts only printable `company_name` user metadata, creates a collision-safe tenant, owner membership, onboarding state, and audit event. User-provided tenant/role/admin metadata is ignored. Trusted backfills use server-controlled `raw_app_meta_data` only.
 
-New tables:
+Invitations contain a random token but store only its hash. Before Auth signup, a rate-limited boolean-only preflight binds the token to the submitted email without returning tenant or role data. Tenant, role, expiry, revocation, and single-use status still come exclusively from the database row. Invalid invitation possession raises an error instead of silently creating a new company.
+
+## 4. MCP OAuth
+
+The stable protected resource is `https://api.brianthebrain.app/mcp`. Both RFC 9728 metadata locations and the unauthenticated Bearer challenge point clients to Supabase's authorization server. Clients use authorization code + PKCE and must bind the exact resource in authorization and token exchange.
+
+Brian's consent screen refetches verified client details from Supabase, selects an active membership, explains permissions, and prepares a short-lived pending `agent_connections` grant. Supabase's custom access-token hook activates an unambiguous grant and writes exact tenant, role, permission, connection, audience/resource, and MCP token-type claims.
+
+The resource server verifies an ES256/RS256 JWKS signature and exact token contract, then calls `resolve_mcp_principal`. Claims must exactly equal the current active grant/membership. This live lookup makes revocation or suspension immediate.
+
+Supabase currently documents standard identity scopes; Brian advertises `email`. Brian capabilities are stored and enforced separately (`skills:read`, `context:read`, `knowledge:write`, `executions:write`, `actions:execute`).
+
+Detailed protocol behavior is in [docs/mcp-oauth.md](docs/mcp-oauth.md), and the rationale is in [docs/architecture/mcp-auth.md](docs/architecture/mcp-auth.md).
+
+## 5. Database enforcement
+
+The application must connect as `brian_app`, which is not a table owner and has no `BYPASSRLS`. Migration execution remains an owner operation. `db()` runs tenant-owned work in a transaction and applies:
 
 ```sql
-create table tenants (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null,
-  slug        text not null unique,          -- 'acme'
-  status      text not null default 'active',-- active | suspended
-  created_at  timestamptz not null default now()
-);
-
--- Agent credentials. One or more per tenant (per environment / per agent
--- platform), revocable independently. Only a hash is stored; the plaintext
--- token is shown once at creation.
-create table api_tokens (
-  id          uuid primary key default gen_random_uuid(),
-  tenant_id   uuid not null references tenants(id),
-  token_hash  text not null unique,          -- sha256 of the bearer token
-  label       text not null,                 -- 'prod claude-code', 'codex laptop'
-  created_at  timestamptz not null default now(),
-  revoked_at  timestamptz
-);
+set local app.user_id = '<verified subject>';
+set local app.tenant_id = '<resolved tenant>';
 ```
 
-Changes to existing tables: add `tenant_id uuid not null references
-tenants(id)` to `skills`, `skill_versions`, `context_entries`,
-`context_versions`, `executions`, `interviews`, and `users`; backfill
-everything to a founding tenant (`slug 'sameh'`) in the same migration;
-add `(tenant_id)` to the natural lookup indexes. Uniqueness constraints
-become per-tenant (e.g. skill names, user emails → unique on
-`(tenant_id, email)`).
+Only fixed-search-path security-definer functions can look up identity before tenant binding. They validate `app.user_id` and are executable only by their intended runtime role. Broad `using (true)` pre-tenant policies are removed.
 
-Migration stays convergent (re-runnable), matching the existing 001–004
-convention.
+Running the Edge/API as `postgres` or a service/table-owner role bypasses RLS and blocks release, even though explicit predicates remain.
 
-## 4. Vector search per client
+## 6. Runtime configuration
 
-- **No separate vector tables or indexes per client.** The existing HNSW
-  indexes stay global; queries gain `and tenant_id = $tenant`.
-- Filtered ANN search is the one real technical caveat: an HNSW scan that
-  post-filters by tenant can return fewer than k results. pgvector ≥ 0.8
-  mitigates this with iterative index scans, and — more importantly — our
-  scale makes it a non-issue: a client's skill library is hundreds of rows,
-  not millions. `find_skill` is top-1/top-3 over a few hundred candidates;
-  even an exact (sequential) scan per tenant would be milliseconds.
-- Lesson from brian-bench stays in force: never trust a vector index created
-  on an empty table (the ivfflat 12.5% incident). Any index change reruns
-  `npm run bench` before going live.
-- Escape hatch if a giant tenant ever appears: per-tenant **partial** HNSW
-  indexes (`create index ... where tenant_id = '...'`) are additive and need
-  no schema change.
-- Embedding *generation* is unchanged (OpenAI `text-embedding-3-small`,
-  1536 dims). Embeddings are derived data; per-tenant encryption of vectors is
-  explicitly out of scope (they live in the same Postgres as the source text).
+Frontend:
 
-## 5. Authentication: two planes, two mechanisms
-
-### 5a. Humans (dashboard) → Supabase Auth
-
-Replace the custom bcrypt+JWT stack with **Supabase Auth**:
-
-- Clients' experts and admins sign in with email/password or magic link
-  (Google OAuth is a checkbox later). Supabase handles password storage,
-  reset flows, MFA — code we should not own.
-- Each auth user carries `tenant_id` and `role` (`admin` | `expert`) in
-  `app_metadata` (set server-side at invite time, not user-editable).
-  The dashboard sends the Supabase JWT to our Fastify API exactly as it sends
-  the custom JWT today; the API verifies it with the project's JWT secret and
-  reads tenant + role from claims. `src/auth/` shrinks to claim verification.
-- Our `users` table remains as the app-level profile (name, role display,
-  interview authorship) keyed by the Supabase auth user id, with `tenant_id`.
-- Migration path: the two existing accounts (founder admin + any test user)
-  are recreated via `supabase.auth.admin.createUser` with the founding
-  tenant's metadata; `npm run seed:admin` is rewritten to do that; the
-  bcrypt path is deleted, not maintained in parallel.
-- Invites: an admin invites an expert by email → Supabase invite email →
-  first login lands in the interview dashboard. This replaces "shareable
-  interview links" from the old follow-up list.
-
-### 5b. Agents (MCP + REST) → per-tenant API tokens
-
-Agents cannot do interactive OAuth, and MCP clients speak "bearer token".
-So agents keep static bearers — but scoped and revocable:
-
-- `POST /mcp` and `/api/*` accept `Authorization: Bearer <token>`; the guard
-  hashes the presented token (sha256), looks it up in `api_tokens`
-  (`revoked_at is null`, tenant `active`), and resolves the **tenant** for the
-  request. Constant-time compare concerns disappear because we compare hashes
-  via unique index lookup.
-- The single global `BRIAN_API_TOKEN` becomes just the founding tenant's first
-  row in `api_tokens` (kept working through the migration), then is retired
-  from `.env`.
-- Tokens are minted per client *and per surface* ("acme — claude-code prod",
-  "acme — codex laptop") so one leaked laptop doesn't rotate the whole
-  company. Admin UI: a "Agents & tokens" page in the dashboard (create,
-  label, revoke; plaintext shown once).
-- The `brian onboard` installer takes exactly this token (`--url --token`) —
-  the client-side story is already built for this.
-
-## 6. How it combines with MCP (request flow)
-
-Nothing about the MCP *protocol* surface changes — same tools, same
-instructions, same briefing endpoint. What changes is that every request now
-knows its tenant:
-
-```
-Agent (any client company, any platform)
-  │  POST https://api.brian.app/mcp        Authorization: Bearer <acme token>
-  ▼
-Fastify guard: sha256(token) → api_tokens → tenant_id = acme, role = agent
-  ▼
-per-request DB context:  SET LOCAL app.tenant_id = '<acme uuid>'
-  ▼
-MCP tool handlers (find_skill / find_context / capture / log_execution / …)
-  — repo functions add `tenant_id = current_setting('app.tenant_id')::uuid`
-  ▼
-RLS (second line of defense, §7) — even a buggy query cannot cross tenants
+```text
+REACT_APP_SUPABASE_URL
+REACT_APP_SUPABASE_PUBLISHABLE_KEY (or legacy REACT_APP_SUPABASE_ANON_KEY)
+REACT_APP_TURNSTILE_SITE_KEY
+REACT_APP_BRIAN_MCP_URL=https://api.brianthebrain.app/mcp
+REACT_APP_SITE_URL=https://brianthebrain.app
 ```
 
-- `find_skill("customer wants a refund")` from an Acme agent searches only
-  Acme's vectors; the same call from a Globex agent searches only Globex's.
-  Same server, same table, zero shared results.
-- `capture` and `log_execution` write with the request's tenant_id — each
-  client's brain learns only from its own agents.
-- The MCP `instructions` blob and the agent contract remain tenant-neutral
-  (they contain no company data), so onboarding artifacts on client machines
-  never need updating when server-side data changes.
-- **stdio MCP** (`npm run mcp`) stays for development and self-hosted
-  single-tenant use; it pins the founding tenant via env
-  (`BRIAN_TENANT=sameh`). Hosted clients use Streamable HTTP only.
-- The hooks briefing endpoint (`POST /api/agent/briefing`) is tenant-scoped
-  by the same guard — client machines already send the bearer token.
+API/Edge:
 
-## 7. What RLS actually enforces (and what changes)
-
-Today RLS is decorative (owner role bypasses it). Multi-tenant flips that:
-
-- The backend connects as a dedicated **non-owner role** (`brian_app`) with
-  RLS in force. Migrations keep running as `postgres`.
-- Policy pattern on every tenant-owned table:
-
-```sql
-create policy tenant_isolation on skills
-  using (tenant_id = current_setting('app.tenant_id', true)::uuid);
+```text
+SUPABASE_URL
+SUPABASE_ANON_KEY
+SUPABASE_DB_URL or DATABASE_URL   # must authenticate as brian_app in production
+BRIAN_APP_URL=https://brianthebrain.app
+BRIAN_ALLOWED_RETURN_ORIGINS      # comma-separated additional trusted origins
+MCP_OAUTH_ENABLED=true
+MCP_OAUTH_APPROVALS_ENABLED=false # fail closed until the staging OAuth flow passes
+MCP_DCR_ENABLED=false             # marker only; Supabase is the enforcement boundary
+CLI_OAUTH_BRIDGE_ENABLED=false    # v1 CLI ships no credential bridge
+LEGACY_AGENT_TOKENS_ENABLED=true  # migration only
+PUBLIC_SIGNUP_ENABLED=false       # UI/API marker; DB app_config gate also stays false
+SIGNUP_PREFLIGHT_RATE_LIMIT_ENABLED=true
+BRIAN_DELETION_GRACE_DAYS=30
+SECURITY_AUDIT_RETENTION_DAYS=365
+EXECUTION_LOG_RETENTION_DAYS=180
 ```
 
-- The guard sets `app.tenant_id` with `SET LOCAL` inside the request's
-  transaction (pool-safe: it dies with the transaction).
-- Result: tenant scoping is enforced twice — explicitly in repo SQL (for
-  correctness and index use) and by RLS (so a forgotten `where` clause is a
-  bug, not a breach).
-- Supabase client-side keys (`anon`, `service_role`) stay unused by the
-  dashboard: all data access continues to go through our Fastify API. Supabase
-  Auth is the only Supabase product the browser talks to directly. This keeps
-  one authorization code path.
+Supabase dashboard configuration:
 
-## 8. Rollout phases
+1. enable OAuth 2.1 in staging;
+2. use an asymmetric ES256/RS256 signing key;
+3. set the Site URL and exact browser callback allowlist;
+4. configure `/oauth/consent` as the authorization path;
+5. select `public.custom_access_token_hook`;
+6. enable/configure Turnstile and Auth rate limits;
+7. control/monitor DCR and unused client registrations;
+8. verify RFC 8707 resource propagation, refresh rotation, revocation, and hook timing before production.
 
-1. **005_tenants migration + token guard** — tenants, api_tokens, tenant_id
-   everywhere, backfill founding tenant, guard resolves tenant from token.
-   All 114 tests updated to create a test tenant. No user-visible change.
-2. **RLS for real** — `brian_app` role, `SET LOCAL`, policies, cross-tenant
-   leak tests (agent A must get NO_MATCHING_SKILL for agent B's skills even
-   with hand-crafted queries).
-3. **Supabase Auth swap** — dashboard login via Supabase, claims-based guard,
-   invite flow, delete bcrypt path.
-4. **Hosted deploy** — the deliberately-deferred cloud step (Fly/Railway for
-   Fastify; DB is already cloud). Token admin UI. First design partner
-   onboarded with `npm run onboard -- --url ... --token ...`.
+## 7. Deployment sequence
 
-Phases 1–2 are safe to build now and don't block anything; 3–4 land when the
-first external design partner is ready.
+1. Back up staging and apply 010-014 as owner using a direct or session-pooler migration URL. The replay holds a PostgreSQL session advisory lock and must not run through a transaction-mode pooler.
+2. Confirm grants to `brian_app` and `supabase_auth_admin`; query the owner-only `identity_membership_report`.
+3. Configure OAuth/asymmetric signing/hook without enabling public signup.
+4. Deploy the API/Edge bundle with the non-owner database credential and branded proxy.
+5. Run the full database/security suite and two-tenant live isolation test.
+6. Complete the dated client compatibility matrix, including expiry/refresh and revocation.
+7. Configure reviewed legal pages, CAPTCHA, gateway/provider rate limits, monitoring/alerts, scheduled privacy maintenance, and runbook ownership.
+8. Set `MCP_OAUTH_APPROVALS_ENABLED=true` only after the staging consent/token smoke passes.
+9. Enable the database `PUBLIC_SIGNUP_ENABLED` value, then the visible product rollout.
+10. Migrate existing static-token clients, measure last use, and set `LEGACY_AGENT_TOKENS_ENABLED=false` after the rollback window.
 
-## 9. Open questions (genuinely open, need a decision later)
+## 8. Current external facts and gates
 
-- **Region/residency:** current project is `eu-central-1`; fine for EU
-  partners, a US-heavy pipeline might want a US project (model 1 makes this a
-  per-client choice later).
-- **Supabase Auth vs keeping custom JWT:** decided above (Supabase Auth), but
-  revisit if a design partner demands SSO/SAML before Supabase's offering
-  fits the price we can pay.
-- **Billing/limits per tenant:** executions and capture calls are already
-  logged per tenant after phase 1 — pricing metering can hang off
-  `executions` later; not designed here.
-- **Realtime:** Supabase Realtime could push review-queue badges to the
-  dashboard; nice-to-have, not part of this design.
+As checked on 2026-07-13, the live Supabase migration list ends at 009, OAuth discovery reports `feature_disabled`, and the canonical branded API routes return Vercel `DEPLOYMENT_NOT_FOUND`. The deployed Edge artifact predates this working tree. Do not assume 010-014, the custom hook, privacy lifecycle, or current bundle are live merely because they are in Git. The CLI is tarball-tested on the configured CI matrix but is not published. No launch client has completed a real staging OAuth flow in this milestone.
+
+These are deployment/release gates, not reasons to weaken the code. See [docs/security/tenant-isolation.md](docs/security/tenant-isolation.md) and [Nextstep.md](Nextstep.md) for the current checklist.

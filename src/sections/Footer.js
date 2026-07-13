@@ -13,6 +13,7 @@ const columns = [
     title: 'Company',
     links: [
       { label: 'FAQ', href: '#faq' },
+      { label: 'Create account', href: '/signup' },
       { label: 'Log in', href: '/login' },
       { label: 'Contact', href: 'mailto:a7madinquiries@gmail.com' },
     ],

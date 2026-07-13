@@ -1,0 +1,130 @@
+.consent-card {
+  max-width: 37rem;
+}
+
+.consent-client {
+  margin: 0 0 1.35rem;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+
+.consent-client > div {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.consent-client > div:last-child {
+  border-bottom: 0;
+}
+
+.consent-client dt {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.consent-client dd {
+  margin: 0;
+  color: var(--fg-secondary);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.consent-select,
+.consent-company {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  margin: 0 0 1.3rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--fg);
+  font: inherit;
+  padding: 0.65rem 0.8rem;
+}
+
+.consent-company {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.consent-company span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: capitalize;
+}
+
+.consent-permissions {
+  margin: 0.25rem 0 1.25rem;
+}
+
+.consent-permissions h2 {
+  margin: 0 0 0.65rem;
+  font-size: 0.9rem;
+}
+
+.consent-permissions article {
+  display: flex;
+  gap: 0.7rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.consent-permissions article > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: rgba(28, 148, 96, 0.12);
+  color: #14704a;
+  font-size: 0.72rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.consent-permissions article.is-sensitive > span {
+  background: rgba(209, 82, 26, 0.12);
+  color: var(--accent-text);
+}
+
+.consent-permissions strong {
+  display: block;
+  font-size: 0.84rem;
+}
+
+.consent-permissions p {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.consent-actions {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 0.75rem;
+}
+
+.consent-actions .login-secondary,
+.consent-actions .login-submit {
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .consent-client > div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .consent-actions {
+    grid-template-columns: 1fr;
+  }
+}

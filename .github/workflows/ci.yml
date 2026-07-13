@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test -- --watchAll=false
+        env:
+          CI: "true"
+      - run: npm run build
+        env:
+          CI: "true"
+
+  server:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.2-pg17
+        env:
+          POSTGRES_DB: brian
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/brian?options=-c%20search_path%3Dtest%2Cpublic
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/brian?options=-c%20search_path%3Dtest%2Cpublic
+      APP_TEST_DATABASE_URL: postgresql://brian_app:brian_app_test@localhost:5432/brian?options=-c%20search_path%3Dtest%2Cpublic
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Verify the generated Edge artifact is current
+        run: |
+          npm run edge:build
+          git diff --exit-code -- ../supabase/functions/brian/index.js ../supabase/functions/brian/deno.json
+      - name: Create the isolated database test schema
+        run: psql "$DATABASE_URL" --set ON_ERROR_STOP=1 --command "create schema if not exists test"
+      - run: npm run migrate
+      - name: Configure the non-owner RLS test login
+        run: psql "$DATABASE_URL" --set ON_ERROR_STOP=1 --command "alter role brian_app login password 'brian_app_test'"
+      - run: npm test -- --maxWorkers=1
+
+  cli-linux:
+    name: CLI / Linux x64 / Node ${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24, 26]
+    defaults:
+      run:
+        working-directory: packages/cli
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: packages/cli/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run check
+      - run: npm pack --dry-run
+      - name: Install the packed binary in a clean prefix
+        if: matrix.node == 24
+        run: |
+          tarball="$(npm pack --silent)"
+          smoke="$RUNNER_TEMP/brian-cli-smoke"
+          mkdir -p "$smoke"
+          npm install --ignore-scripts --no-audit --no-fund --prefix "$smoke" "./$tarball"
+          "$smoke/node_modules/.bin/brian" --version
+
+  cli-macos:
+    name: CLI / ${{ matrix.arch }} / Node 22
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: macOS arm64
+          - runner: macos-15-intel
+            arch: macOS x64
+    defaults:
+      run:
+        working-directory: packages/cli
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: packages/cli/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run check
+      - run: npm pack --dry-run
+      - name: Install the packed binary in a clean prefix
+        run: |
+          tarball="$(npm pack --silent)"
+          smoke="$RUNNER_TEMP/brian-cli-smoke"
+          mkdir -p "$smoke"
+          npm install --ignore-scripts --no-audit --no-fund --prefix "$smoke" "./$tarball"
+          "$smoke/node_modules/.bin/brian" --version

@@ -1,6 +1,5 @@
 import { z } from "zod";
-import type pg from "pg";
-import { pool as defaultPool } from "../db/pool.js";
+import { withTenantTransaction, type TenantTransactionSource } from "../db/tenant.js";
 import { defaultLlm, type LlmClient } from "../llm/complete.js";
 import { INTERVIEW_TURN_JSON_SCHEMA } from "../llm/schemas.js";
 import { parseNewSkill } from "../skills/validation.js";
@@ -47,7 +46,7 @@ function buildUser(iv: Interview, forceFinish: boolean): string {
 }
 
 export async function runTurn(
-  iv: Interview, llm: LlmClient = defaultLlm(), p: pg.Pool = defaultPool
+  iv: Interview, llm: LlmClient = defaultLlm(), p?: TenantTransactionSource,
 ): Promise<Interview> {
   const questionsAsked = iv.messages.filter((m) => m.role === "brian").length;
   const forceFinish = questionsAsked >= MAX_QUESTIONS;
@@ -69,10 +68,15 @@ export async function runTurn(
   if (parsed.status === "ready") {
     const raw = (parsed.draft ?? {}) as Record<string, unknown>;
     const draft = parseNewSkill({ ...raw, owner: raw.owner ?? iv.owner ?? null });
-    return setTurnResult(iv.id, { coverage: parsed.coverage, draft }, p);
+    return withTenantTransaction(
+      (client) => setTurnResult(iv.id, { coverage: parsed!.coverage, draft }, client),
+      p,
+    );
   }
   if (forceFinish) throw new Error("interview exceeded max questions");
   if (!parsed.question) throw new Error("interview turn failed: asking without a question");
-  await setTurnResult(iv.id, { coverage: parsed.coverage }, p);
-  return appendMessage(iv.id, { role: "brian", content: parsed.question }, p);
+  return withTenantTransaction(async (client) => {
+    await setTurnResult(iv.id, { coverage: parsed!.coverage }, client);
+    return appendMessage(iv.id, { role: "brian", content: parsed!.question! }, client);
+  }, p);
 }

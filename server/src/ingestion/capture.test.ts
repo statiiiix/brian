@@ -15,10 +15,13 @@ import { runMigrations } from "../db/migrate.js";
 import { resetDb } from "../test/resetDb.js";
 import { getSkill } from "../skills/repo.js";
 import { capture, type CapturedItem } from "./capture.js";
+import { FOUNDING_TENANT_ID, runPrincipal } from "../db/tenant.js";
+import type { McpPrincipal } from "../auth/principal.js";
 import type { LlmClient } from "../llm/complete.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
+const ACTOR = "14000000-0000-4000-8000-000000000001";
 
 function clientReturning(items: CapturedItem[]): LlmClient {
   return { complete: async () => JSON.stringify(items) };
@@ -29,8 +32,15 @@ const skillBase = { name: "", trigger: "", inputs: [], procedure: "p", hard_rule
 d("capture", () => {
   let pool: pg.Pool;
   beforeAll(async () => { pool = new pg.Pool({ connectionString: url }); await runMigrations(pool); });
-  afterAll(async () => { await pool.end(); });
-  beforeEach(async () => { await resetDb(pool); });
+  afterAll(async () => {
+    await resetDb(pool);
+    await pool.query("delete from brian_auth_users_test where id=$1", [ACTOR]);
+    await pool.end();
+  });
+  beforeEach(async () => {
+    await resetDb(pool);
+    await pool.query("delete from brian_auth_users_test where id=$1", [ACTOR]);
+  });
 
   it("stores a context item active", async () => {
     const c = clientReturning([{ kind: "context", confidence: 0.9, content: "Launch in Q3", summary: "Q3 launch goal", tags: ["goal"] }]);
@@ -65,5 +75,67 @@ d("capture", () => {
     const second = await capture("update launch", c2, pool);
     expect(second.items[0].action).toBe("updated_active");
     expect(second.items[0].id).toBe(first.items[0].id);
+  });
+
+  it("audits captured skill/context creates and updates with actor and connection attribution", async () => {
+    await pool.query(
+      "insert into brian_auth_users_test(id,email) values ($1,'__capture-actor@example.test')",
+      [ACTOR],
+    );
+    const inserted = await pool.query(
+      `insert into agent_connections
+        (tenant_id,user_id,oauth_client_id,client_name,permissions,status,approved_at)
+       values ($1,$2,'capture-audit-client','Capture Audit Client',array['knowledge:write'],'active',now())
+       returning id`,
+      [FOUNDING_TENANT_ID, ACTOR],
+    );
+    const principal: McpPrincipal = {
+      kind: "mcp",
+      tenantId: FOUNDING_TENANT_ID,
+      userId: ACTOR,
+      clientId: "capture-audit-client",
+      connectionId: inserted.rows[0].id,
+      role: "admin",
+      permissions: ["knowledge:write"],
+    };
+
+    const captured = await runPrincipal(principal, async () => {
+      const results = [];
+      results.push(await capture("raw-secret-context-create", clientReturning([
+        { kind: "context", confidence: 0.91, content: "Launch in Q3", summary: "launch goal q3", tags: [] },
+      ]), pool));
+      results.push(await capture("raw-secret-context-update", clientReturning([
+        { kind: "context", confidence: 0.92, content: "Launch moved to Q4", summary: "launch goal q4", tags: [] },
+      ]), pool));
+      results.push(await capture("raw-secret-skill-create", clientReturning([
+        { kind: "skill", confidence: 0.93, skill: { ...skillBase, name: "Lookup Order Status", trigger: "customer asks order status", tools: ["get_order"] } },
+      ]), pool));
+      results.push(await capture("raw-secret-skill-update", clientReturning([
+        { kind: "skill", confidence: 0.94, skill: { ...skillBase, name: "Lookup Order Status Updated", trigger: "customer asks for order status", tools: ["get_order"] } },
+      ]), pool));
+      return results;
+    });
+
+    const { rows } = await pool.query(
+      `select actor_user_id,connection_id,event_type,target_type,target_id,metadata
+         from security_audit_events where actor_user_id=$1 order by id`,
+      [ACTOR],
+    );
+    expect(rows.map((row) => ({
+      eventType: row.event_type,
+      targetType: row.target_type,
+      action: row.metadata.action,
+    }))).toEqual([
+      { eventType: "knowledge.capture.created", targetType: "context", action: "created_active" },
+      { eventType: "knowledge.capture.updated", targetType: "context", action: "updated_active" },
+      { eventType: "knowledge.capture.created", targetType: "skill", action: "created_active" },
+      { eventType: "knowledge.capture.updated", targetType: "skill", action: "updated_active" },
+    ]);
+    for (const [index, row] of rows.entries()) {
+      expect(row.actor_user_id).toBe(ACTOR);
+      expect(row.connection_id).toBe(principal.connectionId);
+      expect(row.target_id).toBe(captured[index].items[0].id);
+    }
+    expect(JSON.stringify(rows)).not.toContain("raw-secret");
   });
 });

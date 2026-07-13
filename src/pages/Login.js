@@ -1,74 +1,79 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Icon, msym } from '../components/Icon';
-import brianWordmark from '../assets/brian-wordmark.webp';
-import { api } from '../app/api';
-import { setToken } from '../app/auth';
-import './Login.css';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { authCallbackUrl, authReturnToFromSearch, withReturnTo } from '../lib/returnTo';
+import { useAuth } from '../app/auth';
+import AuthShell from './AuthShell';
+
+function loginErrorMessage(error) {
+  const message = error?.message || 'Login failed';
+  if (/invalid login credentials/i.test(message)) return 'Wrong email or password.';
+  if (/confirm|verified/i.test(message)) return 'Please confirm your email before logging in.';
+  if (/rate|too many/i.test(message)) return 'Too many attempts. Please wait a moment and try again.';
+  return message;
+}
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { session } = useAuth();
+  const returnTo = authReturnToFromSearch(location.search, '/app');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
 
-  // Supabase Auth when configured (hosted deployment); the access token goes
-  // in the same Authorization header, and the API guard validates it against
-  // the auth server. The legacy fallback is only for unconfigured local dev.
-  async function supabaseLogin() {
-    const url = process.env.REACT_APP_SUPABASE_URL;
-    const key = process.env.REACT_APP_SUPABASE_ANON_KEY;
-    if (!url || !key) return null;
-    const res = await fetch(`${url}/auth/v1/token?grant_type=password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: key },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const message = data.error_description || data.msg || data.error || 'Login failed';
-      if (/confirm|verified/i.test(message)) {
-        throw new Error('Please confirm your email before logging in.');
-      }
-      if (/invalid login credentials/i.test(message)) {
-        throw new Error('Wrong email or password.');
-      }
-      throw new Error(message);
-    }
-    return data.access_token ?? null;
-  }
+  useEffect(() => {
+    if (session) navigate(returnTo, { replace: true });
+  }, [session, navigate, returnTo]);
 
-  async function onSubmit(e) {
-    e.preventDefault();
+  async function onSubmit(event) {
+    event.preventDefault();
     setError('');
+    setNotice('');
+    setNeedsConfirmation(false);
     setBusy(true);
     try {
-      let token = await supabaseLogin();
-      if (!token) {
-        ({ token } = await api('/api/auth/login', {
-          method: 'POST',
-          body: { email, password },
-        }));
-      }
-      setToken(token);
-      navigate('/app', { replace: true });
-    } catch (err) {
-      setError(err.message === 'invalid credentials' ? 'Wrong email or password.' : err.message);
+      if (!isSupabaseConfigured) throw new Error('Supabase Auth is not configured for this deployment.');
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (authError) throw authError;
+      if (!data.session) throw new Error('Login did not create a session. Please try again.');
+      navigate(returnTo, { replace: true });
+    } catch (authError) {
+      const message = loginErrorMessage(authError);
+      setError(message);
+      setNeedsConfirmation(/confirm your email/i.test(message));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendConfirmation() {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+        options: { emailRedirectTo: authCallbackUrl(returnTo) },
+      });
+      if (resendError) throw resendError;
+      setNotice('Confirmation email sent. Check your inbox and spam folder.');
+    } catch (resendError) {
+      setError(loginErrorMessage(resendError));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="login">
-      <a href="/" className="login-back">
-        <Icon path={msym.back} size={16} />
-        Back to site
-      </a>
-      <a href="/" className="login-logo">
-        <img className="login-logo-wordmark" src={brianWordmark} alt="Brian" />
-      </a>
+    <AuthShell>
       <form className="login-card" onSubmit={onSubmit}>
         <h1>Log in</h1>
         <p className="login-sub">Your company brain is waiting.</p>
@@ -78,26 +83,35 @@ export default function Login() {
           type="email"
           autoComplete="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(event) => setEmail(event.target.value)}
           required
         />
-        <label htmlFor="login-password">Password</label>
+        <div className="login-label-row">
+          <label htmlFor="login-password">Password</label>
+          <a href={withReturnTo('/forgot-password', returnTo)}>Forgot password?</a>
+        </div>
         <input
           id="login-password"
           type="password"
           autoComplete="current-password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(event) => setPassword(event.target.value)}
           required
         />
         {error && <p className="login-error" role="alert">{error}</p>}
+        {notice && <p className="login-success" role="status">{notice}</p>}
+        {needsConfirmation && (
+          <button type="button" className="login-secondary" onClick={resendConfirmation} disabled={busy}>
+            Resend confirmation email
+          </button>
+        )}
         <button type="submit" className="login-submit" disabled={busy}>
           {busy ? 'Logging in…' : 'Log in'}
         </button>
         <p className="login-hint">
-          No account? <a href="/#cta">Get a demo</a> — we set up your team after a call.
+          New to Brian? <a href={withReturnTo('/signup', returnTo)}>Create an account</a>
         </p>
       </form>
-    </div>
+    </AuthShell>
   );
 }

@@ -128,6 +128,10 @@
   animation: login-in 450ms var(--ease) both;
 }
 
+.login-card--wide {
+  max-width: 34rem;
+}
+
 @keyframes login-in {
   from {
     opacity: 0;
@@ -160,6 +164,29 @@
   font-weight: 500;
   color: var(--fg-secondary);
   margin-bottom: 0.35rem;
+}
+
+.login-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.login-label-row label {
+  margin: 0;
+}
+
+.login-label-row a,
+.login-card a {
+  color: var(--accent-text);
+  text-underline-offset: 3px;
+}
+
+.login-label-row a {
+  font-size: 0.76rem;
+  text-decoration: none;
 }
 
 .login-card input {
@@ -196,6 +223,50 @@
   font-size: 0.85rem;
 }
 
+.login-success,
+.login-notice {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 9px;
+  font-size: 0.84rem;
+}
+
+.login-success {
+  color: #14704a;
+  background: rgba(28, 148, 96, 0.1);
+  border: 1px solid rgba(28, 148, 96, 0.24);
+}
+
+.login-notice {
+  color: var(--fg-secondary);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+}
+
+.login-secondary {
+  min-height: 42px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--bg-raised);
+  color: var(--fg-secondary);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+}
+
+.login-secondary:hover:not(:disabled) {
+  border-color: var(--muted);
+  color: var(--fg);
+  background: var(--bg-sunken);
+}
+
+.login-secondary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .login-submit {
   background: linear-gradient(180deg, #e0631f, var(--accent));
   color: var(--accent-ink);
@@ -230,6 +301,26 @@
 .login-submit:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.login-submit--link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.auth-kicker {
+  margin: 0 0 0.55rem;
+  color: var(--accent-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.auth-copy {
+  line-height: 1.55;
 }
 
 .login-hint {

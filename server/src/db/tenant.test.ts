@@ -1,9 +1,35 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
+import type pg from "pg";
 import { pool } from "./pool.js";
-import { runTenant, enterTenant, currentTenantId, requireTenantId, db, FOUNDING_TENANT_ID } from "./tenant.js";
+import {
+  runTenant, enterTenant, currentTenantId, requireTenantId, db,
+  FOUNDING_TENANT_ID, withTenantTransaction,
+} from "./tenant.js";
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
+
+describe("tenant transaction composition", () => {
+  it("reuses a pinned PoolClient without trying to connect it again", async () => {
+    // PoolClient has both connect() and release(). The latter is the reliable
+    // discriminator from Pool and reproduces pg's real checked-out shape.
+    const connect = vi.fn(() => {
+      throw new Error("a pinned client must not be reconnected");
+    });
+    const pinned = {
+      connect,
+      release: vi.fn(),
+      query: vi.fn(),
+    } as unknown as pg.PoolClient;
+
+    await expect(withTenantTransaction(async (client) => {
+      expect(client).toBe(pinned);
+      return "reused";
+    }, pinned)).resolves.toBe("reused");
+    expect(connect).not.toHaveBeenCalled();
+    expect(pinned.query).not.toHaveBeenCalled();
+  });
+});
 
 d("tenant context", () => {
   afterAll(async () => { await pool.end(); });

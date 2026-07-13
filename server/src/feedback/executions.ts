@@ -1,4 +1,10 @@
-import { db, tenantOrFounding, type Queryable } from "../db/tenant.js";
+import {
+  currentConnectionId,
+  currentUserId,
+  db,
+  tenantOrFounding,
+  type Queryable,
+} from "../db/tenant.js";
 import type { Execution, ExecutionOutcome } from "../skills/types.js";
 
 export interface NewExecution {
@@ -25,14 +31,18 @@ function rowToExecution(r: any): Execution {
 
 export async function logExecution(row: NewExecution, p: Queryable = db()): Promise<Execution> {
   const { rows } = await p.query(
-    `insert into executions (skill_id, skill_version, task_input, actions_taken, outcome, human_override, tenant_id)
-     values ($1,$2,$3,$4,$5,$6,$7)
+    `insert into executions
+      (skill_id, skill_version, task_input, actions_taken, outcome, human_override,
+       tenant_id, actor_user_id, connection_id)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      returning id, skill_id, skill_version, task_input, actions_taken, outcome, human_override, created_at`,
     [
       row.skill_id, row.skill_version, JSON.stringify(row.task_input),
       JSON.stringify(row.actions_taken), row.outcome,
       row.human_override === null ? null : JSON.stringify(row.human_override),
       tenantOrFounding(),
+      currentUserId(),
+      currentConnectionId(),
     ]
   );
   return rowToExecution(rows[0]);

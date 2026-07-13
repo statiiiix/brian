@@ -1,0 +1,47 @@
+.signup-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 0.85rem;
+}
+
+.signup-grid > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.signup-requirement {
+  margin: -0.75rem 0 1.05rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.signup-captcha {
+  min-height: 65px;
+  margin: 4px 0 12px;
+}
+
+.login-card .signup-terms {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin: 0 0 1.1rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.login-card .signup-terms input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 0.05rem 0 0;
+  padding: 0;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .signup-grid {
+    grid-template-columns: 1fr;
+  }
+}

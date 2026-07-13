@@ -1,173 +1,80 @@
 #!/usr/bin/env node
-// Brian onboarder. One command detects the AI-agent platforms installed on this
-// machine and wires each one to Brian: MCP registration + the strongest
-// always-on layer that platform supports. Safe (timestamped backups, refuses
-// unparseable configs), idempotent (re-runs are zero-diff), confirm-by-default.
+// Compatibility entry point for the original `npm run onboard` command.
 //
-// Usage: node onboard.mjs [--yes] [--dry-run] [--status] [--only a,b]
-//                         [--url <https://…> --token <TOKEN>]
-import { homedir } from "node:os";
+// The public CLI owns client detection, safety checks, backups, and config
+// mutation. Keep this file deliberately small so the internal command cannot
+// drift into a second onboarding implementation.
+import { realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createInterface } from "node:readline";
 
-import * as claudeCode from "./adapters/claudeCode.mjs";
-import * as claudeDesktop from "./adapters/claudeDesktop.mjs";
-import * as cursor from "./adapters/cursor.mjs";
-import * as codex from "./adapters/codex.mjs";
-import * as openclaw from "./adapters/openclaw.mjs";
+import { main as runPublicCli } from "../../../packages/cli/src/index.mjs";
+import { EXIT } from "../../../packages/cli/src/constants.mjs";
 
-// Adding a platform later = adding one adapter module to this array.
-const REGISTRY = [claudeCode, claudeDesktop, cursor, codex, openclaw];
+const PUBLIC_COMMANDS = new Set(["signup", "connect", "status", "doctor", "disconnect"]);
+const PASSTHROUGH_OPTIONS = new Set(["--help", "-h", "--version"]);
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const SERVER_PATH = path.resolve(here, "../.."); // scripts/onboard -> server
+export const DEPRECATION_NOTICE =
+  "Notice: npm run onboard is a compatibility alias for @brianthebrain/cli. " +
+  "Prefer `npx @brianthebrain/cli connect`.\n";
 
-const HELP = `Brian onboarder — wire your AI agents to the company brain.
+const STATIC_CREDENTIAL_ERROR =
+  "Legacy remote onboarding has been retired because it writes a static bearer credential. " +
+  "Use the hosted OAuth flow with `npx @brianthebrain/cli connect`.\n";
 
-Usage: npm run onboard [-- <flags>]
-  --status        show a table of platform / detected / mcp / always-on
-  --dry-run       print the plan; change nothing
-  --yes, -y       apply without the confirmation prompt
-  --only a,b      limit to named platforms (${REGISTRY.map((a) => a.name).join(", ")})
-  --url  <url>    wire a remote/hosted Brian (Streamable HTTP) instead of local stdio
-  --token <tok>   bearer token for --url
-  --help, -h      show this help
-`;
-
-function parseArgs(argv) {
-  const flags = { yes: false, dryRun: false, status: false, only: null, url: null, token: null, help: false };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--yes" || a === "-y") flags.yes = true;
-    else if (a === "--dry-run") flags.dryRun = true;
-    else if (a === "--status") flags.status = true;
-    else if (a === "--help" || a === "-h") flags.help = true;
-    else if (a === "--only") flags.only = (argv[++i] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-    else if (a === "--url") flags.url = argv[++i] ?? null;
-    else if (a === "--token") flags.token = argv[++i] ?? null;
-  }
-  return flags;
+function isStaticCredentialOption(argument) {
+  return argument === "--url" || argument.startsWith("--url=") ||
+    argument === "--token" || argument.startsWith("--token=");
 }
 
-function makeEnv() {
-  return { home: process.env.HOME || homedir(), platform: process.platform, serverPath: SERVER_PATH };
+/**
+ * Translate the original flag-only interface to the public CLI command shape.
+ * This intentionally inspects option names only; values following --token are
+ * never included in errors or forwarded to another parser.
+ */
+export function translateLegacyArgs(argv) {
+  if (argv.some(isStaticCredentialOption)) {
+    return { error: STATIC_CREDENTIAL_ERROR, args: null };
+  }
+
+  if (PUBLIC_COMMANDS.has(argv[0]) || PASSTHROUGH_OPTIONS.has(argv[0])) {
+    return { error: null, args: [...argv] };
+  }
+
+  if (argv.includes("--status")) {
+    return {
+      error: null,
+      args: ["status", ...argv.filter((argument) => argument !== "--status")],
+    };
+  }
+
+  return { error: null, args: ["connect", ...argv] };
 }
 
-function selectedAdapters(flags) {
-  if (!flags.only) return REGISTRY;
-  const set = new Set(flags.only);
-  return REGISTRY.filter((a) => set.has(a.name));
+export async function main(argv = process.argv.slice(2), overrides = {}) {
+  const stderr = overrides.stderr ?? process.stderr;
+  stderr.write(DEPRECATION_NOTICE);
+
+  const translated = translateLegacyArgs(argv);
+  if (translated.error) {
+    stderr.write(translated.error);
+    return EXIT.USAGE;
+  }
+
+  return runPublicCli(translated.args, overrides);
 }
 
-function layerLabel(layer) {
-  switch (layer) {
-    case "hooks": return "guaranteed per-prompt briefing";
-    case "rules": return "contract always in context (tools still model-pulled)";
-    case "instructions": return "contract delivered at connect";
-    case "mcp": return "MCP server registered";
-    default: return layer;
+let direct = false;
+if (process.argv[1]) {
+  try {
+    direct = realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    direct = path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
   }
 }
 
-async function confirm(question) {
-  if (!process.stdin.isTTY) return false;
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await new Promise((res) => rl.question(question, res));
-  rl.close();
-  return /^y(es)?$/i.test(answer.trim());
-}
-
-function out(s) {
-  process.stdout.write(s);
-}
-
-async function main() {
-  const flags = parseArgs(process.argv.slice(2));
-  if (flags.help) {
-    out(HELP);
-    return 0;
-  }
-  if (flags.url && !flags.token) {
-    process.stderr.write("Remote --url requires --token <bearer>.\n");
-    return 2;
-  }
-
-  const env = makeEnv();
-  const opts = { serverPath: SERVER_PATH, url: flags.url, token: flags.token };
-  const adapters = selectedAdapters(flags);
-  const rows = adapters.map((a) => ({ a, detected: a.detect(env) }));
-
-  if (flags.status) {
-    out("Platform            Detected  MCP         Always-on\n");
-    for (const { a, detected } of rows) {
-      const s = detected.detected ? a.status(env) : { mcp: "-", alwaysOn: "-" };
-      out(
-        `${a.label.padEnd(20)}${(detected.detected ? "yes" : "no").padEnd(10)}` +
-          `${String(s.mcp).padEnd(12)}${s.alwaysOn}\n`,
-      );
-    }
-    return 0;
-  }
-
-  const detectedRows = rows.filter((r) => r.detected.detected);
-  const notDetected = rows.filter((r) => !r.detected.detected);
-
-  if (detectedRows.length === 0) {
-    out("No supported agent platforms detected on this machine.\n");
-    for (const { a, detected } of notDetected) out(`  - ${a.label}: ${detected.evidence}\n`);
-    return 0;
-  }
-
-  out(`Brian (${flags.url ? `remote ${flags.url}` : `local, ${SERVER_PATH}`}) will wire:\n\n`);
-  for (const { a } of detectedRows) {
-    out(`${a.label}\n`);
-    for (const step of a.plan(env, opts)) {
-      out(`  - ${step.file}\n      ${step.action} — ${layerLabel(step.layer)}\n`);
-    }
-  }
-
-  if (flags.dryRun) {
-    out("\n(dry run — nothing written)\n");
-    return 0;
-  }
-
-  if (!flags.yes) {
-    const ok = await confirm("\nProceed? [y/N] ");
-    if (!ok) {
-      out("Aborted (no changes). Re-run with --yes to skip this prompt.\n");
-      return 0;
-    }
-  }
-
-  let refusals = 0;
-  out("\n");
-  for (const { a } of detectedRows) {
-    const res = await a.apply(env, opts);
-    out(`${a.label}:\n`);
-    for (const it of res.applied) out(`  ✓ ${it.action} (${it.file})\n`);
-    for (const sk of res.skipped) {
-      out(`  ${sk.manual ? "•" : "✗"} ${sk.reason} (${sk.file})\n`);
-      if (!sk.manual) refusals++;
-    }
-  }
-
-  out("\nNext steps:\n");
-  out("  - Restart each app (Claude Desktop, Cursor, Codex) to load the new MCP server.\n");
-  out(`  - Keep the Brian API running for the per-prompt hook: cd ${SERVER_PATH} && npm run api\n`);
-  if (notDetected.length) {
-    out("  - Not detected (skipped): " + notDetected.map((r) => r.a.label).join(", ") + "\n");
-  }
-  if (refusals > 0) {
-    out(`\n${refusals} item(s) were refused (unparseable config). Fix and re-run.\n`);
-  }
-
-  return refusals > 0 ? 1 : 0;
-}
-
-main()
-  .then((code) => process.exit(code))
-  .catch((err) => {
-    process.stderr.write(String(err && err.stack ? err.stack : err) + "\n");
-    process.exit(1);
+if (direct) {
+  main().then((code) => {
+    process.exitCode = code;
   });
+}

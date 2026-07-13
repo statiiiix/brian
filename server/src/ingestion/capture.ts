@@ -1,5 +1,4 @@
-import type pg from "pg";
-import { pool as defaultPool } from "../db/pool.js";
+import { withTenantTransaction, type TenantTransactionSource } from "../db/tenant.js";
 import { defaultLlm, type LlmClient } from "../llm/complete.js";
 import { CAPTURE_JSON_SCHEMA } from "../llm/schemas.js";
 import { parseNewSkill } from "../skills/validation.js";
@@ -7,6 +6,7 @@ import { parseNewContext } from "../context/validation.js";
 import { skillIsAutoSafe } from "../mcp/toolRisk.js";
 import { createSkill, setStatus, updateSkill, findSkillWithDistance } from "../skills/repo.js";
 import { createContext, updateContext, findContextWithDistance } from "../context/repo.js";
+import { writeAuditEvent } from "../identity/repo.js";
 import type { NewSkill } from "../skills/types.js";
 
 export type CapturedItem =
@@ -50,7 +50,7 @@ function extractItems(text: string): unknown[] {
 }
 
 export async function capture(
-  text: string, llm: LlmClient = defaultLlm(), p: pg.Pool = defaultPool
+  text: string, llm: LlmClient = defaultLlm(), p?: TenantTransactionSource,
 ): Promise<CaptureResult> {
   const out = await llm.complete({
     system: SYSTEM,
@@ -59,37 +59,49 @@ export async function capture(
   });
   const raw = extractItems(out);
 
-  const items: CaptureResult["items"] = [];
-  for (const r of raw as CapturedItem[]) {
-    if (r.kind === "context") {
-      const input = parseNewContext({ content: r.content, summary: r.summary, tags: r.tags, source: "capture", owner: null });
-      const match = await findContextWithDistance(input.summary ?? input.content, p);
-      if (match && match.distance <= SIM_MAX) {
-        const u = await updateContext(match.entry.id, input, "capture", p);
-        items.push({ kind: "context", action: "updated_active", id: u.id, confidence: r.confidence });
-      } else {
-        const cre = await createContext(input, p);
-        items.push({ kind: "context", action: "created_active", id: cre.id, confidence: r.confidence });
-      }
-    } else {
-      const skill = parseNewSkill(r.skill);
-      const auto = r.confidence >= CONF_MIN && skillIsAutoSafe(skill.tools);
-      const match = await findSkillWithDistance(`${skill.name}\n${skill.trigger}`, p);
-      const isUpdate = match !== null && match.distance <= SIM_MAX;
-      if (isUpdate && auto) {
-        const u = await updateSkill(match!.skill.id, skill, "capture", p);
-        const a = await setStatus(u.id, "active", p);
-        items.push({ kind: "skill", action: "updated_active", id: a.id, confidence: r.confidence });
-      } else {
-        const cre = await createSkill(skill, p); // draft
-        if (!isUpdate && auto) {
-          const a = await setStatus(cre.id, "active", p);
-          items.push({ kind: "skill", action: "created_active", id: a.id, confidence: r.confidence });
+  return withTenantTransaction(async (client) => {
+    const items: CaptureResult["items"] = [];
+    const add = async (item: CaptureResult["items"][number]) => {
+      const operation = item.action.startsWith("updated") ? "updated" : "created";
+      await writeAuditEvent(`knowledge.capture.${operation}`, {
+        targetType: item.kind,
+        targetId: item.id,
+        // Captured source text and model output are intentionally excluded.
+        metadata: { action: item.action, confidence: item.confidence },
+      }, client);
+      items.push(item);
+    };
+    for (const r of raw as CapturedItem[]) {
+      if (r.kind === "context") {
+        const input = parseNewContext({ content: r.content, summary: r.summary, tags: r.tags, source: "capture", owner: null });
+        const match = await findContextWithDistance(input.summary ?? input.content, client);
+        if (match && match.distance <= SIM_MAX) {
+          const u = await updateContext(match.entry.id, input, "capture", client);
+          await add({ kind: "context", action: "updated_active", id: u.id, confidence: r.confidence });
         } else {
-          items.push({ kind: "skill", action: isUpdate ? "proposed_draft" : "created_draft", id: cre.id, confidence: r.confidence });
+          const cre = await createContext(input, client);
+          await add({ kind: "context", action: "created_active", id: cre.id, confidence: r.confidence });
+        }
+      } else {
+        const skill = parseNewSkill(r.skill);
+        const auto = r.confidence >= CONF_MIN && skillIsAutoSafe(skill.tools);
+        const match = await findSkillWithDistance(`${skill.name}\n${skill.trigger}`, client);
+        const isUpdate = match !== null && match.distance <= SIM_MAX;
+        if (isUpdate && auto) {
+          const u = await updateSkill(match!.skill.id, skill, "capture", client);
+          const a = await setStatus(u.id, "active", client);
+          await add({ kind: "skill", action: "updated_active", id: a.id, confidence: r.confidence });
+        } else {
+          const cre = await createSkill(skill, client); // draft
+          if (!isUpdate && auto) {
+            const a = await setStatus(cre.id, "active", client);
+            await add({ kind: "skill", action: "created_active", id: a.id, confidence: r.confidence });
+          } else {
+            await add({ kind: "skill", action: isUpdate ? "proposed_draft" : "created_draft", id: cre.id, confidence: r.confidence });
+          }
         }
       }
     }
-  }
-  return { items };
+    return { items };
+  }, p);
 }

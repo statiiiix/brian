@@ -17,7 +17,7 @@ d("bearer auth", () => {
   beforeAll(async () => { await runMigrations(pool); });
   afterAll(async () => { await pool.end(); });
 
-  it("rejects requests without or with a wrong token, accepts the right one", async () => {
+  it("rejects agent bearers on dashboard routes and accepts them only at MCP", async () => {
     const app = testClient(buildApp({ authToken: "sekret" }));
 
     const noAuth = await app.inject({ method: "GET", url: "/api/skills" });
@@ -32,7 +32,22 @@ d("bearer auth", () => {
     const goodAuth = await app.inject({
       method: "GET", url: "/api/skills", headers: { authorization: "Bearer sekret" },
     });
-    expect(goodAuth.statusCode).toBe(200);
+    expect(goodAuth.statusCode).toBe(401);
+
+    const mcp = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        authorization: "Bearer sekret",
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      payload: {
+        jsonrpc: "2.0", id: 1, method: "initialize",
+        params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "test", version: "1" } },
+      },
+    });
+    expect(mcp.statusCode).toBe(200);
     await app.close();
   });
 

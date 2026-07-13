@@ -12,6 +12,7 @@ export interface InjectOpts {
 export interface InjectResult {
   statusCode: number;
   body: string;
+  headers: Record<string, string>;
   json<T = any>(): T;
 }
 
@@ -35,5 +36,10 @@ export async function inject(app: Hono<any>, opts: InjectOpts): Promise<InjectRe
   }
   const res = await app.request(opts.url, { method: opts.method, headers, body });
   const text = await res.text();
-  return { statusCode: res.status, body: text, json: <T = any>(): T => JSON.parse(text) as T };
+  return {
+    statusCode: res.status,
+    body: text,
+    headers: Object.fromEntries(res.headers.entries()),
+    json: <T = any>(): T => JSON.parse(text) as T,
+  };
 }

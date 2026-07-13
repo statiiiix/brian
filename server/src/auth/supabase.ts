@@ -1,70 +1,112 @@
-// Supabase Auth for dashboard humans (SupabaseIntegration.md §5a). The guard
-// validates a Supabase access token by asking the auth server itself
-// (GET /auth/v1/user) — no local JWKS/secret handling, so it works for both
-// legacy HS256 and current asymmetric signing. tenant_id and role live in
-// app_metadata (set server-side at user creation; not user-editable).
+import { decodeJwt } from "jose";
+
+// Human browser-session validation. MCP access tokens use oauthJwt.ts and are
+// never accepted by this validator.
 export interface SupabaseAuthConfig {
-  url: string;                 // https://<ref>.supabase.co
-  anonKey: string;             // publishable key (apikey header)
-  fetchFn?: typeof fetch;      // injectable for tests
+  url: string;
+  anonKey: string;
+  dashboardAudience?: string;
+  fetchFn?: typeof fetch;
 }
 
 export interface SupabaseUser {
   id: string;
   email: string;
-  role: string;
-  tenantId: string | null;
 }
 
-// Both are auto-provided on the Supabase Edge runtime; set them in server/.env
-// for local use. Null when unconfigured (feature off). Under Vitest the env
-// is ignored (like pool.ts's VITEST special-case): tests opt in by passing
-// the config to buildApp explicitly, so `buildApp()` stays an open app.
+export interface OAuthAuthorizationDetails {
+  authorization_id: string;
+  redirect_uri: string;
+  scope: string;
+  client: {
+    id: string;
+    name: string;
+    uri?: string | null;
+    logo_uri?: string | null;
+  };
+  user: { id: string; email: string };
+}
+
 export function supabaseAuthFromEnv(): SupabaseAuthConfig | null {
   if (process.env.VITEST) return null;
   const url = process.env.SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY;
-  return url && anonKey ? { url, anonKey } : null;
+  return url && anonKey
+    ? { url, anonKey, dashboardAudience: process.env.DASHBOARD_JWT_AUDIENCE ?? "authenticated" }
+    : null;
 }
 
-// Cheap pre-filter so we only pay a network call for tokens that are actually
-// Supabase-issued JWTs (iss ends in /auth/v1), not agent bearers or legacy
-// JWTs. Decodes via atob (not Buffer's "base64url" encoding, which is not
-// reliable on the Supabase Edge runtime's Node compat layer).
 export function looksLikeSupabaseToken(token: string): boolean {
   const parts = token.split(".");
   if (parts.length !== 3) return false;
   try {
-    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
-    const payload = JSON.parse(new TextDecoder().decode(bytes));
-    return typeof payload.iss === "string" && payload.iss.includes("/auth/v1");
+    const payload = decodeJwt(token);
+    return typeof payload.iss === "string" && payload.iss.endsWith("/auth/v1");
   } catch {
     return false;
   }
 }
 
-export async function verifySupabaseToken(
+function hasExpectedDashboardClaims(token: string, cfg: SupabaseAuthConfig): boolean {
+  try {
+    const claims = decodeJwt(token);
+    const issuer = `${cfg.url.replace(/\/$/, "")}/auth/v1`;
+    const expectedAudience = cfg.dashboardAudience ?? "authenticated";
+    return claims.iss === issuer
+      && claims.aud === expectedAudience
+      && typeof claims.sub === "string"
+      && claims.client_id === undefined
+      && claims.brian_token_type === undefined;
+  } catch {
+    return false;
+  }
+}
+
+export async function verifyDashboardToken(
   token: string,
   cfg: SupabaseAuthConfig,
 ): Promise<SupabaseUser | null> {
+  if (!hasExpectedDashboardClaims(token, cfg)) return null;
+  const subject = decodeJwt(token).sub;
   const f = cfg.fetchFn ?? fetch;
   try {
-    const res = await f(`${cfg.url}/auth/v1/user`, {
+    const res = await f(`${cfg.url.replace(/\/$/, "")}/auth/v1/user`, {
       headers: { apikey: cfg.anonKey, authorization: `Bearer ${token}` },
     });
     if (!res.ok) return null;
-    const u = (await res.json()) as {
-      id?: string; email?: string; app_metadata?: { tenant_id?: string; role?: string };
-    };
-    if (!u.id || !u.email) return null;
-    return {
-      id: u.id,
-      email: u.email,
-      role: u.app_metadata?.role ?? "admin",
-      tenantId: u.app_metadata?.tenant_id ?? null,
-    };
+    const user = (await res.json()) as { id?: string; email?: string };
+    if (!user.id || !user.email || user.id !== subject) return null;
+    return { id: user.id, email: user.email };
   } catch {
-    return null; // auth server unreachable -> token not accepted
+    return null;
+  }
+}
+
+// Compatibility export for existing callers. It intentionally follows the
+// dashboard-only policy and no longer reads authorization from app_metadata.
+export const verifySupabaseToken = verifyDashboardToken;
+
+export async function getOAuthAuthorizationDetails(
+  authorizationId: string,
+  accessToken: string,
+  expectedUserId: string,
+  cfg: SupabaseAuthConfig,
+): Promise<OAuthAuthorizationDetails | null> {
+  if (!authorizationId || authorizationId.length > 512 || !/^[-A-Za-z0-9_.~]+$/.test(authorizationId)) {
+    return null;
+  }
+  const f = cfg.fetchFn ?? fetch;
+  try {
+    const res = await f(
+      `${cfg.url.replace(/\/$/, "")}/auth/v1/oauth/authorizations/${encodeURIComponent(authorizationId)}`,
+      { headers: { apikey: cfg.anonKey, authorization: `Bearer ${accessToken}` } },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as Partial<OAuthAuthorizationDetails> & { redirect_url?: string };
+    if (data.redirect_url || data.authorization_id !== authorizationId) return null;
+    if (data.user?.id !== expectedUserId || !data.client?.id || !data.client.name || !data.redirect_uri) return null;
+    return data as OAuthAuthorizationDetails;
+  } catch {
+    return null;
   }
 }

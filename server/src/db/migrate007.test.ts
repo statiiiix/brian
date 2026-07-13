@@ -7,8 +7,10 @@ const d = url ? describe : describe.skip;
 
 // Every tenant-owned table must carry the tenant_isolation policy.
 const TENANT_TABLES = [
-  "skills", "skill_versions", "context_entries", "context_versions",
+  "tenants", "skills", "skill_versions", "skill_links", "context_entries", "context_versions",
   "executions", "users", "interviews", "connectors", "evidence", "api_tokens", "oauth_states",
+  "tenant_memberships", "agent_connections", "tenant_invitations",
+  "security_audit_events", "onboarding_state", "data_deletion_requests",
 ];
 
 d("migration 007: RLS backstop (brian_app role + tenant_isolation policies)", () => {
@@ -31,13 +33,13 @@ d("migration 007: RLS backstop (brian_app role + tenant_isolation policies)", ()
     expect(tables).toEqual([...TENANT_TABLES].sort());
   });
 
-  it("allows token lookup and tenant status reads without a tenant context", async () => {
+  it("removes broad pre-tenant lookup policies after narrow resolvers exist", async () => {
     const { rows } = await pool.query(
       `select tablename, policyname from pg_policies
         where schemaname = current_schema() and policyname = 'pre_tenant_lookup'
         order by tablename`,
     );
-    expect(rows.map((r) => r.tablename)).toEqual(["api_tokens", "tenants"]);
+    expect(rows).toEqual([]);
   });
 
   it("grants brian_app DML on the current schema's tables", async () => {
