@@ -8,10 +8,22 @@ This matrix is deliberately evidence-labeled. A CLI flag or menu item proves tha
 
 The canonical domain was rechecked without credentials on 2026-07-14 after deploying Edge Function `brian` version 8 (build marker `207b223821555ba5`). The release smoke now passes both RFC 9728 metadata locations, Supabase authorization-server discovery, PKCE S256 advertisement, the authorization route, and the `/mcp` `401` Bearer challenge. Authenticated client testing remains gated on a safe registration path and an approved test grant; Dynamic Client Registration stays off until the documented abuse controls and monitoring are ready.
 
+On 2026-07-14, a second credential-free production smoke passed and an isolated
+Codex 0.144.2 login reproduced the remaining boundary exactly:
+`Dynamic client registration not supported`. A loopback control server then
+proved that Codex can bypass DCR with a pre-registered public client ID. With
+`mcp_oauth_callback_port = 1455`, this version uses the stable exact redirect
+`http://127.0.0.1:1455/callback/YL4-rwMAP0YR`, requests `email`, sends PKCE S256,
+and includes the configured OAuth resource. Production currently has no rows in
+`auth.oauth_clients` and no Brian `agent_connections`, so no browser consent or
+authenticated MCP request could occur yet. This makes a manually registered
+Codex public client the lowest-risk first proof; it does not require enabling
+open DCR.
+
 | Client | Version inspected | Remote HTTP / OAuth evidence | Brian configuration | E2E status |
 |---|---|---|---|---|
 | Claude Code | 2.1.198 | `claude mcp` exposes HTTP add, login/logout, client ID, callback port, and headless `--no-browser` | CLI writes canonical URL-only HTTP entry; finish with `claude mcp login brian` | Public discovery passed; authenticated run pending |
-| Codex CLI | 0.144.2 | `codex mcp` exposes Streamable HTTP, OAuth client ID, explicit OAuth resource, login/logout | CLI writes `url` and exact `oauth_resource`; finish with `codex mcp login brian` | Public discovery passed; authenticated run pending |
+| Codex CLI | 0.144.2 | `codex mcp` exposes Streamable HTTP, a pre-registered OAuth client ID, explicit OAuth resource, login/logout, and a fixed callback port | CLI writes `url` and exact `oauth_resource`; a pre-registered test also needs the public client ID and fixed callback configuration | Discovery and pre-registration control path passed; production browser consent/authenticated run pending |
 | Claude Desktop | Not installed/inspected in this workspace | Configuration adapter exists; OAuth behavior is version-dependent | CLI writes canonical URL-only `mcpServers.brian`; restart and use client connection UI | Not run |
 | Cursor | CLI not installed/inspected in this workspace | Configuration adapter exists; OAuth behavior is version-dependent | CLI writes canonical URL-only `mcpServers.brian`; restart and use client connection UI | Not run |
 | MCP Inspector / official SDK client | Not inspected | Required as a protocol-control client | Manual staging setup | Not run |
@@ -36,6 +48,24 @@ codex mcp add brian \
 codex mcp login brian
 codex mcp logout brian
 ```
+
+For the dated pre-registration proof only, Codex additionally needs:
+
+```toml
+mcp_oauth_callback_port = 1455
+
+[mcp_servers.brian.oauth]
+client_id = "<public Supabase OAuth client ID>"
+```
+
+Register this exact public-client redirect in Supabase for Codex 0.144.2:
+
+```text
+http://127.0.0.1:1455/callback/YL4-rwMAP0YR
+```
+
+Treat the callback suffix as version-specific evidence: re-run the isolated
+registration probe before reusing it for another Codex release.
 
 The public Brian CLI produces equivalent URL-only configuration and never adds a bearer-token environment variable or header.
 

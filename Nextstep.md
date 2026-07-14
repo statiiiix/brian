@@ -30,6 +30,19 @@ Verified locally so far:
   3. `authRoutes.test.ts` predated fail-closed memberships: a legacy JWT is honored only when its user id has an active membership, so the test now seeds the founding membership (mirroring the trusted backfill) instead of expecting an unmembered 200.
 - CLI test suite (31/31 on Node 24), syntax check, package dry run, tarball install/bin smoke;
 - deterministic generated Edge bundle build and drift check (rebuilt 2026-07-13 from current source).
+- **2026-07-14 registration-boundary probe:** the credential-free production
+  OAuth smoke passed again. An isolated Codex CLI 0.144.2 login reached Brian's
+  discovery metadata and failed only at Supabase DCR with
+  `Dynamic client registration not supported`. A local control server proved
+  Codex can instead use a pre-registered public client ID with PKCE S256,
+  `email`, the exact Brian resource, and stable callback
+  `http://127.0.0.1:1455/callback/YL4-rwMAP0YR` when callback port 1455 is pinned.
+  Live read-only checks found zero `auth.oauth_clients`, zero
+  `agent_connections`, and no release-flag rows in `app_config`, so the
+  fail-closed defaults remain active. The safest first real-client proof is now
+  concrete: manually register this Codex client, configure its public client ID,
+  enable new OAuth approvals for the controlled test, then run consent, an MCP
+  tool call, refresh, and revocation. Open DCR is not required for this proof.
 
 Applied to live production on 2026-07-13/14 (founder explicitly approved in-session):
 
