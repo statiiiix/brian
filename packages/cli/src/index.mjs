@@ -28,6 +28,17 @@ async function interactiveConfirm(preview, io) {
   }
 }
 
+async function interactiveLoginConfirm(plan, io) {
+  if (!io.stdin.isTTY) return false;
+  const readline = createInterface({ input: io.stdin, output: io.stdout });
+  try {
+    const answer = await readline.question(`Authenticate Brian in ${plan.label} now? [Y/n] `);
+    return !/^n(?:o)?$/i.test(answer.trim());
+  } finally {
+    readline.close();
+  }
+}
+
 export async function main(argv = process.argv.slice(2), overrides = {}) {
   const io = {
     stdin: overrides.stdin ?? processStdin,
@@ -54,6 +65,7 @@ export async function main(argv = process.argv.slice(2), overrides = {}) {
 
   const runtime = createRuntime(overrides);
   if (!runtime.confirm) runtime.confirm = (preview) => interactiveConfirm(preview, io);
+  if (!runtime.confirmLogin) runtime.confirmLogin = (plan) => interactiveLoginConfirm(plan, io);
   const options = parsed.options;
   let outcome;
   try {

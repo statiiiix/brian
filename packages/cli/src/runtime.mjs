@@ -74,6 +74,7 @@ export function createRuntime(overrides = {}) {
     now: overrides.now ?? (() => new Date()),
     openBrowser: overrides.openBrowser,
     confirm: overrides.confirm,
+    confirmLogin: overrides.confirmLogin,
     isInteractive: overrides.isInteractive ?? Boolean(overrides.stdin?.isTTY ?? process.stdin.isTTY),
   };
   runtime.commandInfo = overrides.commandInfo ?? ((name) => defaultCommandInfo(name, runtime));

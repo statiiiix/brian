@@ -34,7 +34,10 @@ export function renderMutationPlan(result) {
 }
 
 function renderMutation(result) {
-  const lines = [`Brian ${result.command}: ${result.status}`, `Hosted MCP: ${result.canonicalMcpUrl}`];
+  const heading = result.command === "connect" && result.configurationStatus
+    ? "Configuration installed"
+    : `Brian ${result.command}: ${result.status}`;
+  const lines = [heading, `Hosted MCP: ${result.canonicalMcpUrl}`];
   for (const client of result.clients ?? []) {
     lines.push("", client.label);
     if (client.actions.length === 0) lines.push("  • no file changes needed");
@@ -50,6 +53,12 @@ function renderMutation(result) {
   for (const error of result.errors ?? []) {
     const prefix = error.file ? `${error.file}: ` : error.client ? `${error.client}: ` : "";
     lines.push(`✗ ${prefix}${error.reason ?? error}`);
+  }
+  for (const auth of result.authentication ?? []) {
+    const marker = auth.authentication === "authenticated" ? "✓" : auth.authentication === "failed" ? "✗" : "•";
+    lines.push("", `${marker} ${auth.client}: ${auth.authentication}`);
+    if (auth.instruction) lines.push(`  ${auth.instruction}`);
+    if (auth.authentication === "failed" && auth.retryCommand) lines.push(`  Retry: ${auth.retryCommand}`);
   }
   if (result.revocation) lines.push("", result.revocation);
   if (result.status === "confirmation-required") lines.push("Re-run with --yes to apply non-interactively.");

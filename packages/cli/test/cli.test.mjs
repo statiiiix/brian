@@ -111,6 +111,20 @@ test("CLI returns no-client exit code and exposes help/version", async () => {
   assert.equal(version.stdout.trim(), "0.1.0");
 });
 
+test("--no-login is accepted only by connect and remains JSON-safe", async () => {
+  const home = await temporaryHome("brian-cli-no-login-");
+  await mkdir(path.join(home, ".cursor"), { recursive: true });
+  const connected = await runCli([
+    "connect", "--only", "cursor", "--yes", "--no-login", "--json",
+  ], home);
+  assert.equal(connected.code, 0, connected.stderr);
+  assert.equal(JSON.parse(connected.stdout).authentication[0].authentication, "manual");
+
+  const rejected = await runCli(["status", "--no-login", "--json"], home);
+  assert.equal(rejected.code, 2);
+  assert.match(JSON.parse(rejected.stdout).error, /--no-login/);
+});
+
 test("CLI runs when invoked through an installed-bin style symlink", async () => {
   const home = await temporaryHome("brian-cli-bin-");
   const bin = path.join(home, "brian");

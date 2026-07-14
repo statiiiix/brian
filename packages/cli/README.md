@@ -28,8 +28,10 @@ npx @brianthebrain/cli disconnect
 ```
 
 Use `--only claude-code,codex` to limit client commands. `connect` and
-`disconnect` show their plan and ask before writing. Automation must pass both
-`--yes` and `--json`:
+`disconnect` show their plan and ask before writing. After a successful
+interactive `connect`, the CLI offers to start each supported client's native
+OAuth login command. Use `--no-login` to install configuration without starting
+authentication. Automation must pass both `--yes` and `--json`:
 
 ```bash
 npx @brianthebrain/cli connect --only codex --yes --json
@@ -63,11 +65,18 @@ entry with URL-only OAuth configuration; the original config remains available
 only in the timestamped backup. Complete browser OAuth immediately, then remove
 legacy backups according to your credential-retention policy.
 
-Current post-install actions:
+Current post-install authentication:
 
-- Claude Code: `claude mcp login brian`.
-- Codex: `codex mcp login brian`.
+- Claude Code: the CLI offers `claude mcp login brian` when the installed client
+  exposes that command; older versions get an upgrade/settings instruction.
+- Codex: the CLI offers `codex mcp login brian`.
 - Cursor and Claude Desktop: restart the client and use its Brian connection UI.
+
+Native commands run only after every planned configuration write succeeds, one
+client at a time, and only in an interactive terminal after a separate login
+confirmation. `--json`, `--dry-run`, non-interactive terminals, and
+`--no-login` never launch a client. A login failure does not roll back the valid
+URL-only configuration; the CLI prints the fixed retry command instead.
 
 These command surfaces show native OAuth support, but no client/version is
 reported as Brian-compatible until a dated staging result is recorded in the

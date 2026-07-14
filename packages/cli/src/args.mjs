@@ -4,7 +4,7 @@ export const HELP = `Brian CLI — connect local AI clients to Brian's hosted MC
 
 Usage:
   brian signup [--dry-run] [--json]
-  brian connect [--only <clients>] [--dry-run] [--yes] [--json]
+  brian connect [--only <clients>] [--dry-run] [--yes] [--no-login] [--json]
   brian status [--only <clients>] [--json]
   brian doctor [--only <clients>] [--json]
   brian disconnect [--only <clients>] [--dry-run] [--yes] [--json]
@@ -15,6 +15,7 @@ Options:
   --only <a,b>  limit the command to named clients
   --dry-run     show planned changes without writing or opening a browser
   --yes, -y     apply file changes without interactive confirmation
+  --no-login    configure clients without starting native authentication
   --json        emit machine-readable JSON; mutations also require --yes
   --help, -h    show help
   --version     show the CLI version
@@ -39,13 +40,14 @@ export function parseArgs(argv) {
 
   const command = argv[0];
   if (!COMMANDS.has(command)) return { error: "unknown or missing command" };
-  const options = { only: null, dryRun: false, yes: false, json: false };
+  const options = { only: null, dryRun: false, yes: false, json: false, noLogin: false };
   for (let index = 1; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === "--help" || argument === "-h") return { help: true, command, options };
     if (argument === "--dry-run") options.dryRun = true;
     else if (argument === "--yes" || argument === "-y") options.yes = true;
     else if (argument === "--json") options.json = true;
+    else if (argument === "--no-login") options.noLogin = true;
     else if (argument === "--only") {
       if (options.only) return { error: "--only may be supplied only once", options };
       const parsed = parseOnly(argv[++index]);
@@ -65,6 +67,9 @@ export function parseArgs(argv) {
 
   if ((command === "status" || command === "doctor") && (options.dryRun || options.yes)) {
     return { error: `${command} does not modify files and does not accept --dry-run or --yes`, options };
+  }
+  if (command !== "connect" && options.noLogin) {
+    return { error: "--no-login is accepted only by connect", options };
   }
   if (command === "signup" && (options.only || options.yes)) {
     return { error: "signup accepts only --dry-run and --json", options };

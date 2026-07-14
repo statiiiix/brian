@@ -403,7 +403,7 @@ git commit -m "feat: model native MCP login capabilities"
 - Modify: `packages/cli/test/cli.test.mjs`
 - Modify: `packages/cli/test/platforms.test.mjs`
 
-- [ ] **Step 1: Add failing parser and orchestration tests**
+- [x] **Step 1: Add failing parser and orchestration tests**
 
 Add `--no-login` to connect only. Require:
 
@@ -417,7 +417,7 @@ Add `--no-login` to connect only. Require:
 - manual clients report `configured: true`, `authentication: "manual"`;
 - the result contains no child stdout/stderr or token-shaped fixture.
 
-- [ ] **Step 2: Run tests and observe failures**
+- [x] **Step 2: Run tests and observe failures**
 
 Run:
 
@@ -427,7 +427,7 @@ cd packages/cli && node --test test/cli.test.mjs test/platforms.test.mjs
 
 Expected: parser rejects `--no-login` and connect never invokes login.
 
-- [ ] **Step 3: Parse and document `--no-login`**
+- [x] **Step 3: Parse and document `--no-login`**
 
 Initialize:
 
@@ -437,7 +437,7 @@ const options = { only: null, dryRun: false, yes: false, json: false, noLogin: f
 
 Add `--no-login` to help and accept it only for `connect`.
 
-- [ ] **Step 4: Separate configuration outcome from authentication outcome**
+- [x] **Step 4: Separate configuration outcome from authentication outcome**
 
 After `applyChanges` succeeds—or when the config is already unchanged—build a login queue from detected platform `loginPlan` values. Skip execution when:
 
@@ -459,11 +459,11 @@ Use a new `runtime.confirmLogin({ name, label, retryCommand })` prompt with defa
 
 Do not rollback file writes on login failure. Keep the command exit code out of machine output unless it is an ordinary bounded integer.
 
-- [ ] **Step 5: Render the two-stage result clearly**
+- [x] **Step 5: Render the two-stage result clearly**
 
 Human output must lead with `Configuration installed` and then print each authentication state. JSON preserves the stable `authentication` array and never prompts or spawns.
 
-- [ ] **Step 6: Run the CLI suite and commit**
+- [x] **Step 6: Run the CLI suite and commit**
 
 Run:
 
