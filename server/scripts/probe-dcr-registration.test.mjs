@@ -229,3 +229,63 @@ test("proves the Admin credential works before creating a registration", async (
 
   assert.equal(calls.some((call) => call.url === registrationEndpoint), false);
 });
+
+test("recovers and deletes after an ambiguous registration response", async () => {
+  for (const responseMode of ["connection-reset", "non-json-success"]) {
+    const runId = `safe-${responseMode}`;
+    const clientName = `Brian controlled DCR probe ${runId}`;
+    const deleted = [];
+    let listCalls = 0;
+    const { fetchFn: baseFetch } = successfulFetch();
+    const fetchFn = async (url, init) => {
+      if (String(url) !== registrationEndpoint) return baseFetch(url, init);
+      if (responseMode === "connection-reset") throw new Error("socket closed after commit");
+      return new Response("created but not json", { status: 201 });
+    };
+    await assert.rejects(runDcrRegistrationProbe({
+      resourceUrl,
+      supabaseUrl,
+      fetchFn,
+      admin: {
+        listClients: async () => {
+          listCalls += 1;
+          return listCalls === 1 ? [] : [{ clientId: `recovered-${responseMode}`, clientName }];
+        },
+        deleteClient: async (clientId) => { deleted.push(clientId); },
+      },
+      runId,
+    }), /^Error: DCR probe registration failed$/);
+    assert.deepEqual(deleted, [`recovered-${responseMode}`]);
+  }
+});
+
+test("retries marker recovery when the Admin inventory is briefly stale", async () => {
+  const runId = "safe-eventual-inventory";
+  const clientName = `Brian controlled DCR probe ${runId}`;
+  const deleted = [];
+  const waits = [];
+  let listCalls = 0;
+  const { fetchFn: baseFetch } = successfulFetch();
+  const fetchFn = async (url, init) => {
+    if (String(url) === registrationEndpoint) throw new Error("socket closed after commit");
+    return baseFetch(url, init);
+  };
+
+  await assert.rejects(runDcrRegistrationProbe({
+    resourceUrl,
+    supabaseUrl,
+    fetchFn,
+    waitFn: async (milliseconds) => { waits.push(milliseconds); },
+    admin: {
+      listClients: async () => {
+        listCalls += 1;
+        return listCalls < 3 ? [] : [{ clientId: "eventually-visible", clientName }];
+      },
+      deleteClient: async (clientId) => { deleted.push(clientId); },
+    },
+    runId,
+  }), /^Error: DCR probe registration failed$/);
+
+  assert.deepEqual(waits, [100]);
+  assert.deepEqual(deleted, ["eventually-visible"]);
+});

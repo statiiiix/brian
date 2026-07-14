@@ -8,6 +8,7 @@ import {
   isClientLifecycleInactive,
   loadDcrMarkerState,
   loadLifecycleEvidence,
+  loadRegistryClients,
   type MaintenancePool,
 } from "./dcrRegistry.js";
 
@@ -33,7 +34,7 @@ export function parseDcrMaintenanceArgs(argv: string[]): DcrMaintenanceOptions {
 
 export interface DcrMaintenanceConfig {
   supabaseUrl: string;
-  secretKey: string;
+  secretKey: string | null;
   databaseUrl: string;
   publicConfigUrl: string;
   protectedClientIds: Set<string>;
@@ -42,27 +43,82 @@ export interface DcrMaintenanceConfig {
 export function assertDcrMaintenanceSucceeded(summary: {
   failed: number;
   markerDrift: boolean | null;
+  cleanupBlocked: boolean;
 }): void {
   if (summary.failed > 0) throw new Error("DCR maintenance completed with failures");
   if (summary.markerDrift) throw new Error("DCR maintenance marker drift detected");
+  if (summary.cleanupBlocked) {
+    throw new Error("DCR cleanup requires provider DCR and Brian approvals to be paused");
+  }
 }
 
-export function readDcrMaintenanceConfig(env: NodeJS.ProcessEnv): DcrMaintenanceConfig {
+function normalizeSupabaseUrl(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("DCR maintenance configuration failed");
+  }
+  if (url.protocol !== "https:"
+    || url.username
+    || url.password
+    || !/^[a-z0-9-]+\.supabase\.co$/.test(url.hostname)
+    || (url.pathname !== "/" && url.pathname !== "")
+    || url.search
+    || url.hash) {
+    throw new Error("DCR maintenance configuration failed");
+  }
+  return url.origin;
+}
+
+function normalizePublicConfigUrl(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("DCR maintenance configuration failed");
+  }
+  if (url.protocol !== "https:"
+    || url.username
+    || url.password
+    || url.hostname !== "api.brianthebrain.app"
+    || url.pathname !== "/api/public/config"
+    || url.search
+    || url.hash) {
+    throw new Error("DCR maintenance configuration failed");
+  }
+  return url.toString();
+}
+
+export function readDcrMaintenanceConfig(
+  env: NodeJS.ProcessEnv,
+  mode: "audit" | "cleanup" = "audit",
+): DcrMaintenanceConfig {
   const supabaseUrl = env.SUPABASE_URL?.trim();
   const secretKey = env.SUPABASE_SECRET_KEY?.trim();
   const databaseUrl = env.DCR_MAINTENANCE_DATABASE_URL?.trim();
-  if (!supabaseUrl || !secretKey || !databaseUrl) {
-    throw new Error("SUPABASE_URL, SUPABASE_SECRET_KEY, and DCR_MAINTENANCE_DATABASE_URL are required");
+  if (!supabaseUrl || !databaseUrl) {
+    throw new Error("SUPABASE_URL and DCR_MAINTENANCE_DATABASE_URL are required");
   }
+  if (mode === "cleanup" && !secretKey) {
+    throw new Error("SUPABASE_SECRET_KEY is required for DCR cleanup");
+  }
+  const trustedSupabaseUrl = normalizeSupabaseUrl(supabaseUrl);
   const protectedClientIds = new Set(
     String(env.DCR_PROTECTED_CLIENT_IDS ?? "")
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean),
   );
-  const publicConfigUrl = env.BRIAN_PUBLIC_CONFIG_URL?.trim()
-    || "https://api.brianthebrain.app/api/public/config";
-  return { supabaseUrl, secretKey, databaseUrl, publicConfigUrl, protectedClientIds };
+  const publicConfigUrl = normalizePublicConfigUrl(env.BRIAN_PUBLIC_CONFIG_URL?.trim()
+    || "https://api.brianthebrain.app/api/public/config");
+  return {
+    supabaseUrl: trustedSupabaseUrl,
+    secretKey: secretKey || null,
+    databaseUrl,
+    publicConfigUrl,
+    protectedClientIds,
+  };
 }
 
 function usage(): string {
@@ -92,13 +148,18 @@ export async function runDcrMaintenanceCli(
     write(usage());
     return;
   }
-  const config = readDcrMaintenanceConfig(env);
+  const config = readDcrMaintenanceConfig(env, options.mode);
   const createPool = dependencies.createPool ?? createDcrMaintenancePool;
   const pool = createPool(config.databaseUrl);
   try {
-    const admin = createSupabaseOAuthAdminAdapter(config);
+    const admin = options.mode === "cleanup"
+      ? createSupabaseOAuthAdminAdapter({
+        supabaseUrl: config.supabaseUrl,
+        secretKey: config.secretKey!,
+      })
+      : null;
     const [clients, lifecycle, markerState] = await Promise.all([
-      admin.listClients(),
+      admin ? admin.listClients() : loadRegistryClients(pool),
       loadLifecycleEvidence(pool),
       loadDcrMarkerState({
         supabaseUrl: config.supabaseUrl,
@@ -113,8 +174,22 @@ export async function runDcrMaintenanceCli(
       runId: dependencies.runId?.() ?? randomUUID(),
       mode: options.mode,
       markerState,
+      revalidateCleanupWindow: options.mode === "cleanup"
+        ? async () => {
+          const current = await loadDcrMarkerState({
+            supabaseUrl: config.supabaseUrl,
+            publicConfigUrl: config.publicConfigUrl,
+          });
+          return !current.providerDcrAdvertised
+            && !current.brianDcrEnabled
+            && !current.brianApprovalsEnabled
+            && !current.markerDrift;
+        }
+        : undefined,
       revalidateClient: (clientId) => isClientLifecycleInactive(pool, clientId),
-      deleteClient: admin.deleteClient,
+      deleteClient: admin
+        ? admin.deleteClient
+        : async () => { throw new Error("DCR audit cannot delete clients"); },
     });
     write(JSON.stringify(result.summary));
     for (const deletion of result.deletions) write(JSON.stringify(deletion));

@@ -12,7 +12,7 @@
 
 Implemented in the working tree:
 
-- migrations 010-014 for identity/provisioning/OAuth claims, legacy-token retirement, privacy deletion/retention, narrow security-definer resolvers, and the Supabase custom access-token hook;
+- migrations 010-016 for identity/provisioning/OAuth claims, legacy-token retirement, privacy deletion/retention, narrow security-definer resolvers, the Supabase custom access-token hook, and request-time guarded MCP release flags;
 - fail-closed Supabase dashboard identity, separate MCP JWT/JWKS/resource/grant validation, RFC 9728 discovery/challenge, per-tool permissions, and immediate Brian-side revocation;
 - PKCE Supabase browser sessions, signup/confirmation/recovery/reset, safe continuations, email-bound invitation preflight/acceptance, durable onboarding, verified OAuth consent, and Settings → Agents & connections;
 - account/company deletion UI and APIs, a 30-day grace workflow with immediate credential revocation, owner-only due-deletion processing, and bounded 365/180-day audit/execution retention defaults;
@@ -24,12 +24,12 @@ Implemented in the working tree:
 Verified locally so far:
 
 - **2026-07-14 guarded-connection release verification:** frontend 9 suites,
-  51/51 tests, and the production build pass; CLI 49/49 tests, syntax check,
+  51/51 tests, and the production build pass; CLI 50/50 tests, syntax check,
   package dry-run, clean-prefix tarball install, version, URL-only dry-run, and
   credential-free doctor output pass; the regenerated Edge bundle is
   deterministic across consecutive builds (SHA-256
   `661add722cace59f7011b43bd0d4f55babdb65fbb3baf871a968313cfe575f62`).
-- server TypeScript build and 44 non-database files / 207 tests pass, including
+- server TypeScript build and 44 non-database files / 208 tests pass, including
   the localhost hook suite; 43 DB-backed files / 193 tests skip in this
   worktree because `TEST_DATABASE_URL` and `APP_TEST_DATABASE_URL` are not
   available. Do not reinterpret that skip as a new DB proof; the last complete
@@ -38,8 +38,8 @@ Verified locally so far:
   1. **Migration 014 (real production bug):** the `data_deletion_requests` actor/scope CHECK used strict `target is not distinct from requested_by`, but the two `on delete set null` FK actions fire as separate statements during auth-user deletion, so the transient one-null state violated the check and aborted the account deletion itself. Replaced with a null-tolerant named constraint `data_deletion_requests_actor_scope_check` plus a convergent fixup that drops the stale anonymous check; strict target=requester equality remains enforced by `request_data_deletion` at insert time.
   2. `migrate014.test.ts` referenced only `$1`/`$3` in the api_tokens seed while passing 3 params (unreferenced `$2` is untypable); second row now correctly uses tenant B.
   3. `authRoutes.test.ts` predated fail-closed memberships: a legacy JWT is honored only when its user id has an active membership, so the test now seeds the founding membership (mirroring the trusted backfill) instead of expecting an unmembered 200.
-- CLI test suite (49/49 on Node 24), syntax check, package dry run, and native-login orchestration fixtures;
-- DCR registry/CLI/workflow/probe suites: 27 focused tests, with trusted Admin-host pinning and credential preflight, unique-run recovery, redaction, nonzero failure/drift status, per-client lifecycle rechecks, step-scoped workflow secrets, and cleanup-after-registration coverage; server TypeScript build passes;
+- CLI test suite (50/50 on Node 24), syntax check, package dry run, and native-login orchestration fixtures;
+- DCR registry/CLI/workflow/probe suites: 32 focused tests, with trusted Admin-host pinning and credential preflight, retrying ambiguous-response recovery cleanup, redaction, nonzero failure/drift status, per-client lifecycle and paused-window rechecks, a secret-free read-only hourly audit, manual protected cleanup restricted to a fully paused window, and cleanup-after-registration coverage; server TypeScript build passes;
 - deterministic generated Edge bundle build and drift check (rebuilt 2026-07-13 from current source).
 - **2026-07-14 registration-boundary probe:** the credential-free production
   OAuth smoke passed again. An isolated Codex CLI 0.144.2 login reached Brian's
@@ -78,7 +78,7 @@ Remaining release gates / not yet claimed complete externally:
 - `api.brianthebrain.app` is attached to the Vercel `brian` project, the branded proxy is reachable, and the current credential-free public OAuth/MCP release smoke passes. Public signup remains server-side disabled (`PUBLIC_SIGNUP_ENABLED` defaults false and is unset in `app_config`);
 - **Supabase OAuth dashboard setup completed and verified 2026-07-14:** OAuth 2.1 is enabled; Site URL is `https://brianthebrain.app`; Authorization Path is `/oauth/consent`; exact web callback `https://brianthebrain.app/auth/callback` is allowlisted; `public.custom_access_token_hook` is enabled as the Postgres custom access-token hook with execute restricted to `supabase_auth_admin`; authorization-server discovery now returns HTTP 200 with authorization/token/JWKS/DCR endpoints and PKCE S256. Dynamic OAuth app registration is enabled under the guarded rollout decision above;
 - DCR is now advertised, but disposable registration+cleanup, RFC 8707 `resource`, browser authentication, refresh rotation, provider-side revocation, and a real tenant-scoped OAuth tool call still need dated proof;
-- a 2026-07-14 release review correctly blocked the first guarded artifact: the disposable probe trusted a discovered Admin origin, cleanup failures could leave CI green, lifecycle deletion evidence was snapshot-only, marker drift was unset, workflow secrets were job-scoped, and the documented database flags did not drive runtime behavior. The branch now has test-backed fixes: trusted `SUPABASE_URL` pinning plus unique-run recovery cleanup, nonzero failure/drift exits, client-scoped pre-delete rechecks, step-scoped protected secrets, separate CLI provider/marker/approval/drift states, and migration 016's request-time boolean-only flag function. These corrections are local until migration 016 and refreshed Edge/web artifacts are deployed and re-verified;
+- 2026-07-14 release reviews blocked two unsafe guarded artifacts. The branch now pins Admin calls to a Supabase-owned HTTPS origin, recovers and deletes ambiguous probe registrations by a unique marker, makes the hourly audit DB-only and secret-free, confines Admin deletion to a manually approved fully paused window, rechecks lifecycle evidence per client, distinguishes unknown marker evidence from real drift, and drives request-time flags through migration 016's boolean-only function. These corrections are local until migration 016 and refreshed Edge/web artifacts are deployed and re-verified;
 - Claude Code 2.1.198 and Codex CLI 0.144.2 command surfaces were inspected, but the full authenticated client matrix has not run end to end;
 - reviewed legal pages/subprocessors, production monitoring and alert delivery, a dated backup/restore exercise, the selected deep security scan in a fresh Codex session, npm scope/license/publish decisions, and deployment remain release actions.
 

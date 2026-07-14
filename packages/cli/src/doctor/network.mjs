@@ -62,7 +62,7 @@ export async function runNetworkDoctor({
   const metadataUrl = protectedResourceMetadataUrl(resourceUrl);
   const rootMetadataUrl = rootProtectedResourceMetadataUrl(resourceUrl);
   let metadata = null;
-  let authorizationMetadata = null;
+  let providerDcrState = null;
 
   try {
     const result = await fetchJson(fetchFn, metadataUrl, timeoutMs);
@@ -110,14 +110,16 @@ export async function runNetworkDoctor({
           Boolean(endpointsValid),
           endpointsValid ? "authorization server advertises authorization code + PKCE S256" : "discovery document is incomplete or issuer mismatched",
         ));
-        if (endpointsValid) authorizationMetadata = document;
+        if (endpointsValid) {
+          providerDcrState = validEndpoint(document.registration_endpoint, allowHttp);
+        }
       }
     } catch {
       checks.push(check("authorization-server-discovery", false, "request failed"));
     }
   }
 
-  const registrationValid = validEndpoint(authorizationMetadata?.registration_endpoint, allowHttp);
+  const registrationValid = providerDcrState === true;
   checks.push(check(
     "dynamic-client-registration-advertised",
     registrationValid,
@@ -170,13 +172,20 @@ export async function runNetworkDoctor({
             config.mcpOAuthApprovals ? "new connection approvals are enabled" : "new connection approvals are paused",
             "warn",
           ),
-          check(
-            "dcr-marker-drift",
-            registrationValid === config.mcpDcr,
-            registrationValid === config.mcpDcr
-              ? "provider advertisement and Brian DCR marker agree"
-              : "provider advertisement and Brian DCR marker disagree",
-          ),
+          providerDcrState === null
+            ? check(
+              "dcr-marker-drift",
+              false,
+              "provider advertisement was unavailable; marker drift is unknown",
+              "warn",
+            )
+            : check(
+              "dcr-marker-drift",
+              providerDcrState === config.mcpDcr,
+              providerDcrState === config.mcpDcr
+                ? "provider advertisement and Brian DCR marker agree"
+                : "provider advertisement and Brian DCR marker disagree",
+            ),
         );
       }
     }

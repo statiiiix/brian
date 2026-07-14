@@ -8,14 +8,16 @@ const workflow = readFileSync(
 
 describe("DCR maintenance workflow privilege boundaries", () => {
   it("protects every secret-bearing job with the production environment", () => {
-    expect(workflow.match(/environment: production/g)).toHaveLength(2);
+    expect(workflow.match(/environment: production-audit/g)).toHaveLength(1);
+    expect(workflow.match(/environment: production$/gm)).toHaveLength(1);
+    expect(workflow).not.toContain('cron: "41 2 * * *"');
   });
 
   it("scopes privileged secrets only to maintenance command steps", () => {
     const jobLevelSecretBlocks = workflow.match(/^    env:\n(?:      .*\n)+/gm) ?? [];
     expect(jobLevelSecretBlocks).toEqual([]);
     expect(workflow.match(/SUPABASE_SECRET_KEY: \$\{\{ secrets\.SUPABASE_SECRET_KEY \}\}/g))
-      .toHaveLength(2);
+      .toHaveLength(1);
     expect(workflow.match(/DCR_MAINTENANCE_DATABASE_URL: \$\{\{ secrets\.DCR_MAINTENANCE_DATABASE_URL \}\}/g))
       .toHaveLength(2);
   });

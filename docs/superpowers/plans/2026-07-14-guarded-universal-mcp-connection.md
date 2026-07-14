@@ -647,7 +647,7 @@ npm run oauth:dcr:audit
 npm run oauth:dcr:audit -- --delete-stale --yes
 ```
 
-`--delete-stale` without `--yes` is a usage error. Audit is default and read-only. Require `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, and `DCR_MAINTENANCE_DATABASE_URL`; accept protected IDs only from `DCR_PROTECTED_CLIENT_IDS` as a comma-separated server environment variable. Never print environment values.
+`--delete-stale` without `--yes` is a usage error. Audit is default and reads the minimal OAuth client inventory plus lifecycle evidence through the attested read-only database role; it requires no Admin secret. Cleanup additionally requires `SUPABASE_SECRET_KEY`, a manually approved production environment, and a provider/Brian state where DCR and new approvals are paused and aligned. Accept protected IDs only from `DCR_PROTECTED_CLIENT_IDS` as a comma-separated server environment variable. Never print environment values.
 
 Add:
 
@@ -685,7 +685,7 @@ git commit -m "feat: audit and clean dynamic OAuth clients"
 
 - [x] **Step 1: Add the scheduled workflow with least privilege**
 
-Create two jobs under both `workflow_dispatch` and cron:
+Create a secret-free hourly audit job and a separate manual cleanup job:
 
 ```yaml
 on:
@@ -698,10 +698,9 @@ on:
         type: boolean
   schedule:
     - cron: "17 * * * *"
-    - cron: "41 2 * * *"
 ```
 
-Set `permissions: contents: read`, `timeout-minutes: 10`, Node 24, `working-directory: server`, `npm ci`, and environment values only from repository/environment secrets. Hourly runs execute audit. The daily cron and an explicit cleanup dispatch execute `npm run oauth:dcr:audit -- --delete-stale --yes`.
+Set `permissions: contents: read`, `timeout-minutes: 10`, Node 24, `working-directory: server`, `npm ci`, and environment values only from repository/environment secrets. Hourly runs execute read-only audit in `production-audit` without `SUPABASE_SECRET_KEY`. Only an explicit protected-environment dispatch may execute `npm run oauth:dcr:audit -- --delete-stale --yes`, and it fails closed unless provider DCR, Brian's DCR marker, and new approvals are paused and aligned.
 
 - [x] **Step 2: Keep GitHub logs count-only**
 
@@ -871,7 +870,7 @@ Skip this commit when those paths are unchanged.
 
 - [ ] **Step 1: Establish DCR maintenance evidence before enablement**
 
-Provision the `DCR_MAINTENANCE_DATABASE_URL` role with `LOGIN`, `default_transaction_read_only=on`, and `SELECT` only on the attested Auth lifecycle tables plus `public.agent_connections` and the DCR marker source. Run:
+Provision the `DCR_MAINTENANCE_DATABASE_URL` role with `LOGIN`, `default_transaction_read_only=on`, and `SELECT` only on `auth.oauth_clients(id, registration_type, created_at, deleted_at)`, the attested Auth lifecycle columns, and `public.agent_connections`. The hourly audit environment must not receive `SUPABASE_SECRET_KEY`. Run:
 
 ```bash
 cd server && npm run oauth:dcr:audit
@@ -913,7 +912,7 @@ Run the same URL-only journey with the current Claude Code version. If its exact
 
 - [ ] **Step 6: Exercise cleanup, alert, and kill switches**
 
-Create a disposable unapproved DCR registration, age only the isolated staging fixture past 24 hours, and prove daily cleanup deletes it while retaining a protected/manual/connected client. Exercise the synthetic volume alert and verify delivery. Disable Supabase DCR plus `MCP_DCR_ENABLED`, prove new registration stops while an existing approved connection still works, then restore both only if alert and rollback evidence are complete.
+Create a disposable unapproved DCR registration and age only the isolated staging fixture past 24 hours. Pause Supabase DCR, `MCP_DCR_ENABLED`, and new approvals, then manually approve the protected cleanup workflow and prove it deletes the stale fixture while retaining a protected/manual/connected client. Exercise the synthetic volume alert and verify delivery. Prove new registration stops while an existing approved connection still works, then restore DCR and approvals only if alert and rollback evidence are complete.
 
 - [ ] **Step 7: Publish the verified CLI package**
 

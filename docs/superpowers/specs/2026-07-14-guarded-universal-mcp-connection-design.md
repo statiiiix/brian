@@ -245,8 +245,8 @@ Brian adds a credential-redacting operations command:
 npm run oauth:dcr:audit
 ```
 
-It reads OAuth clients through Supabase's supported OAuth Admin API, reads OAuth
-authorization/consent existence through a read-only maintenance database
+Audit reads only `id`, `registration_type`, `created_at`, and `deleted_at` from
+`auth.oauth_clients`, and reads OAuth authorization/consent existence through a read-only maintenance database
 connection, and compares public client IDs with Brian `agent_connections`. It
 emits counts only:
 
@@ -257,8 +257,9 @@ emits counts only:
 - registration-to-approved-connection conversion;
 - DCR/Brian marker drift.
 
-The command requires `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, and
-`DCR_MAINTENANCE_DATABASE_URL`. The maintenance connection is available only to
+Audit requires `SUPABASE_URL` and `DCR_MAINTENANCE_DATABASE_URL`; it never
+receives a Supabase secret key. Cleanup additionally requires
+`SUPABASE_SECRET_KEY`. The maintenance connection is available only to
 the scheduled operations runner and may read the required `auth` lifecycle
 tables and Brian connection rows; the command never writes directly to the
 `auth` schema. The secret key and maintenance URL are never accepted by the
@@ -288,10 +289,12 @@ are excluded.
 
 ### 8.3 Scheduling and kill switch
 
-A production scheduler runs the audit hourly and cleanup daily. The deployment
-may use the existing CI provider's scheduled workflow or an equivalent secret
-manager-backed runner. Permanent DCR requires one recorded successful scheduled
-run and alert delivery.
+A production scheduler runs the read-only audit hourly. Cleanup is never
+scheduled: it is a manual, protected-environment operation and runs only while
+provider DCR, Brian's DCR marker, and new approvals are all paused and aligned.
+The command rechecks that window and lifecycle evidence immediately before each
+Admin-API deletion. Permanent DCR requires one recorded successful scheduled
+audit run and alert delivery.
 
 The warning threshold is two times the trailing seven-day same-hour baseline.
 The release-stop threshold is five times baseline or 100 registrations in ten

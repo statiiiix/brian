@@ -128,7 +128,7 @@ globally coordinated rate limit at the branded production gateway; the gateway
 must overwrite `CF-Connecting-IP`, `X-Real-IP`, or `X-Forwarded-For` rather than
 trusting a caller-supplied value.
 
-Use an asymmetric Supabase signing key supported by the verifier (`ES256` or `RS256`). Configure the Supabase OAuth authorization path as Brian's `/oauth/consent` route and select `public.custom_access_token_hook` as the custom access-token hook after the identity/OAuth migrations 010-012 are applied. Apply the complete current migration set through 014 before releasing the product.
+Use an asymmetric Supabase signing key supported by the verifier (`ES256` or `RS256`). Configure the Supabase OAuth authorization path as Brian's `/oauth/consent` route and select `public.custom_access_token_hook` as the custom access-token hook after the identity/OAuth migrations 010-012 are applied. Apply the complete current migration set through 016 before releasing the product.
 
 Brian rejects MCP access tokens whose declared lifetime exceeds one hour, even
 when their signature is otherwise valid. Configure Supabase access-token

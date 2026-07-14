@@ -10,7 +10,6 @@ on:
         type: boolean
   schedule:
     - cron: "17 * * * *"
-    - cron: "41 2 * * *"
 
 permissions:
   contents: read
@@ -26,7 +25,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.cleanup == false)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    environment: production
+    environment: production-audit
     defaults:
       run:
         working-directory: server
@@ -44,14 +43,11 @@ jobs:
         run: npm run oauth:dcr:audit
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           DCR_MAINTENANCE_DATABASE_URL: ${{ secrets.DCR_MAINTENANCE_DATABASE_URL }}
           DCR_PROTECTED_CLIENT_IDS: ${{ secrets.DCR_PROTECTED_CLIENT_IDS }}
 
   cleanup:
-    if: >-
-      (github.event_name == 'schedule' && github.event.schedule == '41 2 * * *') ||
-      (github.event_name == 'workflow_dispatch' && inputs.cleanup == true)
+    if: github.event_name == 'workflow_dispatch' && inputs.cleanup == true
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: production

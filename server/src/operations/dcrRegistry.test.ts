@@ -7,6 +7,7 @@ import {
   isClientLifecycleInactive,
   loadDcrMarkerState,
   loadLifecycleEvidence,
+  loadRegistryClients,
   type ClientLifecycleEvidence,
   type RegistryClient,
 } from "./dcrRegistry.js";
@@ -88,8 +89,8 @@ describe("DCR registry maintenance output", () => {
       runId: "run-safe-001",
       mode: "cleanup",
       markerState: {
-        providerDcrAdvertised: true,
-        brianDcrEnabled: true,
+        providerDcrAdvertised: false,
+        brianDcrEnabled: false,
         brianApprovalsEnabled: false,
         markerDrift: false,
       },
@@ -113,8 +114,9 @@ describe("DCR registry maintenance output", () => {
       deleted: 1,
       retained: 2,
       failed: 1,
-      providerDcrAdvertised: true,
-      brianDcrEnabled: true,
+      cleanupBlocked: false,
+      providerDcrAdvertised: false,
+      brianDcrEnabled: false,
       brianApprovalsEnabled: false,
       markerDrift: false,
     });
@@ -163,9 +165,9 @@ describe("DCR registry maintenance output", () => {
       runId: "run-jit-001",
       mode: "cleanup",
       markerState: {
-        providerDcrAdvertised: true,
-        brianDcrEnabled: true,
-        brianApprovalsEnabled: true,
+        providerDcrAdvertised: false,
+        brianDcrEnabled: false,
+        brianApprovalsEnabled: false,
         markerDrift: false,
       },
       revalidateClient,
@@ -180,6 +182,64 @@ describe("DCR registry maintenance output", () => {
       deleted: 0,
       failed: 0,
     });
+  });
+
+  it("never mutates during marker drift or a live registration/approval window", async () => {
+    for (const markerState of [
+      {
+        providerDcrAdvertised: true,
+        brianDcrEnabled: false,
+        brianApprovalsEnabled: false,
+        markerDrift: true,
+      },
+      {
+        providerDcrAdvertised: true,
+        brianDcrEnabled: true,
+        brianApprovalsEnabled: true,
+        markerDrift: false,
+      },
+    ]) {
+      const deleteClient = vi.fn();
+      const result = await executeDcrMaintenance({
+        clients: [client("must-retain", 72)],
+        evidence: evidence(),
+        protectedClientIds: new Set(),
+        now: NOW,
+        runId: "run-blocked-cleanup",
+        mode: "cleanup",
+        markerState,
+        revalidateClient: async () => true,
+        deleteClient,
+      });
+      expect(deleteClient).not.toHaveBeenCalled();
+      expect(result.summary.cleanupBlocked).toBe(true);
+    }
+  });
+
+  it("stops before deletion when the paused window closes after inventory", async () => {
+    const deleteClient = vi.fn();
+    const revalidateClient = vi.fn();
+    const result = await executeDcrMaintenance({
+      clients: [client("must-retain-after-resume", 72)],
+      evidence: evidence(),
+      protectedClientIds: new Set(),
+      now: NOW,
+      runId: "run-window-closed",
+      mode: "cleanup",
+      markerState: {
+        providerDcrAdvertised: false,
+        brianDcrEnabled: false,
+        brianApprovalsEnabled: false,
+        markerDrift: false,
+      },
+      revalidateCleanupWindow: async () => false,
+      revalidateClient,
+      deleteClient,
+    });
+
+    expect(revalidateClient).not.toHaveBeenCalled();
+    expect(deleteClient).not.toHaveBeenCalled();
+    expect(result.summary.cleanupBlocked).toBe(true);
   });
 });
 
@@ -374,6 +434,40 @@ describe("read-only lifecycle evidence", () => {
       connect: async () => ({ query, release }),
       end: async () => undefined,
     }, "client-under-review")).resolves.toBe(false);
+    expect(release).toHaveBeenCalledOnce();
+  });
+});
+
+describe("read-only registry inventory", () => {
+  it("loads only minimal OAuth client fields through the maintenance role", async () => {
+    const release = vi.fn();
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes("transaction_read_only")) {
+        return { rows: [{ transaction_read_only: "on", is_superuser: false, is_database_owner: false }] };
+      }
+      if (sql.includes("information_schema.columns")) {
+        return { rows: [
+          { column_name: "id" },
+          { column_name: "registration_type" },
+          { column_name: "created_at" },
+          { column_name: "deleted_at" },
+        ] };
+      }
+      return { rows: [{
+        client_id: "database-client-id",
+        registration_type: "dynamic",
+        created_at: "2026-07-13T10:00:00.000Z",
+      }] };
+    });
+
+    await expect(loadRegistryClients({
+      connect: async () => ({ query, release }),
+      end: async () => undefined,
+    })).resolves.toEqual([{
+      clientId: "database-client-id",
+      registrationType: "dynamic",
+      createdAt: new Date("2026-07-13T10:00:00.000Z"),
+    }]);
     expect(release).toHaveBeenCalledOnce();
   });
 });

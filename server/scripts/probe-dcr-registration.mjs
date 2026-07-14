@@ -47,13 +47,17 @@ async function fetchJson(fetchFn, url, category, init = undefined) {
   try {
     response = await fetchFn(url, { redirect: "error", ...init });
   } catch {
-    throw new Error(`DCR probe ${category} failed`);
+    const error = new Error(`DCR probe ${category} failed`);
+    if (category === "registration") error.ambiguousRegistration = true;
+    throw error;
   }
   if (!response.ok) throw new Error(`DCR probe ${category} failed`);
   try {
     return await response.json();
   } catch {
-    throw new Error(`DCR probe ${category} failed`);
+    const error = new Error(`DCR probe ${category} failed`);
+    if (category === "registration") error.ambiguousRegistration = true;
+    throw error;
   }
 }
 
@@ -102,6 +106,7 @@ export async function runDcrRegistrationProbe({
   adminFactory = createProbeAdmin,
   secretKey = "",
   runId = randomUUID(),
+  waitFn = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
 }) {
   const trusted = trustedSupabaseEndpoints(supabaseUrl);
   const metadata = await fetchJson(
@@ -148,22 +153,48 @@ export async function runDcrRegistrationProbe({
   }
   const clientName = `Brian controlled DCR probe ${runId}`;
 
-  const registration = await fetchJson(
-    fetchFn,
-    registrationEndpoint,
-    "registration",
-    {
-      method: "POST",
-      headers: { accept: "application/json", "content-type": "application/json" },
-      body: JSON.stringify({
-        client_name: clientName,
-        redirect_uris: [CALLBACK],
-        grant_types: ["authorization_code", "refresh_token"],
-        response_types: ["code"],
-        token_endpoint_auth_method: "none",
-      }),
-    },
-  );
+  let registration;
+  try {
+    registration = await fetchJson(
+      fetchFn,
+      registrationEndpoint,
+      "registration",
+      {
+        method: "POST",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify({
+          client_name: clientName,
+          redirect_uris: [CALLBACK],
+          grant_types: ["authorization_code", "refresh_token"],
+          response_types: ["code"],
+          token_endpoint_auth_method: "none",
+        }),
+      },
+    );
+  } catch (error) {
+    if (!error?.ambiguousRegistration) {
+      throw new Error("DCR probe registration failed");
+    }
+    let matches = [];
+    for (const delayMs of [0, 100, 400, 1000]) {
+      if (delayMs > 0) await waitFn(delayMs);
+      try {
+        matches = (await admin.listClients()).filter((client) => client.clientName === clientName);
+      } catch {
+        throw new Error("DCR probe cleanup failed");
+      }
+      if (matches.length > 0) break;
+    }
+    if (matches.length === 0 || matches.some((match) => !match.clientId)) {
+      throw new Error("DCR probe cleanup failed");
+    }
+    try {
+      for (const match of matches) await admin.deleteClient(match.clientId);
+    } catch {
+      throw new Error("DCR probe cleanup failed");
+    }
+    throw new Error("DCR probe registration failed");
+  }
   let clientId = typeof registration?.client_id === "string" ? registration.client_id : "";
   let listed;
   if (!clientId) {

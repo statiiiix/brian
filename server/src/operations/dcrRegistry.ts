@@ -123,6 +123,7 @@ export interface DcrAuditSummary {
   brianDcrEnabled: boolean | null;
   brianApprovalsEnabled: boolean | null;
   markerDrift: boolean | null;
+  cleanupBlocked: boolean;
 }
 
 export interface DcrDeletionRecord {
@@ -169,6 +170,7 @@ interface ExecuteDcrMaintenanceInput extends RegistryClassificationInput {
   runId: string;
   mode: "audit" | "cleanup";
   markerState: DcrMarkerState | null;
+  revalidateCleanupWindow?(): Promise<boolean>;
   revalidateClient(clientId: string): Promise<boolean>;
   deleteClient(clientId: string): Promise<void>;
 }
@@ -188,8 +190,14 @@ export async function executeDcrMaintenance(input: ExecuteDcrMaintenanceInput): 
   let deleted = 0;
   let failed = 0;
   let revalidatedRetained = 0;
+  const cleanupWindowOpen = input.markerState !== null
+    && !input.markerState.providerDcrAdvertised
+    && !input.markerState.brianDcrEnabled
+    && !input.markerState.brianApprovalsEnabled
+    && !input.markerState.markerDrift;
+  let cleanupBlocked = input.mode === "cleanup" && !cleanupWindowOpen;
 
-  if (input.mode === "cleanup") {
+  if (input.mode === "cleanup" && !cleanupBlocked) {
     for (const { client } of eligible) {
       const record = {
         clientIdHash: clientIdHash(client.clientId),
@@ -197,6 +205,11 @@ export async function executeDcrMaintenance(input: ExecuteDcrMaintenanceInput): 
         runId: input.runId,
       } as const;
       try {
+        if (input.revalidateCleanupWindow
+          && !await input.revalidateCleanupWindow()) {
+          cleanupBlocked = true;
+          break;
+        }
         if (!await input.revalidateClient(client.clientId)) {
           revalidatedRetained += 1;
           continue;
@@ -230,6 +243,7 @@ export async function executeDcrMaintenance(input: ExecuteDcrMaintenanceInput): 
       brianDcrEnabled: input.markerState?.brianDcrEnabled ?? null,
       brianApprovalsEnabled: input.markerState?.brianApprovalsEnabled ?? null,
       markerDrift: input.markerState?.markerDrift ?? null,
+      cleanupBlocked,
     },
     deletions,
   };
@@ -458,6 +472,51 @@ export async function isClientLifecycleInactive(
       throw new Error("DCR lifecycle revalidation failed");
     }
     return rows[0].inactive;
+  } finally {
+    client.release();
+  }
+}
+
+export async function loadRegistryClients(pool: MaintenancePool): Promise<RegistryClient[]> {
+  const client = await pool.connect().catch(() => {
+    throw new Error("DCR registry inventory connection failed");
+  });
+  try {
+    await assertReadOnlyMaintenanceConnection(client);
+    const attestation = await client.query(`
+      select column_name
+        from information_schema.columns
+       where table_schema = 'auth'
+         and table_name = 'oauth_clients'
+         and column_name in ('id', 'registration_type', 'created_at', 'deleted_at')
+    `).catch(() => { throw new Error("DCR registry schema attestation failed"); });
+    const columns = new Set(attestation.rows.map((row) => String(row.column_name)));
+    if (columns.size !== 4
+      || ["id", "registration_type", "created_at", "deleted_at"]
+        .some((column) => !columns.has(column))) {
+      throw new Error("DCR registry schema attestation failed");
+    }
+    const { rows } = await client.query(`
+      select id::text as client_id,
+             registration_type::text as registration_type,
+             created_at
+        from auth.oauth_clients
+       where deleted_at is null
+       order by created_at, id
+    `).catch(() => { throw new Error("DCR registry inventory query failed"); });
+    return rows.map((row) => {
+      const createdAt = new Date(String(row.created_at));
+      if (typeof row.client_id !== "string"
+        || (row.registration_type !== "dynamic" && row.registration_type !== "manual")
+        || Number.isNaN(createdAt.getTime())) {
+        throw new Error("DCR registry inventory returned invalid data");
+      }
+      return {
+        clientId: row.client_id,
+        registrationType: row.registration_type,
+        createdAt,
+      };
+    });
   } finally {
     client.release();
   }

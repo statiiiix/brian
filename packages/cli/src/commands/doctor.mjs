@@ -104,7 +104,9 @@ export async function runDoctor(options, runtime) {
         approvals: approvals?.status === "pass"
           ? "enabled"
           : approvals?.status === "warn" ? "paused" : "unavailable",
-        markerDrift: markerDrift?.status === "pass" ? "aligned" : "detected",
+        markerDrift: markerDrift?.status === "pass"
+          ? "aligned"
+          : markerDrift?.status === "fail" ? "detected" : "unavailable",
         localClient: localReady ? "ready" : "not-ready",
       },
       checks,
