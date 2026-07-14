@@ -17,6 +17,7 @@ Implemented in the working tree:
 - PKCE Supabase browser sessions, signup/confirmation/recovery/reset, safe continuations, email-bound invitation preflight/acceptance, durable onboarding, verified OAuth consent, and Settings → Agents & connections;
 - account/company deletion UI and APIs, a 30-day grace workflow with immediate credential revocation, owner-only due-deletion processing, and bounded 365/180-day audit/execution retention defaults;
 - publishable `packages/cli` with URL-only Claude Code/Desktop, Cursor, and Codex adapters plus signup/connect/status/doctor/disconnect, private last-health state, backups, refusal safety, and fixture tests;
+- guarded universal MCP connection work: explicit server-authoritative Brian permissions, native post-configuration login orchestration, doctor readiness labels, a pinned Supabase OAuth Admin adapter, count-only DCR audit, fail-closed stale cleanup with read-only schema attestation, scheduled hygiene, alert thresholds, and a kill-switch runbook;
 - pinned CI across web/server and Node 22/24/26 Linux plus macOS arm64/x64 tarball installs, with deterministic Edge generation and drift enforcement;
 - architecture, security, operations, privacy, signup, OAuth, compatibility, CLI, migration, incident, legacy-token, backup, and retention documentation.
 
@@ -28,7 +29,8 @@ Verified locally so far:
   1. **Migration 014 (real production bug):** the `data_deletion_requests` actor/scope CHECK used strict `target is not distinct from requested_by`, but the two `on delete set null` FK actions fire as separate statements during auth-user deletion, so the transient one-null state violated the check and aborted the account deletion itself. Replaced with a null-tolerant named constraint `data_deletion_requests_actor_scope_check` plus a convergent fixup that drops the stale anonymous check; strict target=requester equality remains enforced by `request_data_deletion` at insert time.
   2. `migrate014.test.ts` referenced only `$1`/`$3` in the api_tokens seed while passing 3 params (unreferenced `$2` is untypable); second row now correctly uses tenant B.
   3. `authRoutes.test.ts` predated fail-closed memberships: a legacy JWT is honored only when its user id has an active membership, so the test now seeds the founding membership (mirroring the trusted backfill) instead of expecting an unmembered 200.
-- CLI test suite (31/31 on Node 24), syntax check, package dry run, tarball install/bin smoke;
+- CLI test suite (46/46 on Node 24), syntax check, package dry run, and native-login orchestration fixtures;
+- DCR registry/probe suites: 11 registry/CLI tests plus 4 disposable-probe path tests, with redaction, stop-on-error, and cleanup-after-registration coverage; server TypeScript build passes;
 - deterministic generated Edge bundle build and drift check (rebuilt 2026-07-13 from current source).
 - **2026-07-14 registration-boundary probe:** the credential-free production
   OAuth smoke passed again. An isolated Codex CLI 0.144.2 login reached Brian's
@@ -43,6 +45,14 @@ Verified locally so far:
   concrete: manually register this Codex client, configure its public client ID,
   enable new OAuth approvals for the controlled test, then run consent, an MCP
   tool call, refresh, and revocation. Open DCR is not required for this proof.
+- **2026-07-14 guarded DCR enablement:** the founder explicitly chose the
+  universal-registration path. Supabase Authentication → OAuth Server → Allow
+  Dynamic OAuth Apps was enabled and saved successfully. Production discovery
+  now advertises a valid `registration_endpoint`. The extended public smoke
+  intentionally stops at the next deployment gate because the live Brian Edge
+  bundle predates the new `mcpOAuth`, `mcpOAuthApprovals`, and `mcpDcr` public
+  markers. No disposable client was created: the controlled probe will not run
+  until `SUPABASE_SECRET_KEY` is available so Admin-API deletion is guaranteed.
 
 Applied to live production on 2026-07-13/14 (founder explicitly approved in-session):
 
@@ -55,10 +65,10 @@ Applied to live production on 2026-07-13/14 (founder explicitly approved in-sess
 
 Remaining release gates / not yet claimed complete externally:
 
-- production still needs a verified non-owner `brian_app` runtime credential, a DCR/abuse-control decision, signup rate-limit configuration, and Turnstile;
+- production still needs a verified non-owner `brian_app` runtime credential, deployment of the guarded DCR/approval markers and maintenance workflow secrets, signup rate-limit configuration, and Turnstile;
 - `api.brianthebrain.app` is attached to the Vercel `brian` project, the branded proxy is reachable, and the current credential-free public OAuth/MCP release smoke passes. Public signup remains server-side disabled (`PUBLIC_SIGNUP_ENABLED` defaults false and is unset in `app_config`);
-- **Supabase OAuth dashboard setup completed and verified 2026-07-14:** OAuth 2.1 is enabled; Site URL is `https://brianthebrain.app`; Authorization Path is `/oauth/consent`; exact web callback `https://brianthebrain.app/auth/callback` is allowlisted; `public.custom_access_token_hook` is enabled as the Postgres custom access-token hook with execute restricted to `supabase_auth_admin`; authorization-server discovery now returns HTTP 200 with authorization/token/JWKS endpoints and PKCE S256. Dynamic OAuth app registration remains off intentionally until the documented abuse-control decision;
-- RFC 8707 `resource`, DCR, refresh rotation, provider-side revocation, and a real tenant-scoped OAuth tool call need staging proof;
+- **Supabase OAuth dashboard setup completed and verified 2026-07-14:** OAuth 2.1 is enabled; Site URL is `https://brianthebrain.app`; Authorization Path is `/oauth/consent`; exact web callback `https://brianthebrain.app/auth/callback` is allowlisted; `public.custom_access_token_hook` is enabled as the Postgres custom access-token hook with execute restricted to `supabase_auth_admin`; authorization-server discovery now returns HTTP 200 with authorization/token/JWKS/DCR endpoints and PKCE S256. Dynamic OAuth app registration is enabled under the guarded rollout decision above;
+- DCR is now advertised, but disposable registration+cleanup, RFC 8707 `resource`, browser authentication, refresh rotation, provider-side revocation, and a real tenant-scoped OAuth tool call still need dated proof;
 - Claude Code 2.1.198 and Codex CLI 0.144.2 command surfaces were inspected, but the full authenticated client matrix has not run end to end;
 - reviewed legal pages/subprocessors, production monitoring and alert delivery, a dated backup/restore exercise, the selected deep security scan in a fresh Codex session, npm scope/license/publish decisions, and deployment remain release actions.
 

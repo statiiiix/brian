@@ -755,11 +755,11 @@ git commit -m "ops: schedule guarded DCR maintenance"
 - Modify: `docs/mcp-client-compatibility.md`
 - Modify: `Nextstep.md`
 
-- [ ] **Step 1: Add a credential-free public smoke assertion**
+- [x] **Step 1: Add a credential-free public smoke assertion**
 
 Require authorization metadata to advertise a valid `registration_endpoint`, then fetch `/api/public/config` and assert `mcpOAuth`, `mcpOAuthApprovals`, and `mcpDcr` are booleans. The normal smoke must not call the registration endpoint.
 
-- [ ] **Step 2: Add an explicit disposable DCR probe**
+- [x] **Step 2: Add an explicit disposable DCR probe**
 
 The probe must be a separate script requiring both `--yes` and `SUPABASE_SECRET_KEY`. It should:
 
@@ -771,7 +771,7 @@ The probe must be a separate script requiring both `--yes` and `SUPABASE_SECRET_
 
 It must never print the registration response, client ID, secret, callback query, or provider error body. Add `smoke:dcr-registration` to `server/package.json`. This probe is controlled-operations evidence, never `brian doctor` behavior.
 
-- [ ] **Step 3: Add tests around the probe adapters**
+- [x] **Step 3: Add tests around the probe adapters**
 
 Factor the probe into an injected function and test success, registration failure, verification failure, and cleanup failure with fake fetch/admin adapters. Assert cleanup runs after every post-registration path and output excludes all secret fixtures.
 
@@ -787,7 +787,7 @@ Expected before production enablement: public OAuth checks pass; availability ma
 
 Update compatibility and next-step documents with separate dated fields for `advertised`, `registered`, `authenticated`, `refreshed`, and `revoked`. Do not mark unperformed fields passed.
 
-- [ ] **Step 5: Commit smoke changes**
+- [x] **Step 5: Commit smoke changes**
 
 ```bash
 git add server/scripts/smoke-mcp-oauth.mjs server/scripts/probe-dcr-registration.mjs server/package.json docs/mcp-client-compatibility.md Nextstep.md

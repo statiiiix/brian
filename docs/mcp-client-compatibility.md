@@ -2,11 +2,27 @@
 
 > Inspection date: 2026-07-14
 > Protocol target: MCP 2025-11-25
-> Status: public discovery/challenge verified against production; authenticated end-to-end OAuth has not yet been run.
+> Status: public discovery/challenge and DCR advertisement verified against production; authenticated end-to-end OAuth has not yet been run.
 
 This matrix is deliberately evidence-labeled. A CLI flag or menu item proves that a client exposes a feature; it does not prove interoperability with Supabase, RFC 9728 discovery, DCR, refresh rotation, or revocation.
 
-The canonical domain was rechecked without credentials on 2026-07-14 after deploying Edge Function `brian` version 8 (build marker `207b223821555ba5`). The release smoke now passes both RFC 9728 metadata locations, Supabase authorization-server discovery, PKCE S256 advertisement, the authorization route, and the `/mcp` `401` Bearer challenge. Authenticated client testing remains gated on a safe registration path and an approved test grant; Dynamic Client Registration stays off until the documented abuse controls and monitoring are ready.
+The canonical domain was rechecked without credentials on 2026-07-14 after deploying Edge Function `brian` version 8 (build marker `207b223821555ba5`). The earlier release smoke passed both RFC 9728 metadata locations, Supabase authorization-server discovery, PKCE S256 advertisement, the authorization route, and the `/mcp` `401` Bearer challenge. Dynamic Client Registration was enabled in Supabase on 2026-07-14 after the repository gained count-only registry audit, fail-closed stale cleanup, alert thresholds, and a documented kill switch. Authenticated testing remains gated on deploying Brian's new approval/availability markers and completing a disposable registration cleanup proof.
+
+## Dated OAuth evidence ledger
+
+These fields are independent. A later field never backfills an earlier one, and
+an advertised command or endpoint is not authentication proof.
+
+| Date | Surface | Advertised | Registered | Authenticated | Refreshed | Revoked |
+|---|---|---|---|---|---|---|
+| 2026-07-14 | Production authorization server | Passed: valid DCR `registration_endpoint` appeared after Supabase DCR enablement | Not run: controlled probe requires an available `SUPABASE_SECRET_KEY` so deletion is guaranteed | Not run | Not run | Not run |
+| 2026-07-14 | Brian public release markers | Pending deployment: current production Edge bundle predates `mcpOAuth`, `mcpOAuthApprovals`, and `mcpDcr` markers | Not applicable | Not run | Not run | Not run |
+| 2026-07-14 | Codex 0.144.2 | Passed: URL-only client follows Brian discovery and attempts DCR | Not rerun after enablement | Not run | Not run | Not run |
+| 2026-07-14 | Claude Code 2.1.198 | Passed locally: exact native login command surface exists | Not run | Not run | Not run | Not run |
+
+No row is `proven` beyond the exact dated field shown. The disposable DCR probe
+will add `registered` evidence only when it verifies the new ID through the
+Supabase OAuth Admin SDK and deletes it in `finally`.
 
 On 2026-07-14, a second credential-free production smoke passed and an isolated
 Codex 0.144.2 login reproduced the remaining boundary exactly:
@@ -14,11 +30,11 @@ Codex 0.144.2 login reproduced the remaining boundary exactly:
 proved that Codex can bypass DCR with a pre-registered public client ID. With
 `mcp_oauth_callback_port = 1455`, this version uses the stable exact redirect
 `http://127.0.0.1:1455/callback/YL4-rwMAP0YR`, requests `email`, sends PKCE S256,
-and includes the configured OAuth resource. Production currently has no rows in
-`auth.oauth_clients` and no Brian `agent_connections`, so no browser consent or
-authenticated MCP request could occur yet. This makes a manually registered
-Codex public client the lowest-risk first proof; it does not require enabling
-open DCR.
+and includes the configured OAuth resource. The last pre-enablement read-only
+check found no rows in `auth.oauth_clients` and no Brian `agent_connections`,
+so no browser consent or authenticated MCP request had occurred at that point.
+DCR is now available for the controlled probe and real-client test, but neither
+is marked passed until its dated cleanup and authenticated evidence is recorded.
 
 | Client | Version inspected | Remote HTTP / OAuth evidence | Brian configuration | E2E status |
 |---|---|---|---|---|

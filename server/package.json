@@ -20,6 +20,7 @@
     "sync": "tsx src/scripts/syncCli.ts",
     "edge:build": "node scripts/edge-build.mjs",
     "smoke:mcp-oauth": "node scripts/smoke-mcp-oauth.mjs",
+    "smoke:dcr-registration": "node scripts/probe-dcr-registration.mjs",
     "privacy:maintain": "tsx src/privacy/maintenanceCli.ts",
     "oauth:dcr:audit": "tsx src/operations/dcrMaintenanceCli.ts",
     "seed:supabase-admin": "tsx src/scripts/seedSupabaseAdmin.ts"

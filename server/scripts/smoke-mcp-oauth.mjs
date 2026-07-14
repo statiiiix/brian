@@ -96,6 +96,14 @@ assert.ok(authorizationMetadata, "authorization-server discovery failed");
 assert.ok(authorizationMetadata.authorization_endpoint, "authorization endpoint missing");
 assert.ok(authorizationMetadata.token_endpoint, "token endpoint missing");
 assert.ok(authorizationMetadata.code_challenge_methods_supported?.includes("S256"), "PKCE S256 missing");
+assert.equal(typeof authorizationMetadata.registration_endpoint, "string", "registration endpoint missing");
+const registrationEndpoint = new URL(authorizationMetadata.registration_endpoint);
+assert.equal(registrationEndpoint.protocol, "https:", "registration endpoint is not HTTPS");
+
+const publicConfig = await json(`${origin}/api/public/config`);
+for (const marker of ["mcpOAuth", "mcpOAuthApprovals", "mcpDcr"]) {
+  assert.equal(typeof publicConfig[marker], "boolean", `${marker} availability marker missing`);
+}
 
 // Exercise the authorization route with a deliberately non-authoritative
 // synthetic request. A provider may reject the unknown client with 4xx; that
@@ -136,7 +144,7 @@ assert.equal(unauthenticated.status, 401, "unauthenticated MCP did not challenge
 assert.match(unauthenticated.headers.get("www-authenticate") || "", /resource_metadata=/, "resource challenge missing");
 
 if (!token) {
-  process.stdout.write("MCP OAuth public discovery smoke passed (authenticated checks skipped: MCP_SMOKE_ACCESS_TOKEN unset).\n");
+  process.stdout.write("MCP OAuth public discovery and DCR availability smoke passed (registration and authenticated checks skipped).\n");
   process.exit(0);
 }
 
