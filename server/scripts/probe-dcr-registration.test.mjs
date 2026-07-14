@@ -151,6 +151,28 @@ test("rejects discovery that does not match the trusted Supabase URL before regi
   assert.deepEqual(calls, ["https://api.example.test/.well-known/oauth-protected-resource/mcp"]);
 });
 
+test("rejects a non-Supabase Admin origin before discovery or credential use", async () => {
+  let fetchCalls = 0;
+  let adminFactoryCalls = 0;
+  await assert.rejects(runDcrRegistrationProbe({
+    resourceUrl,
+    supabaseUrl: "https://attacker.example",
+    secretKey: "must-not-leak",
+    fetchFn: async () => {
+      fetchCalls += 1;
+      throw new Error("must not fetch");
+    },
+    adminFactory: () => {
+      adminFactoryCalls += 1;
+      throw new Error("must not construct Admin client");
+    },
+    runId: "safe-run-id",
+  }), /^Error: DCR probe configuration failed$/);
+
+  assert.equal(fetchCalls, 0);
+  assert.equal(adminFactoryCalls, 0);
+});
+
 test("cleanup is attempted for every non-empty returned client ID", async () => {
   const longClientId = "x".repeat(513);
   const { fetchFn } = successfulFetch(longClientId);

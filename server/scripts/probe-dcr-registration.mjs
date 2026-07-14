@@ -30,6 +30,7 @@ function trustedSupabaseEndpoints(supabaseUrl) {
   if (url.protocol !== "https:"
     || url.username
     || url.password
+    || !/^[a-z0-9-]+\.supabase\.co$/.test(url.hostname)
     || (url.pathname !== "/" && url.pathname !== "")
     || url.search
     || url.hash) {
