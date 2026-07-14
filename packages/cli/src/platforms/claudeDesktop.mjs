@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { claudeDesktopLoginPlan } from "../login/native.mjs";
 import { createJsonPlatform } from "./shared.mjs";
 
 export function claudeDesktopDirectory(context) {
@@ -24,6 +25,7 @@ export const claudeDesktop = createJsonPlatform({
   restartRequired: true,
   detectPaths: (context) => [claudeDesktopDirectory(context)],
   configPath: claudeDesktopConfigPath,
+  loginPlan: claudeDesktopLoginPlan,
   nextStep: "Restart Claude Desktop, open the Brian connection, and complete browser authorization if this client version supports remote MCP OAuth.",
   disconnectStep: "Restart Claude Desktop. Revoke the server-side grant separately from the Brian dashboard if desired.",
 });

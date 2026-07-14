@@ -312,13 +312,15 @@ git commit -m "feat: add explicit MCP permission consent"
 - Modify: `packages/cli/src/runtime.mjs`
 - Add: `packages/cli/src/login/native.mjs`
 - Add: `packages/cli/test/native-login.test.mjs`
+- Add: `packages/cli/test/runtime.test.mjs`
+- Modify: `packages/cli/src/platforms/shared.mjs`
 - Modify: `packages/cli/src/platforms/claudeCode.mjs`
 - Modify: `packages/cli/src/platforms/codex.mjs`
 - Modify: `packages/cli/src/platforms/cursor.mjs`
 - Modify: `packages/cli/src/platforms/claudeDesktop.mjs`
 - Modify: `packages/cli/test/platforms.test.mjs`
 
-- [ ] **Step 1: Add failing native-login policy tests**
+- [x] **Step 1: Add failing native-login policy tests**
 
 Define the adapter result:
 
@@ -334,7 +336,7 @@ Define the adapter result:
 
 Tests must prove Codex always returns the fixed command when detected; Claude returns it only when `runtime.commandSupports("claude", ["mcp", "login", "--help"])` succeeds; Cursor and Claude Desktop return manual UI instructions; no client/config value enters `executable` or `args`.
 
-- [ ] **Step 2: Run tests and observe the missing module**
+- [x] **Step 2: Run tests and observe the missing module**
 
 Run:
 
@@ -344,7 +346,7 @@ cd packages/cli && node --test test/native-login.test.mjs test/platforms.test.mj
 
 Expected: native-login policy is absent.
 
-- [ ] **Step 3: Extend the runtime with injectable command probes and execution**
+- [x] **Step 3: Extend the runtime with injectable command probes and execution**
 
 Add runtime methods with fixed-array calling conventions:
 
@@ -356,7 +358,7 @@ runtime.isInteractive = overrides.isInteractive ?? Boolean(overrides.stdin?.isTT
 
 Implement `defaultCommandSupports(executable, args)` with `execFileSync(executable, args, { stdio: "ignore", timeout: 2000 })`. Implement native execution with `spawnSync(executable, args, { stdio: "inherit", shell: false, env })`. Return only `{ status, exitCode }`; never include stdout/stderr.
 
-- [ ] **Step 4: Add `loginPlan(runtime)` to every platform**
+- [x] **Step 4: Add `loginPlan(runtime)` to every platform**
 
 Use exact command arrays:
 
@@ -371,7 +373,7 @@ Claude Desktop instruction: `Restart Claude Desktop, open Brian in Connectors, a
 
 For an older Claude command surface, return: `Upgrade Claude Code or run the Brian connection from Claude's MCP settings.`
 
-- [ ] **Step 5: Re-run tests and commit**
+- [x] **Step 5: Re-run tests and commit**
 
 Run:
 

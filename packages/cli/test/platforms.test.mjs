@@ -5,6 +5,10 @@ import test from "node:test";
 import { runConnect, runDisconnect } from "../src/commands/clients.mjs";
 import { CANONICAL_MCP_URL } from "../src/constants.mjs";
 import { claudeDesktopConfigPath, claudeDesktopDirectory } from "../src/platforms/claudeDesktop.mjs";
+import { claudeCode } from "../src/platforms/claudeCode.mjs";
+import { claudeDesktop } from "../src/platforms/claudeDesktop.mjs";
+import { codex } from "../src/platforms/codex.mjs";
+import { cursor } from "../src/platforms/cursor.mjs";
 import { createRuntime } from "../src/runtime.mjs";
 import { temporaryHome, writeJson } from "./helpers.mjs";
 
@@ -57,6 +61,15 @@ test("platform paths are architecture-neutral and Windows APPDATA is injectable"
   });
   assert.equal(claudeDesktopDirectory(windows), path.join(home, "Roaming Data", "Claude"));
   assert.equal(claudeDesktopConfigPath(windows), path.join(home, "Roaming Data", "Claude", "claude_desktop_config.json"));
+});
+
+test("every platform exposes its fixed post-configuration login plan", async () => {
+  const home = await temporaryHome("brian-login-plan-");
+  const runtime = fixtureRuntime(home, { commandSupports: () => true });
+  assert.deepEqual(codex.loginPlan(runtime).args, ["mcp", "login", "brian"]);
+  assert.deepEqual(claudeCode.loginPlan(runtime).args, ["mcp", "login", "brian"]);
+  assert.equal(cursor.loginPlan(runtime).kind, "manual");
+  assert.equal(claudeDesktop.loginPlan(runtime).kind, "manual");
 });
 
 test("multi-client preflight failure prevents every planned write", async () => {

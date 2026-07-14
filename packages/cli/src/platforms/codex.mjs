@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { codexLoginPlan } from "../login/native.mjs";
 import { inspectMarkerFile, planMarkerConnect, planMarkerDisconnect } from "../config/markers.mjs";
 import { inspectTomlConfig, planTomlConnect, planTomlDisconnect, safeTomlInspection } from "../config/toml.mjs";
 
@@ -48,6 +49,9 @@ export const codex = {
       instructions: safeMarker(inspectMarkerFile(located.agents)),
       restartRequired: true,
     };
+  },
+  loginPlan(context) {
+    return codexLoginPlan(context);
   },
   connectPlan(context) {
     const located = paths(context);
