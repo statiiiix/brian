@@ -136,7 +136,7 @@ export async function runNetworkDoctor({
         check("brian-mcp-oauth-validation", false, result.error),
         check("brian-dcr-marker", false, "public DCR marker is unavailable"),
         check("brian-oauth-approvals", false, "public approval marker is unavailable"),
-        check("dcr-marker-drift", false, "provider and Brian markers could not be compared"),
+        check("dcr-marker-drift", false, "provider and Brian markers could not be compared", "warn"),
       );
     } else {
       const config = result.value;
@@ -151,7 +151,7 @@ export async function runNetworkDoctor({
           check("brian-mcp-oauth-validation", false, "public OAuth markers are incomplete"),
           check("brian-dcr-marker", false, "public DCR marker is unavailable"),
           check("brian-oauth-approvals", false, "public approval marker is unavailable"),
-          check("dcr-marker-drift", false, "provider and Brian markers could not be compared"),
+          check("dcr-marker-drift", false, "provider and Brian markers could not be compared", "warn"),
         );
       } else {
         checks.push(
@@ -194,7 +194,7 @@ export async function runNetworkDoctor({
       check("brian-mcp-oauth-validation", false, "request failed"),
       check("brian-dcr-marker", false, "public DCR marker is unavailable"),
       check("brian-oauth-approvals", false, "public approval marker is unavailable"),
-      check("dcr-marker-drift", false, "provider and Brian markers could not be compared"),
+      check("dcr-marker-drift", false, "provider and Brian markers could not be compared", "warn"),
     );
   }
 

@@ -100,6 +100,20 @@ test("network doctor reports marker comparison unavailable when discovery fails"
   assert.equal(checks.find((item) => item.name === "dcr-marker-drift").status, "warn");
 });
 
+test("network doctor reports marker comparison unavailable when Brian config fails", async () => {
+  const resource = "http://resource.test/mcp";
+  const issuer = "http://auth.test/issuer";
+  const base = goodFetch(resource, issuer, []);
+  const fetchFn = async (url, init) => (
+    url === "http://resource.test/api/public/config"
+      ? new Response("down", { status: 503 })
+      : base(url, init)
+  );
+
+  const checks = await runNetworkDoctor({ resourceUrl: resource, fetchFn, allowHttp: true });
+  assert.equal(checks.find((item) => item.name === "dcr-marker-drift").status, "warn");
+});
+
 test("network doctor reports Brian marker drift independently from approvals", async () => {
   const resource = "http://resource.test/mcp";
   const issuer = "http://auth.test/issuer";

@@ -231,7 +231,7 @@ test("proves the Admin credential works before creating a registration", async (
 });
 
 test("recovers and deletes after an ambiguous registration response", async () => {
-  for (const responseMode of ["connection-reset", "non-json-success"]) {
+  for (const responseMode of ["connection-reset", "non-json-success", "gateway-5xx"]) {
     const runId = `safe-${responseMode}`;
     const clientName = `Brian controlled DCR probe ${runId}`;
     const deleted = [];
@@ -240,6 +240,7 @@ test("recovers and deletes after an ambiguous registration response", async () =
     const fetchFn = async (url, init) => {
       if (String(url) !== registrationEndpoint) return baseFetch(url, init);
       if (responseMode === "connection-reset") throw new Error("socket closed after commit");
+      if (responseMode === "gateway-5xx") return new Response("gateway failed after commit", { status: 503 });
       return new Response("created but not json", { status: 201 });
     };
     await assert.rejects(runDcrRegistrationProbe({
@@ -288,4 +289,37 @@ test("retries marker recovery when the Admin inventory is briefly stale", async 
 
   assert.deepEqual(waits, [100]);
   assert.deepEqual(deleted, ["eventually-visible"]);
+});
+
+test("retries recovery for a successful response without a client ID", async () => {
+  const runId = "safe-missing-id-eventual";
+  const clientName = `Brian controlled DCR probe ${runId}`;
+  const deleted = [];
+  const waits = [];
+  let listCalls = 0;
+  const { fetchFn: baseFetch } = successfulFetch();
+  const fetchFn = async (url, init) => (
+    String(url) === registrationEndpoint
+      ? responseJson({ client_name: clientName }, 201)
+      : baseFetch(url, init)
+  );
+
+  const result = await runDcrRegistrationProbe({
+    resourceUrl,
+    supabaseUrl,
+    fetchFn,
+    waitFn: async (milliseconds) => { waits.push(milliseconds); },
+    admin: {
+      listClients: async () => {
+        listCalls += 1;
+        return listCalls < 3 ? [] : [{ clientId: "eventually-visible-missing-id", clientName }];
+      },
+      deleteClient: async (clientId) => { deleted.push(clientId); },
+    },
+    runId,
+  });
+
+  assert.deepEqual(result, { registration: "proven", cleanup: "deleted", runId });
+  assert.deepEqual(waits, [100]);
+  assert.deepEqual(deleted, ["eventually-visible-missing-id"]);
 });

@@ -24,7 +24,7 @@ Implemented in the working tree:
 Verified locally so far:
 
 - **2026-07-14 guarded-connection release verification:** frontend 9 suites,
-  51/51 tests, and the production build pass; CLI 50/50 tests, syntax check,
+  51/51 tests, and the production build pass; CLI 51/51 tests, syntax check,
   package dry-run, clean-prefix tarball install, version, URL-only dry-run, and
   credential-free doctor output pass; the regenerated Edge bundle is
   deterministic across consecutive builds (SHA-256
@@ -38,8 +38,8 @@ Verified locally so far:
   1. **Migration 014 (real production bug):** the `data_deletion_requests` actor/scope CHECK used strict `target is not distinct from requested_by`, but the two `on delete set null` FK actions fire as separate statements during auth-user deletion, so the transient one-null state violated the check and aborted the account deletion itself. Replaced with a null-tolerant named constraint `data_deletion_requests_actor_scope_check` plus a convergent fixup that drops the stale anonymous check; strict target=requester equality remains enforced by `request_data_deletion` at insert time.
   2. `migrate014.test.ts` referenced only `$1`/`$3` in the api_tokens seed while passing 3 params (unreferenced `$2` is untypable); second row now correctly uses tenant B.
   3. `authRoutes.test.ts` predated fail-closed memberships: a legacy JWT is honored only when its user id has an active membership, so the test now seeds the founding membership (mirroring the trusted backfill) instead of expecting an unmembered 200.
-- CLI test suite (50/50 on Node 24), syntax check, package dry run, and native-login orchestration fixtures;
-- DCR registry/CLI/workflow/probe suites: 32 focused tests, with trusted Admin-host pinning and credential preflight, retrying ambiguous-response recovery cleanup, redaction, nonzero failure/drift status, per-client lifecycle and paused-window rechecks, a secret-free read-only hourly audit, manual protected cleanup restricted to a fully paused window, and cleanup-after-registration coverage; server TypeScript build passes;
+- CLI test suite (51/51 on Node 24), syntax check, package dry run, and native-login orchestration fixtures;
+- DCR registry/CLI/workflow/probe suites: 33 focused tests, with trusted Admin-host pinning and credential preflight, retrying ambiguous-response recovery cleanup across network/5xx/malformed/missing-ID outcomes, redaction, nonzero failure/drift status, per-client lifecycle and paused-window rechecks, a secret-free read-only hourly audit, manual protected cleanup restricted to a fully paused window, and cleanup-after-registration coverage; server TypeScript build passes;
 - deterministic generated Edge bundle build and drift check (rebuilt 2026-07-13 from current source).
 - **2026-07-14 registration-boundary probe:** the credential-free production
   OAuth smoke passed again. An isolated Codex CLI 0.144.2 login reached Brian's

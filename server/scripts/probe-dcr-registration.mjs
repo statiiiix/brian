@@ -51,7 +51,13 @@ async function fetchJson(fetchFn, url, category, init = undefined) {
     if (category === "registration") error.ambiguousRegistration = true;
     throw error;
   }
-  if (!response.ok) throw new Error(`DCR probe ${category} failed`);
+  if (!response.ok) {
+    const error = new Error(`DCR probe ${category} failed`);
+    if (category === "registration" && response.status >= 500) {
+      error.ambiguousRegistration = true;
+    }
+    throw error;
+  }
   try {
     return await response.json();
   } catch {
@@ -96,6 +102,31 @@ function createProbeAdmin(supabaseUrl, secretKey) {
       if (response.error) throw new Error("DCR probe cleanup failed");
     },
   };
+}
+
+async function findMarkerMatches(admin, clientName, waitFn) {
+  let matches = [];
+  for (const delayMs of [0, 100, 400, 1000]) {
+    if (delayMs > 0) await waitFn(delayMs);
+    try {
+      matches = (await admin.listClients()).filter((client) => client.clientName === clientName);
+    } catch {
+      throw new Error("DCR probe cleanup failed");
+    }
+    if (matches.length > 0) return matches;
+  }
+  throw new Error("DCR probe cleanup failed");
+}
+
+async function deleteMarkerMatches(admin, matches) {
+  if (matches.some((match) => !match.clientId)) {
+    throw new Error("DCR probe cleanup failed");
+  }
+  try {
+    for (const match of matches) await admin.deleteClient(match.clientId);
+  } catch {
+    throw new Error("DCR probe cleanup failed");
+  }
 }
 
 export async function runDcrRegistrationProbe({
@@ -175,39 +206,20 @@ export async function runDcrRegistrationProbe({
     if (!error?.ambiguousRegistration) {
       throw new Error("DCR probe registration failed");
     }
-    let matches = [];
-    for (const delayMs of [0, 100, 400, 1000]) {
-      if (delayMs > 0) await waitFn(delayMs);
-      try {
-        matches = (await admin.listClients()).filter((client) => client.clientName === clientName);
-      } catch {
-        throw new Error("DCR probe cleanup failed");
-      }
-      if (matches.length > 0) break;
-    }
-    if (matches.length === 0 || matches.some((match) => !match.clientId)) {
-      throw new Error("DCR probe cleanup failed");
-    }
-    try {
-      for (const match of matches) await admin.deleteClient(match.clientId);
-    } catch {
-      throw new Error("DCR probe cleanup failed");
-    }
+    const matches = await findMarkerMatches(admin, clientName, waitFn);
+    await deleteMarkerMatches(admin, matches);
     throw new Error("DCR probe registration failed");
   }
   let clientId = typeof registration?.client_id === "string" ? registration.client_id : "";
   let listed;
   if (!clientId) {
-    try {
-      listed = await admin.listClients();
-    } catch {
-      throw new Error("DCR probe cleanup failed");
-    }
-    const matches = listed.filter((client) => client.clientName === clientName);
+    const matches = await findMarkerMatches(admin, clientName, waitFn);
     if (matches.length !== 1 || !matches[0].clientId) {
+      await deleteMarkerMatches(admin, matches);
       throw new Error("DCR probe cleanup failed");
     }
     clientId = matches[0].clientId;
+    listed = matches;
   }
   let verificationError = null;
   let cleanupError = null;
