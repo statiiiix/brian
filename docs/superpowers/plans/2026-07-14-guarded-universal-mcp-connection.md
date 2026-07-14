@@ -552,7 +552,7 @@ git commit -m "feat: diagnose MCP registration and login readiness"
 - Add: `server/src/operations/dcrMaintenanceCli.ts`
 - Add: `server/src/operations/dcrMaintenanceCli.test.ts`
 
-- [ ] **Step 1: Pin the supported Supabase server SDK**
+- [x] **Step 1: Pin the supported Supabase server SDK**
 
 Add `@supabase/supabase-js` version `2.110.2` to `server/package.json` and regenerate only `server/package-lock.json`:
 
@@ -562,7 +562,7 @@ cd server && npm install --save-exact @supabase/supabase-js@2.110.2
 
 Verify the installed type exposes `auth.admin.oauth.listClients` and `deleteClient`.
 
-- [ ] **Step 2: Add failing domain tests for registry classification**
+- [x] **Step 2: Add failing domain tests for registry classification**
 
 Define narrow internal types:
 
@@ -582,7 +582,7 @@ export interface ClientLifecycleEvidence {
 
 Test `classifyRegistry` at a fixed clock. A stale candidate must be dynamic, older than 24 hours, absent from both sets, absent from `protectedClientIds`, and have `evidenceComplete === true`. Test every predicate independently and assert ambiguity produces `retained_evidence_incomplete`.
 
-- [ ] **Step 3: Add failing redaction and stop-on-error tests**
+- [x] **Step 3: Add failing redaction and stop-on-error tests**
 
 Require output to contain only:
 
@@ -604,7 +604,7 @@ export interface DcrAuditSummary {
 
 Deletion records may include only `{ clientIdHash, ageBucket, outcome, runId }`. Feed token/client-name/URI/redirect fixtures and assert none appear in JSON. Make the second deletion fail and prove the third is never attempted.
 
-- [ ] **Step 4: Run tests and observe missing implementation**
+- [x] **Step 4: Run tests and observe missing implementation**
 
 Run:
 
@@ -612,7 +612,7 @@ Run:
 cd server && npm test -- src/operations/dcrRegistry.test.ts src/operations/dcrMaintenanceCli.test.ts
 ```
 
-- [ ] **Step 5: Implement the Supabase OAuth Admin adapter**
+- [x] **Step 5: Implement the Supabase OAuth Admin adapter**
 
 Create the admin client server-side:
 
@@ -624,7 +624,7 @@ const supabase = createClient(supabaseUrl, secretKey, {
 
 Paginate `supabase.auth.admin.oauth.listClients({ page, perPage: 100 })` until `nextPage` is null. Map only `client_id`, `registration_type`, and `created_at`; discard every other field immediately. Delete only through `supabase.auth.admin.oauth.deleteClient(clientId)`. Convert provider errors to fixed categories without including upstream messages.
 
-- [ ] **Step 6: Implement read-only lifecycle evidence with schema attestation**
+- [x] **Step 6: Implement read-only lifecycle evidence with schema attestation**
 
 Connect a dedicated `pg.Pool` to `DCR_MAINTENANCE_DATABASE_URL` with `application_name=brian_dcr_audit`, `statement_timeout=10000`, and `default_transaction_read_only=on`. At startup, query `information_schema.columns` for:
 
@@ -638,7 +638,7 @@ The production rollout may proceed only if this exact schema attestation passes.
 
 Query open Brian rows with `status in ('pending','active')`. Query Supabase evidence where a session is unexpired or an authorization is pending/approved and unexpired. All SQL is `SELECT`; `assertReadOnlyMaintenanceConnection` must verify `current_setting('transaction_read_only') = 'on'` and reject an owner/superuser connection.
 
-- [ ] **Step 7: Implement CLI parsing and explicit cleanup confirmation**
+- [x] **Step 7: Implement CLI parsing and explicit cleanup confirmation**
 
 Use:
 
@@ -655,7 +655,7 @@ Add:
 "oauth:dcr:audit": "tsx src/operations/dcrMaintenanceCli.ts"
 ```
 
-- [ ] **Step 8: Run tests/build and commit**
+- [x] **Step 8: Run tests/build and commit**
 
 Run:
 
