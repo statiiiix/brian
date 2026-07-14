@@ -5,8 +5,8 @@ import {
   rootProtectedResourceMetadataUrl,
 } from "../constants.mjs";
 
-function check(name, ok, detail) {
-  return { name, status: ok ? "pass" : "fail", detail };
+function check(name, ok, detail, failureStatus = "fail") {
+  return { name, status: ok ? "pass" : failureStatus, detail };
 }
 
 function validEndpoint(value, allowHttp) {
@@ -62,6 +62,7 @@ export async function runNetworkDoctor({
   const metadataUrl = protectedResourceMetadataUrl(resourceUrl);
   const rootMetadataUrl = rootProtectedResourceMetadataUrl(resourceUrl);
   let metadata = null;
+  let authorizationMetadata = null;
 
   try {
     const result = await fetchJson(fetchFn, metadataUrl, timeoutMs);
@@ -109,10 +110,51 @@ export async function runNetworkDoctor({
           Boolean(endpointsValid),
           endpointsValid ? "authorization server advertises authorization code + PKCE S256" : "discovery document is incomplete or issuer mismatched",
         ));
+        if (endpointsValid) authorizationMetadata = document;
       }
     } catch {
       checks.push(check("authorization-server-discovery", false, "request failed"));
     }
+  }
+
+  const registrationValid = validEndpoint(authorizationMetadata?.registration_endpoint, allowHttp);
+  checks.push(check(
+    "dynamic-client-registration-advertised",
+    registrationValid,
+    registrationValid
+      ? "authorization server advertises DCR; no client was created"
+      : "registration endpoint is missing or invalid",
+  ));
+
+  try {
+    const publicConfigUrl = new URL("/api/public/config", new URL(resourceUrl).origin).toString();
+    const result = await fetchJson(fetchFn, publicConfigUrl, timeoutMs);
+    if (result.error) {
+      checks.push(check("brian-oauth-availability", false, result.error));
+    } else {
+      const config = result.value;
+      const valid = config
+        && typeof config === "object"
+        && typeof config.publicSignup === "boolean"
+        && typeof config.mcpOAuth === "boolean"
+        && typeof config.mcpOAuthApprovals === "boolean"
+        && typeof config.mcpDcr === "boolean";
+      if (!valid) {
+        checks.push(check("brian-oauth-availability", false, "public OAuth markers are incomplete"));
+      } else if (!config.mcpOAuth) {
+        checks.push(check("brian-oauth-availability", false, "MCP OAuth validation is disabled"));
+      } else {
+        const available = config.mcpOAuthApprovals && config.mcpDcr;
+        checks.push(check(
+          "brian-oauth-availability",
+          available,
+          available ? "DCR and new connection approvals are available" : "new registrations or approvals are paused",
+          "warn",
+        ));
+      }
+    }
+  } catch {
+    checks.push(check("brian-oauth-availability", false, "request failed"));
   }
 
   try {

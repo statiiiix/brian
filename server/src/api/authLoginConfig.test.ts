@@ -5,7 +5,7 @@ import { testClient } from "../test/http.js";
 import type { OperationalLog } from "../operations/http.js";
 
 describe("legacy auth login configuration", () => {
-  it("exposes only the fail-closed public signup release marker without authentication", async () => {
+  it("exposes only boolean signup and MCP OAuth release markers without authentication", async () => {
     const disabled = testClient(buildApp({
       authRequired: true,
       authToken: "static-tok",
@@ -14,7 +14,12 @@ describe("legacy auth login configuration", () => {
     }));
     const off = await disabled.inject({ method: "GET", url: "/api/public/config" });
     expect(off.statusCode).toBe(200);
-    expect(off.json()).toEqual({ publicSignup: false });
+    expect(off.json()).toEqual({
+      publicSignup: false,
+      mcpOAuth: true,
+      mcpOAuthApprovals: false,
+      mcpDcr: false,
+    });
     await disabled.close();
 
     const enabled = testClient(buildApp({
@@ -22,11 +27,38 @@ describe("legacy auth login configuration", () => {
       authToken: "static-tok",
       supabaseAuth: null,
       publicSignupEnabled: true,
+      mcpOAuthEnabled: true,
+      mcpOAuthApprovalsEnabled: true,
+      mcpDcrEnabled: true,
     }));
     const on = await enabled.inject({ method: "GET", url: "/api/public/config" });
     expect(on.statusCode).toBe(200);
-    expect(on.json()).toEqual({ publicSignup: true });
+    expect(on.json()).toEqual({
+      publicSignup: true,
+      mcpOAuth: true,
+      mcpOAuthApprovals: true,
+      mcpDcr: true,
+    });
     await enabled.close();
+  });
+
+  it("keeps DCR, new approvals, existing OAuth validation, and signup independent", async () => {
+    const app = testClient(buildApp({
+      authRequired: true,
+      supabaseAuth: null,
+      publicSignupEnabled: false,
+      mcpOAuthEnabled: true,
+      mcpOAuthApprovalsEnabled: false,
+      mcpDcrEnabled: true,
+    }));
+    const response = await app.inject({ method: "GET", url: "/api/public/config" });
+    expect(response.json()).toEqual({
+      publicSignup: false,
+      mcpOAuth: true,
+      mcpOAuthApprovals: false,
+      mcpDcr: true,
+    });
+    await app.close();
   });
 
   it("keeps invitation preflight public, boolean-only, and burst-limited", async () => {

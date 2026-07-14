@@ -12,6 +12,7 @@ import { temporaryHome, writeJson } from "./helpers.mjs";
 function goodFetch(resource, issuer, calls) {
   const metadataUrl = "http://resource.test/.well-known/oauth-protected-resource/mcp";
   const rootUrl = "http://resource.test/.well-known/oauth-protected-resource";
+  const publicConfigUrl = "http://resource.test/api/public/config";
   const discoveryUrl = authorizationServerMetadataUrl(issuer);
   return async (url, init = {}) => {
     calls.push({ url, init });
@@ -27,7 +28,16 @@ function goodFetch(resource, issuer, calls) {
         issuer,
         authorization_endpoint: "http://auth.test/authorize",
         token_endpoint: "http://auth.test/token",
+        registration_endpoint: "http://auth.test/oauth/clients/register",
         code_challenge_methods_supported: ["S256"],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (url === publicConfigUrl) {
+      return new Response(JSON.stringify({
+        publicSignup: false,
+        mcpOAuth: true,
+        mcpOAuthApprovals: true,
+        mcpDcr: true,
       }), { status: 200, headers: { "content-type": "application/json" } });
     }
     if (url === resource) {
@@ -50,10 +60,51 @@ test("network doctor validates metadata, discovery, and exact 401 challenge with
     allowHttp: true,
     timeoutMs: 1000,
   });
-  assert.equal(checks.length, 4);
+  assert.equal(checks.length, 6);
   assert.equal(checks.every((item) => item.status === "pass"), true);
   assert.equal(JSON.stringify(checks).includes("body-secret-must-not-leak"), false);
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 5);
+});
+
+test("network doctor fails when authorization discovery does not advertise DCR", async () => {
+  const resource = "http://resource.test/mcp";
+  const issuer = "http://auth.test/issuer";
+  const discoveryUrl = authorizationServerMetadataUrl(issuer);
+  const base = goodFetch(resource, issuer, []);
+  const fetchFn = async (url, init) => {
+    if (url === discoveryUrl) {
+      return new Response(JSON.stringify({
+        issuer,
+        authorization_endpoint: "http://auth.test/authorize",
+        token_endpoint: "http://auth.test/token",
+        code_challenge_methods_supported: ["S256"],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return base(url, init);
+  };
+
+  const checks = await runNetworkDoctor({ resourceUrl: resource, fetchFn, allowHttp: true });
+  assert.equal(checks.find((item) => item.name === "dynamic-client-registration-advertised").status, "fail");
+});
+
+test("network doctor warns when Brian's public marker pauses new registrations", async () => {
+  const resource = "http://resource.test/mcp";
+  const issuer = "http://auth.test/issuer";
+  const base = goodFetch(resource, issuer, []);
+  const fetchFn = async (url, init) => {
+    if (url === "http://resource.test/api/public/config") {
+      return new Response(JSON.stringify({
+        publicSignup: false,
+        mcpOAuth: true,
+        mcpOAuthApprovals: true,
+        mcpDcr: false,
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return base(url, init);
+  };
+
+  const checks = await runNetworkDoctor({ resourceUrl: resource, fetchFn, allowHttp: true });
+  assert.equal(checks.find((item) => item.name === "brian-oauth-availability").status, "warn");
 });
 
 test("network doctor fails closed on wrong challenge metadata", async () => {

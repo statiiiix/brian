@@ -32,7 +32,7 @@
 - Modify: `packages/cli/src/doctor/network.mjs`
 - Modify: `packages/cli/test/doctor.test.mjs`
 
-- [ ] **Step 1: Add failing API tests for the public marker contract**
+- [x] **Step 1: Add failing API tests for the public marker contract**
 
 Change the public-config test to require a fixed, boolean-only shape:
 
@@ -54,7 +54,7 @@ expect(on.json()).toEqual({
 
 Construct the enabled app with all four explicit options. Add a case proving that DCR may be true while approvals are false and OAuth token validation remains true.
 
-- [ ] **Step 2: Run the focused server test and observe the expected failure**
+- [x] **Step 2: Run the focused server test and observe the expected failure**
 
 Run:
 
@@ -64,7 +64,7 @@ cd server && npm test -- src/api/authLoginConfig.test.ts
 
 Expected: failure because `/api/public/config` currently returns only `publicSignup`.
 
-- [ ] **Step 3: Implement the minimal public marker response**
+- [x] **Step 3: Implement the minimal public marker response**
 
 Replace the response with:
 
@@ -79,7 +79,7 @@ app.get("/api/public/config", (c) => c.json({
 
 Do not expose Supabase URLs, keys, client IDs, tenant values, or environment diagnostics.
 
-- [ ] **Step 4: Add failing doctor fixtures for registration discovery and public markers**
+- [x] **Step 4: Add failing doctor fixtures for registration discovery and public markers**
 
 Extend `goodFetch` so authorization metadata includes:
 
@@ -100,7 +100,7 @@ and `/api/public/config` returns:
 
 Require separate checks named `dynamic-client-registration-advertised` and `brian-oauth-availability`. Add mismatch cases for missing `registration_endpoint` and `mcpDcr: false`; the former is a failure, while the latter is a warning that registrations are paused.
 
-- [ ] **Step 5: Run the focused CLI test and observe the expected failure**
+- [x] **Step 5: Run the focused CLI test and observe the expected failure**
 
 Run:
 
@@ -110,7 +110,7 @@ cd packages/cli && node --test test/doctor.test.mjs
 
 Expected: new checks are absent.
 
-- [ ] **Step 6: Implement doctor validation without registering a client**
+- [x] **Step 6: Implement doctor validation without registering a client**
 
 In `runNetworkDoctor`, retain the authorization document and validate that `registration_endpoint` is a valid HTTPS endpoint (or HTTP only under `allowHttp`). Fetch `${new URL(resourceUrl).origin}/api/public/config` without an Authorization header and validate the exact four booleans. Emit:
 
@@ -124,7 +124,7 @@ check(
 
 Return a `warn` status for a valid public marker response with `mcpDcr === false` or `mcpOAuthApprovals === false`; extend `check` to accept an explicit status rather than converting every non-pass to `fail`.
 
-- [ ] **Step 7: Re-run focused tests and commit**
+- [x] **Step 7: Re-run focused tests and commit**
 
 Run:
 

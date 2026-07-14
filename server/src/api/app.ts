@@ -463,7 +463,12 @@ export function buildApp(opts: AppOptions = {}): App {
   // Deliberately tiny unauthenticated configuration surface. Self-service
   // signup must fail closed in the browser as well as in the provisioning
   // trigger; invitation signup remains a separate, token-bound path.
-  app.get("/api/public/config", (c) => c.json({ publicSignup: publicSignupEnabled }));
+  app.get("/api/public/config", (c) => c.json({
+    publicSignup: publicSignupEnabled,
+    mcpOAuth: mcpOAuthEnabled,
+    mcpOAuthApprovals: mcpOAuthApprovalsEnabled,
+    mcpDcr: mcpDcrEnabled,
+  }));
 
   app.post("/api/public/invitations/validate", async (c) => {
     const { email, token } = (await jsonBody(c)) ?? {};
