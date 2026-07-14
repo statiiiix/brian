@@ -152,12 +152,13 @@ git commit -m "feat: publish guarded MCP OAuth availability"
 - Add: `server/src/auth/permissions.test.ts`
 - Modify: `server/src/api/app.ts`
 - Modify: `server/src/api/identityApi.test.ts`
+- Add: `server/src/api/oauthGrantPolicy.test.ts`
 - Modify: `src/app/permissions.js`
 - Modify: `src/pages/OAuthConsent.js`
 - Modify: `src/pages/OAuthConsent.css`
 - Modify: `src/pages/AuthPages.test.js`
 
-- [ ] **Step 1: Add failing unit tests for selected-permission policy**
+- [x] **Step 1: Add failing unit tests for selected-permission policy**
 
 Define tests for a new function with this signature:
 
@@ -187,7 +188,7 @@ validateSelectedAgentPermissions([...DEFAULT_AGENT_PERMISSIONS, "unknown"], "own
 // => error, never silently filter
 ```
 
-- [ ] **Step 2: Run the permission test and observe the import failure**
+- [x] **Step 2: Run the permission test and observe the import failure**
 
 Run:
 
@@ -197,11 +198,11 @@ cd server && npm test -- src/auth/permissions.test.ts
 
 Expected: the function does not exist.
 
-- [ ] **Step 3: Implement closed permission validation**
+- [x] **Step 3: Implement closed permission validation**
 
 Keep output order equal to `AGENT_PERMISSIONS`, reject duplicates and unknown strings, require every `DEFAULT_AGENT_PERMISSIONS` member, and reject `actions:execute` unless role is `owner` or `admin`. Do not derive optional Brian permissions from the OAuth identity scope.
 
-- [ ] **Step 4: Add failing identity API tests**
+- [x] **Step 4: Add failing identity API tests**
 
 Change the attack-body test: an unknown permission must now return `400`, not be ignored. Add cases proving:
 
@@ -213,7 +214,7 @@ Change the attack-body test: an unknown permission must now return `400`, not be
 - omitted defaults, unknown values, duplicates, and non-arrays return `400`;
 - Supabase-verified client ID/name/URI/redirect still override every browser-supplied metadata field.
 
-- [ ] **Step 5: Run the identity API tests and observe policy failures**
+- [x] **Step 5: Run the identity API tests and observe policy failures**
 
 Run:
 
@@ -223,7 +224,7 @@ cd server && npm test -- src/api/identityApi.test.ts --maxWorkers=1
 
 Expected: current endpoint ignores the browser permission field and derives permissions from OAuth scope.
 
-- [ ] **Step 6: Enforce selected permissions in `/api/oauth/grants/prepare`**
+- [x] **Step 6: Enforce selected permissions in `/api/oauth/grants/prepare`**
 
 Replace `permissionsForOAuthScope(details.scope)` in this endpoint with `validateSelectedAgentPermissions(body.permissions, selected.role)`. Return fixed errors only:
 
@@ -236,7 +237,7 @@ if (!validated.ok) {
 
 Pass `validated.permissions` to `prepareAgentConnection`. Keep `permissionsForOAuthScope` for token/request compatibility where it is still needed; do not globally redefine OAuth scope semantics.
 
-- [ ] **Step 7: Add failing React consent tests**
+- [x] **Step 7: Add failing React consent tests**
 
 Tests must require:
 
@@ -250,7 +251,7 @@ Tests must require:
 - a loopback redirect shows `This agent will return through a local callback on this device.`;
 - an HTTPS remote callback does not show the loopback warning.
 
-- [ ] **Step 8: Run the focused React tests and observe failures**
+- [x] **Step 8: Run the focused React tests and observe failures**
 
 Run:
 
@@ -260,7 +261,7 @@ CI=true npm test -- --watchAll=false src/pages/AuthPages.test.js
 
 Expected: optional controls, request permissions, and loopback warning are missing.
 
-- [ ] **Step 9: Implement consent state and safe redirect display**
+- [x] **Step 9: Implement consent state and safe redirect display**
 
 Add:
 
@@ -284,7 +285,7 @@ body: {
 
 Replace `redirectOrigin` with a helper returning `{ label, hostname, loopback }`. Treat `localhost`, `127.0.0.1`, and `[::1]` as loopback. Show the exact `host` value (hostname plus port), while keeping all values in React text nodes.
 
-- [ ] **Step 10: Run all focused tests and commit**
+- [x] **Step 10: Run all focused tests and commit**
 
 Run:
 

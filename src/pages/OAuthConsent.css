@@ -34,6 +34,13 @@
   overflow-wrap: anywhere;
 }
 
+.consent-loopback {
+  margin: -0.75rem 0 1.25rem;
+  color: var(--accent-text);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .consent-select,
 .consent-company {
   width: 100%;
@@ -76,6 +83,14 @@
   border-bottom: 1px solid var(--border);
 }
 
+.consent-permissions article small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
 .consent-permissions article > span {
   display: inline-flex;
   align-items: center;
@@ -105,6 +120,27 @@
   color: var(--muted);
   font-size: 0.76rem;
   line-height: 1.45;
+}
+
+.consent-permission-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.consent-permission-option input {
+  width: 18px;
+  height: 18px;
+  margin: 0.1rem 0 0;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.consent-permission-option.is-sensitive strong {
+  color: var(--accent-text);
 }
 
 .consent-actions {

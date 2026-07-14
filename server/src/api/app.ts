@@ -53,7 +53,11 @@ import {
   type HumanRole,
   type PrincipalStore,
 } from "../auth/principal.js";
-import { hasPermission, permissionsForOAuthScope } from "../auth/permissions.js";
+import {
+  hasPermission,
+  permissionsForOAuthScope,
+  validateSelectedAgentPermissions,
+} from "../auth/permissions.js";
 import {
   AgentConnectionConflict,
   createInvitation,
@@ -160,6 +164,20 @@ function requestReturnOrigin(c: Context): string | undefined {
     return configured.includes(url.origin) || loopback ? url.origin : undefined;
   } catch {
     return undefined;
+  }
+}
+
+function safeOAuthRedirectUri(value: unknown): boolean {
+  if (typeof value !== "string" || value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+    return !url.username
+      && !url.password
+      && !url.hash
+      && (url.protocol === "https:" || (url.protocol === "http:" && loopback));
+  } catch {
+    return false;
   }
 }
 
@@ -751,12 +769,18 @@ export function buildApp(opts: AppOptions = {}): App {
       });
       return c.json({ error: "invalid or expired authorization request" }, 400);
     }
-    // Permission authority is the verified Supabase authorization request and
-    // Brian's policy, never the browser body. Standard identity-only scopes
-    // resolve to Brian's conservative default grant.
-    const requestedPermissions = permissionsForOAuthScope(details.scope);
-    if (selected.role === "expert" && requestedPermissions.includes("actions:execute")) {
-      return c.json({ error: "actions:execute requires an owner or admin" }, 403);
+    if (!safeOAuthRedirectUri(details.redirect_uri)) {
+      return c.json({ error: "unsafe OAuth redirect" }, 400);
+    }
+    // Supabase remains authoritative for the client and authorization request.
+    // Brian's closed permission policy is authoritative for the explicit
+    // tenant grant selected on the consent page.
+    const validatedPermissions = validateSelectedAgentPermissions(body.permissions, selected.role);
+    if (!validatedPermissions.ok) {
+      const status = validatedPermissions.reason === "actions:execute requires an owner or admin"
+        ? 403
+        : 400;
+      return c.json({ error: validatedPermissions.reason }, status);
     }
     const selectedPrincipal: HumanPrincipal = {
       kind: "human",
@@ -772,7 +796,7 @@ export function buildApp(opts: AppOptions = {}): App {
         clientName: details.client.name,
         clientUri: details.client.uri,
         redirectUri: details.redirect_uri,
-        permissions: requestedPermissions,
+        permissions: validatedPermissions.permissions,
         requestId: c.get("requestId"),
       }));
     } catch (error) {
