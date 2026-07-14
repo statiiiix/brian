@@ -76,6 +76,11 @@ export default function OAuthConsent() {
   }, [memberships]);
 
   const selectedMembership = memberships.find((membership) => tenantIdFor(membership) === selectedTenantId);
+  useEffect(() => {
+    if (selectedMembership?.role !== 'owner' && selectedMembership?.role !== 'admin') {
+      setOptionalPermissions((current) => current.filter((permission) => permission !== 'actions:execute'));
+    }
+  }, [selectedMembership?.role]);
   const permissions = useMemo(
     () => [...DEFAULT_AGENT_PERMISSIONS, ...optionalPermissions],
     [optionalPermissions],

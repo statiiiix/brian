@@ -64,9 +64,12 @@ test("platform paths are architecture-neutral and Windows APPDATA is injectable"
   assert.equal(claudeDesktopConfigPath(windows), path.join(home, "Roaming Data", "Claude", "claude_desktop_config.json"));
 });
 
-test("every platform exposes its fixed post-configuration login plan", async () => {
+test("every installed platform exposes its fixed post-configuration login plan", async () => {
   const home = await temporaryHome("brian-login-plan-");
-  const runtime = fixtureRuntime(home, { commandSupports: () => true });
+  const runtime = fixtureRuntime(home, {
+    commandInfo: () => ({ installed: true, version: "test" }),
+    commandSupports: () => true,
+  });
   assert.deepEqual(codex.loginPlan(runtime).args, ["mcp", "login", "brian"]);
   assert.deepEqual(claudeCode.loginPlan(runtime).args, ["mcp", "login", "brian"]);
   assert.equal(cursor.loginPlan(runtime).kind, "manual");
@@ -110,6 +113,7 @@ test("connect writes every config before invoking a confirmed native login", asy
   let configuredBeforeLogin = false;
   const calls = [];
   const runtime = fixtureRuntime(home, {
+    commandInfo: () => ({ installed: true, version: "test" }),
     isInteractive: true,
     confirmLogin: async () => true,
     runInteractiveCommand: async (executable, args) => {
@@ -143,6 +147,7 @@ test("multiple native logins run sequentially in stable platform order", async (
   let active = 0;
   let maxActive = 0;
   const runtime = fixtureRuntime(home, {
+    commandInfo: () => ({ installed: true, version: "test" }),
     isInteractive: true,
     commandSupports: () => true,
     confirmLogin: async () => true,
@@ -194,6 +199,7 @@ test("native login failure preserves configuration and returns a safe retry", as
   const home = await temporaryHome("brian-login-failure-");
   await mkdir(path.join(home, ".codex"), { recursive: true });
   const runtime = fixtureRuntime(home, {
+    commandInfo: () => ({ installed: true, version: "test" }),
     isInteractive: true,
     confirmLogin: async () => true,
     runInteractiveCommand: async () => ({ status: "failed", exitCode: 7, stderr: "token-secret" }),
@@ -226,6 +232,7 @@ test("an unchanged config can still authenticate and manual clients stay explici
   const outcome = await runConnect({
     only: ["codex", "cursor"], dryRun: false, yes: true, json: false, noLogin: false,
   }, fixtureRuntime(home, {
+    commandInfo: () => ({ installed: true, version: "test" }),
     isInteractive: true,
     confirmLogin: async () => true,
     runInteractiveCommand: async () => {

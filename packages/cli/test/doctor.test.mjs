@@ -60,7 +60,7 @@ test("network doctor validates metadata, discovery, and exact 401 challenge with
     allowHttp: true,
     timeoutMs: 1000,
   });
-  assert.equal(checks.length, 6);
+  assert.equal(checks.length, 9);
   assert.equal(checks.every((item) => item.status === "pass"), true);
   assert.equal(JSON.stringify(checks).includes("body-secret-must-not-leak"), false);
   assert.equal(calls.length, 5);
@@ -87,7 +87,7 @@ test("network doctor fails when authorization discovery does not advertise DCR",
   assert.equal(checks.find((item) => item.name === "dynamic-client-registration-advertised").status, "fail");
 });
 
-test("network doctor warns when Brian's public marker pauses new registrations", async () => {
+test("network doctor reports Brian marker drift independently from approvals", async () => {
   const resource = "http://resource.test/mcp";
   const issuer = "http://auth.test/issuer";
   const base = goodFetch(resource, issuer, []);
@@ -104,7 +104,32 @@ test("network doctor warns when Brian's public marker pauses new registrations",
   };
 
   const checks = await runNetworkDoctor({ resourceUrl: resource, fetchFn, allowHttp: true });
-  assert.equal(checks.find((item) => item.name === "brian-oauth-availability").status, "warn");
+  assert.equal(checks.find((item) => item.name === "brian-dcr-marker").status, "warn");
+  assert.equal(checks.find((item) => item.name === "brian-oauth-approvals").status, "pass");
+  assert.equal(checks.find((item) => item.name === "dcr-marker-drift").status, "fail");
+});
+
+test("network doctor keeps provider registration available during an approvals-only pause", async () => {
+  const resource = "http://resource.test/mcp";
+  const issuer = "http://auth.test/issuer";
+  const base = goodFetch(resource, issuer, []);
+  const fetchFn = async (url, init) => {
+    if (url === "http://resource.test/api/public/config") {
+      return new Response(JSON.stringify({
+        publicSignup: false,
+        mcpOAuth: true,
+        mcpOAuthApprovals: false,
+        mcpDcr: true,
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return base(url, init);
+  };
+
+  const checks = await runNetworkDoctor({ resourceUrl: resource, fetchFn, allowHttp: true });
+  assert.equal(checks.find((item) => item.name === "dynamic-client-registration-advertised").status, "pass");
+  assert.equal(checks.find((item) => item.name === "brian-dcr-marker").status, "pass");
+  assert.equal(checks.find((item) => item.name === "brian-oauth-approvals").status, "warn");
+  assert.equal(checks.find((item) => item.name === "dcr-marker-drift").status, "pass");
 });
 
 test("network doctor fails closed on wrong challenge metadata", async () => {
@@ -184,6 +209,9 @@ test("doctor records a private identity-free health result for status", async ()
   assert.equal(doctor.result.status, "healthy");
   assert.deepEqual(doctor.result.oauthEvidence, {
     registration: "advertised",
+    brianDcrMarker: "enabled",
+    approvals: "enabled",
+    markerDrift: "aligned",
     localClient: "ready",
   });
   assert.equal(doctor.result.checks.some((item) =>
@@ -234,7 +262,35 @@ test("doctor does not treat a native login command as completed OAuth compatibil
     "Upgrade Claude Code or run the Brian connection from Claude's MCP settings.");
   assert.deepEqual(outcome.result.oauthEvidence, {
     registration: "advertised",
+    brianDcrMarker: "enabled",
+    approvals: "enabled",
+    markerDrift: "aligned",
     localClient: "not-ready",
   });
   assert.equal(JSON.stringify(outcome.result).includes("proven"), false);
+});
+
+test("a stale Codex directory without the Codex command is not native-login ready", async () => {
+  const home = await temporaryHome("brian-stale-codex-");
+  await mkdir(path.join(home, ".codex"), { recursive: true });
+  await import("node:fs/promises").then(({ writeFile }) => writeFile(
+    path.join(home, ".codex", "config.toml"),
+    `[mcp_servers.brian]\nurl = "${CANONICAL_MCP_URL}"\n`,
+  ));
+  const resource = "http://resource.test/mcp";
+  const issuer = "http://auth.test/issuer";
+  const runtime = createRuntime({
+    home,
+    platform: "linux",
+    env: { HOME: home, PATH: "", DISPLAY: ":1" },
+    commandInfo: () => ({ installed: false, version: null }),
+    fetch: goodFetch(resource, issuer, []),
+  });
+
+  const outcome = await runDoctor({
+    only: ["codex"], resourceUrl: resource, allowHttp: true, timeoutMs: 1000,
+  }, runtime);
+  const readiness = outcome.result.checks.find((item) => item.name === "codex:native-login");
+  assert.equal(readiness.status, "warn");
+  assert.equal(outcome.result.oauthEvidence.localClient, "not-ready");
 });

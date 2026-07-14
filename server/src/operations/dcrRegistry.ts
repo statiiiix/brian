@@ -5,6 +5,82 @@ import pg from "pg";
 const { Pool } = pg;
 const STALE_AFTER_MS = 24 * 60 * 60 * 1_000;
 
+export interface DcrMarkerState {
+  providerDcrAdvertised: boolean;
+  brianDcrEnabled: boolean;
+  brianApprovalsEnabled: boolean;
+  markerDrift: boolean;
+}
+
+export async function loadDcrMarkerState({
+  supabaseUrl,
+  publicConfigUrl,
+  fetchFn = globalThis.fetch,
+}: {
+  supabaseUrl: string;
+  publicConfigUrl: string;
+  fetchFn?: typeof globalThis.fetch;
+}): Promise<DcrMarkerState> {
+  let supabase: URL;
+  let publicConfig: URL;
+  try {
+    supabase = new URL(supabaseUrl);
+    publicConfig = new URL(publicConfigUrl);
+  } catch {
+    throw new Error("DCR marker audit configuration failed");
+  }
+  if (supabase.protocol !== "https:"
+    || supabase.username
+    || supabase.password
+    || (supabase.pathname !== "/" && supabase.pathname !== "")
+    || supabase.search
+    || supabase.hash
+    || publicConfig.protocol !== "https:"
+    || publicConfig.username
+    || publicConfig.password) {
+    throw new Error("DCR marker audit configuration failed");
+  }
+  const issuer = `${supabase.origin}/auth/v1`;
+  const registrationEndpoint = `${issuer}/oauth/clients/register`;
+  const discoveryUrl = `${supabase.origin}/.well-known/oauth-authorization-server/auth/v1`;
+  let discoveryResponse: Response;
+  let configResponse: Response;
+  try {
+    [discoveryResponse, configResponse] = await Promise.all([
+      fetchFn(discoveryUrl, { redirect: "error", headers: { accept: "application/json" } }),
+      fetchFn(publicConfig, { redirect: "error", headers: { accept: "application/json" } }),
+    ]);
+  } catch {
+    throw new Error("DCR marker audit request failed");
+  }
+  if (!discoveryResponse.ok || !configResponse.ok) {
+    throw new Error("DCR marker audit request failed");
+  }
+  let discovery: unknown;
+  let config: unknown;
+  try {
+    [discovery, config] = await Promise.all([discoveryResponse.json(), configResponse.json()]);
+  } catch {
+    throw new Error("DCR marker audit response failed");
+  }
+  const provider = discovery as { issuer?: unknown; registration_endpoint?: unknown };
+  const brian = config as { mcpDcr?: unknown; mcpOAuthApprovals?: unknown };
+  if (provider?.issuer !== issuer
+    || (provider.registration_endpoint !== undefined
+      && provider.registration_endpoint !== registrationEndpoint)
+    || typeof brian?.mcpDcr !== "boolean"
+    || typeof brian.mcpOAuthApprovals !== "boolean") {
+    throw new Error("DCR marker audit response failed");
+  }
+  const providerDcrAdvertised = provider.registration_endpoint === registrationEndpoint;
+  return {
+    providerDcrAdvertised,
+    brianDcrEnabled: brian.mcpDcr,
+    brianApprovalsEnabled: brian.mcpOAuthApprovals,
+    markerDrift: providerDcrAdvertised !== brian.mcpDcr,
+  };
+}
+
 export interface RegistryClient {
   clientId: string;
   registrationType: "dynamic" | "manual";
@@ -39,9 +115,13 @@ export interface DcrAuditSummary {
   createdLast24Hours: number;
   withBrianConnection: number;
   staleEligible: number;
+  revalidatedRetained: number;
   deleted: number;
   retained: number;
   failed: number;
+  providerDcrAdvertised: boolean | null;
+  brianDcrEnabled: boolean | null;
+  brianApprovalsEnabled: boolean | null;
   markerDrift: boolean | null;
 }
 
@@ -88,7 +168,8 @@ function ageBucket(createdAt: Date, now: Date): DcrDeletionRecord["ageBucket"] {
 interface ExecuteDcrMaintenanceInput extends RegistryClassificationInput {
   runId: string;
   mode: "audit" | "cleanup";
-  markerDrift: boolean | null;
+  markerState: DcrMarkerState | null;
+  revalidateClient(clientId: string): Promise<boolean>;
   deleteClient(clientId: string): Promise<void>;
 }
 
@@ -106,6 +187,7 @@ export async function executeDcrMaintenance(input: ExecuteDcrMaintenanceInput): 
   const deletions: DcrDeletionRecord[] = [];
   let deleted = 0;
   let failed = 0;
+  let revalidatedRetained = 0;
 
   if (input.mode === "cleanup") {
     for (const { client } of eligible) {
@@ -115,6 +197,10 @@ export async function executeDcrMaintenance(input: ExecuteDcrMaintenanceInput): 
         runId: input.runId,
       } as const;
       try {
+        if (!await input.revalidateClient(client.clientId)) {
+          revalidatedRetained += 1;
+          continue;
+        }
         await input.deleteClient(client.clientId);
         deleted += 1;
         deletions.push({ ...record, outcome: "deleted" });
@@ -136,10 +222,14 @@ export async function executeDcrMaintenance(input: ExecuteDcrMaintenanceInput): 
       withBrianConnection: dynamic.filter(({ client }) =>
         input.evidence.brianOpenConnections.has(client.clientId)).length,
       staleEligible: eligible.length,
+      revalidatedRetained,
       deleted,
       retained: dynamic.length - deleted,
       failed,
-      markerDrift: input.markerDrift,
+      providerDcrAdvertised: input.markerState?.providerDcrAdvertised ?? null,
+      brianDcrEnabled: input.markerState?.brianDcrEnabled ?? null,
+      brianApprovalsEnabled: input.markerState?.brianApprovalsEnabled ?? null,
+      markerDrift: input.markerState?.markerDrift ?? null,
     },
     deletions,
   };
@@ -329,6 +419,45 @@ export async function loadLifecycleEvidence(pool: MaintenancePool): Promise<Clie
         typeof row.client_id === "string" ? [row.client_id] : [])),
       evidenceComplete: true,
     };
+  } finally {
+    client.release();
+  }
+}
+
+export async function isClientLifecycleInactive(
+  pool: MaintenancePool,
+  clientId: string,
+): Promise<boolean> {
+  const client = await pool.connect().catch(() => {
+    throw new Error("DCR lifecycle revalidation connection failed");
+  });
+  try {
+    await assertReadOnlyMaintenanceConnection(client);
+    const { rows } = await client.query(`
+      select not exists (
+        select 1
+          from public.agent_connections
+         where oauth_client_id = $1
+           and status in ('pending', 'active')
+        union all
+        select 1
+          from auth.sessions
+         where oauth_client_id = $1
+           and (not_after is null or not_after > now())
+        union all
+        select 1
+          from auth.oauth_authorizations
+         where client_id = $1
+           and status in ('pending', 'approved')
+           and (expires_at is null or expires_at > now())
+      ) as inactive
+    `, [clientId]).catch(() => {
+      throw new Error("DCR lifecycle revalidation failed");
+    });
+    if (typeof rows[0]?.inactive !== "boolean") {
+      throw new Error("DCR lifecycle revalidation failed");
+    }
+    return rows[0].inactive;
   } finally {
     client.release();
   }

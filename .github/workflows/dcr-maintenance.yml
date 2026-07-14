@@ -26,14 +26,10 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.cleanup == false)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    environment: production
     defaults:
       run:
         working-directory: server
-    env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-      DCR_MAINTENANCE_DATABASE_URL: ${{ secrets.DCR_MAINTENANCE_DATABASE_URL }}
-      DCR_PROTECTED_CLIENT_IDS: ${{ secrets.DCR_PROTECTED_CLIENT_IDS }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -46,6 +42,11 @@ jobs:
       - run: npm ci
       - name: Emit count-only registry audit
         run: npm run oauth:dcr:audit
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          DCR_MAINTENANCE_DATABASE_URL: ${{ secrets.DCR_MAINTENANCE_DATABASE_URL }}
+          DCR_PROTECTED_CLIENT_IDS: ${{ secrets.DCR_PROTECTED_CLIENT_IDS }}
 
   cleanup:
     if: >-
@@ -57,11 +58,6 @@ jobs:
     defaults:
       run:
         working-directory: server
-    env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-      DCR_MAINTENANCE_DATABASE_URL: ${{ secrets.DCR_MAINTENANCE_DATABASE_URL }}
-      DCR_PROTECTED_CLIENT_IDS: ${{ secrets.DCR_PROTECTED_CLIENT_IDS }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -74,3 +70,8 @@ jobs:
       - run: npm ci
       - name: Emit count-only registry cleanup
         run: npm run oauth:dcr:audit -- --delete-stale --yes
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          DCR_MAINTENANCE_DATABASE_URL: ${{ secrets.DCR_MAINTENANCE_DATABASE_URL }}
+          DCR_PROTECTED_CLIENT_IDS: ${{ secrets.DCR_PROTECTED_CLIENT_IDS }}

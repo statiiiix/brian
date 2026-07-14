@@ -5,6 +5,8 @@ import {
   createDcrMaintenancePool,
   createSupabaseOAuthAdminAdapter,
   executeDcrMaintenance,
+  isClientLifecycleInactive,
+  loadDcrMarkerState,
   loadLifecycleEvidence,
   type MaintenancePool,
 } from "./dcrRegistry.js";
@@ -33,7 +35,16 @@ export interface DcrMaintenanceConfig {
   supabaseUrl: string;
   secretKey: string;
   databaseUrl: string;
+  publicConfigUrl: string;
   protectedClientIds: Set<string>;
+}
+
+export function assertDcrMaintenanceSucceeded(summary: {
+  failed: number;
+  markerDrift: boolean | null;
+}): void {
+  if (summary.failed > 0) throw new Error("DCR maintenance completed with failures");
+  if (summary.markerDrift) throw new Error("DCR maintenance marker drift detected");
 }
 
 export function readDcrMaintenanceConfig(env: NodeJS.ProcessEnv): DcrMaintenanceConfig {
@@ -49,7 +60,9 @@ export function readDcrMaintenanceConfig(env: NodeJS.ProcessEnv): DcrMaintenance
       .map((value) => value.trim())
       .filter(Boolean),
   );
-  return { supabaseUrl, secretKey, databaseUrl, protectedClientIds };
+  const publicConfigUrl = env.BRIAN_PUBLIC_CONFIG_URL?.trim()
+    || "https://api.brianthebrain.app/api/public/config";
+  return { supabaseUrl, secretKey, databaseUrl, publicConfigUrl, protectedClientIds };
 }
 
 function usage(): string {
@@ -84,9 +97,13 @@ export async function runDcrMaintenanceCli(
   const pool = createPool(config.databaseUrl);
   try {
     const admin = createSupabaseOAuthAdminAdapter(config);
-    const [clients, lifecycle] = await Promise.all([
+    const [clients, lifecycle, markerState] = await Promise.all([
       admin.listClients(),
       loadLifecycleEvidence(pool),
+      loadDcrMarkerState({
+        supabaseUrl: config.supabaseUrl,
+        publicConfigUrl: config.publicConfigUrl,
+      }),
     ]);
     const result = await executeDcrMaintenance({
       clients,
@@ -95,11 +112,13 @@ export async function runDcrMaintenanceCli(
       now: dependencies.now?.() ?? new Date(),
       runId: dependencies.runId?.() ?? randomUUID(),
       mode: options.mode,
-      markerDrift: null,
+      markerState,
+      revalidateClient: (clientId) => isClientLifecycleInactive(pool, clientId),
       deleteClient: admin.deleteClient,
     });
     write(JSON.stringify(result.summary));
     for (const deletion of result.deletions) write(JSON.stringify(deletion));
+    assertDcrMaintenanceSucceeded(result.summary);
   } finally {
     await pool.end().catch(() => undefined);
   }

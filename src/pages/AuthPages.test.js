@@ -286,6 +286,52 @@ test('owners can explicitly add both optional Brian permissions', async () => {
   }));
 });
 
+test('switching to a non-admin company removes role-ineligible optional actions', async () => {
+  useAuth.mockReturnValue({
+    session: { user: { id: 'u1' } },
+    loading: false,
+    profileLoading: false,
+    profileError: '',
+    profile: {
+      memberships: [
+        { tenant_id: 'owner-tenant', role: 'owner', status: 'active', tenant: { id: 'owner-tenant', name: 'Owner Co' } },
+        { tenant_id: 'expert-tenant', role: 'expert', status: 'active', tenant: { id: 'expert-tenant', name: 'Expert Co' } },
+      ],
+      featureFlags: { MCP_OAUTH_ENABLED: true, MCP_OAUTH_APPROVALS_ENABLED: true },
+    },
+  });
+  supabase.auth.oauth.getAuthorizationDetails.mockResolvedValue({
+    data: {
+      authorization_id: 'auth-role-switch',
+      redirect_uri: 'http://127.0.0.1:49152/callback',
+      scope: 'email',
+      client: { id: 'client-1', name: 'Role Switch Agent', uri: 'https://agent.example' },
+    },
+    error: null,
+  });
+  api.mockImplementation(async (path) => (
+    path === '/api/oauth/grants/prepare' ? { grant: { id: 'grant-role-switch' } } : { denied: true }
+  ));
+  supabase.auth.oauth.approveAuthorization.mockResolvedValue({ data: null, error: new Error('stop after prepare') });
+
+  render(<MemoryRouter initialEntries={['/oauth/consent?authorization_id=auth-role-switch']}><OAuthConsent /></MemoryRouter>);
+  const company = await screen.findByLabelText('Company');
+  fireEvent.change(company, { target: { value: 'owner-tenant' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Act through connected tools' }));
+  fireEvent.change(company, { target: { value: 'expert-tenant' } });
+  expect(screen.queryByRole('checkbox', { name: 'Act through connected tools' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Approve connection' }));
+
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/oauth/grants/prepare', {
+    method: 'POST',
+    body: {
+      authorizationId: 'auth-role-switch',
+      tenantId: 'expert-tenant',
+      permissions: ['skills:read', 'context:read', 'executions:write'],
+    },
+  }));
+});
+
 test('experts may capture knowledge but cannot select business-tool actions', async () => {
   useAuth.mockReturnValue({
     session: { user: { id: 'u1' } },

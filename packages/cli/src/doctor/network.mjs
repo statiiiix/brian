@@ -130,7 +130,12 @@ export async function runNetworkDoctor({
     const publicConfigUrl = new URL("/api/public/config", new URL(resourceUrl).origin).toString();
     const result = await fetchJson(fetchFn, publicConfigUrl, timeoutMs);
     if (result.error) {
-      checks.push(check("brian-oauth-availability", false, result.error));
+      checks.push(
+        check("brian-mcp-oauth-validation", false, result.error),
+        check("brian-dcr-marker", false, "public DCR marker is unavailable"),
+        check("brian-oauth-approvals", false, "public approval marker is unavailable"),
+        check("dcr-marker-drift", false, "provider and Brian markers could not be compared"),
+      );
     } else {
       const config = result.value;
       const valid = config
@@ -140,21 +145,48 @@ export async function runNetworkDoctor({
         && typeof config.mcpOAuthApprovals === "boolean"
         && typeof config.mcpDcr === "boolean";
       if (!valid) {
-        checks.push(check("brian-oauth-availability", false, "public OAuth markers are incomplete"));
-      } else if (!config.mcpOAuth) {
-        checks.push(check("brian-oauth-availability", false, "MCP OAuth validation is disabled"));
+        checks.push(
+          check("brian-mcp-oauth-validation", false, "public OAuth markers are incomplete"),
+          check("brian-dcr-marker", false, "public DCR marker is unavailable"),
+          check("brian-oauth-approvals", false, "public approval marker is unavailable"),
+          check("dcr-marker-drift", false, "provider and Brian markers could not be compared"),
+        );
       } else {
-        const available = config.mcpOAuthApprovals && config.mcpDcr;
-        checks.push(check(
-          "brian-oauth-availability",
-          available,
-          available ? "DCR and new connection approvals are available" : "new registrations or approvals are paused",
-          "warn",
-        ));
+        checks.push(
+          check(
+            "brian-mcp-oauth-validation",
+            config.mcpOAuth,
+            config.mcpOAuth ? "MCP OAuth validation is enabled" : "MCP OAuth validation is disabled",
+          ),
+          check(
+            "brian-dcr-marker",
+            config.mcpDcr,
+            config.mcpDcr ? "Brian marks DCR enabled" : "Brian marks DCR paused",
+            "warn",
+          ),
+          check(
+            "brian-oauth-approvals",
+            config.mcpOAuthApprovals,
+            config.mcpOAuthApprovals ? "new connection approvals are enabled" : "new connection approvals are paused",
+            "warn",
+          ),
+          check(
+            "dcr-marker-drift",
+            registrationValid === config.mcpDcr,
+            registrationValid === config.mcpDcr
+              ? "provider advertisement and Brian DCR marker agree"
+              : "provider advertisement and Brian DCR marker disagree",
+          ),
+        );
       }
     }
   } catch {
-    checks.push(check("brian-oauth-availability", false, "request failed"));
+    checks.push(
+      check("brian-mcp-oauth-validation", false, "request failed"),
+      check("brian-dcr-marker", false, "public DCR marker is unavailable"),
+      check("brian-oauth-approvals", false, "public approval marker is unavailable"),
+      check("dcr-marker-drift", false, "provider and Brian markers could not be compared"),
+    );
   }
 
   try {

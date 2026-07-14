@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseDcrMaintenanceArgs, readDcrMaintenanceConfig } from "./dcrMaintenanceCli.js";
+import {
+  assertDcrMaintenanceSucceeded,
+  parseDcrMaintenanceArgs,
+  readDcrMaintenanceConfig,
+} from "./dcrMaintenanceCli.js";
 
 describe("DCR maintenance CLI", () => {
   it("defaults to audit and requires explicit confirmation for cleanup", () => {
@@ -27,7 +31,16 @@ describe("DCR maintenance CLI", () => {
       supabaseUrl: "https://project.supabase.co",
       secretKey: "never-print-secret",
       databaseUrl: "postgres://never-print-database",
+      publicConfigUrl: "https://api.brianthebrain.app/api/public/config",
       protectedClientIds: new Set(["manual-one", "manual-two"]),
     });
+  });
+
+  it("turns any cleanup failure into a fixed nonzero-workflow error", () => {
+    expect(() => assertDcrMaintenanceSucceeded({ failed: 0, markerDrift: false })).not.toThrow();
+    expect(() => assertDcrMaintenanceSucceeded({ failed: 1, markerDrift: false }))
+      .toThrow(/^DCR maintenance completed with failures$/);
+    expect(() => assertDcrMaintenanceSucceeded({ failed: 0, markerDrift: true }))
+      .toThrow(/^DCR maintenance marker drift detected$/);
   });
 });

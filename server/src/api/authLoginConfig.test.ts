@@ -61,6 +61,26 @@ describe("legacy auth login configuration", () => {
     await app.close();
   });
 
+  it("reads DCR and approval kill switches at request time", async () => {
+    let enabled = false;
+    const app = testClient(buildApp({
+      authRequired: true,
+      authToken: "static-tok",
+      supabaseAuth: null,
+      operationalFlags: async () => ({
+        mcpDcrEnabled: enabled,
+        mcpOAuthApprovalsEnabled: enabled,
+      }),
+    }));
+
+    const off = await app.inject({ method: "GET", url: "/api/public/config" });
+    expect(off.json()).toMatchObject({ mcpDcr: false, mcpOAuthApprovals: false });
+    enabled = true;
+    const on = await app.inject({ method: "GET", url: "/api/public/config" });
+    expect(on.json()).toMatchObject({ mcpDcr: true, mcpOAuthApprovals: true });
+    await app.close();
+  });
+
   it("keeps invitation preflight public, boolean-only, and burst-limited", async () => {
     const logs: OperationalLog[] = [];
     const app = testClient(buildApp({

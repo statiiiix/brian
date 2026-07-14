@@ -23,6 +23,10 @@ import {
 import { runPrincipal, runTenant } from "../db/tenant.js";
 import { secret } from "../config/secrets.js";
 import {
+  loadMcpOperationalFlags,
+  type McpOperationalFlags,
+} from "../config/operationalFlags.js";
+import {
   createInterview, getInterview, listInterviews, appendMessage as appendInterviewMessage,
   completeInterview, abandonInterview, resumeInterview,
 } from "../interviews/repo.js";
@@ -113,6 +117,7 @@ export interface AppOptions {
   mcpOAuthEnabled?: boolean;
   mcpOAuthApprovalsEnabled?: boolean;
   mcpDcrEnabled?: boolean;
+  operationalFlags?: () => Promise<McpOperationalFlags>;
   cliOauthBridgeEnabled?: boolean;
   publicSignupEnabled?: boolean;
   legacyPasswordLoginEnabled?: boolean;
@@ -284,12 +289,20 @@ export function buildApp(opts: AppOptions = {}): App {
   // New grants are release-gated independently from validation of existing
   // short-lived MCP credentials. Missing configuration fails closed.
   const mcpOAuthApprovalsEnabled = opts.mcpOAuthApprovalsEnabled
-    ?? featureFlag("MCP_OAUTH_APPROVALS_ENABLED", false);
+    ?? false;
   // Supabase owns DCR and the public CLI intentionally ships no credential
   // bridge in v1. Keep both controls visible and fail closed until their
   // respective compatibility/release gates have passed.
   const mcpDcrEnabled = opts.mcpDcrEnabled
-    ?? featureFlag("MCP_DCR_ENABLED", false);
+    ?? false;
+  const staticOperationalFlags: McpOperationalFlags = {
+    mcpDcrEnabled,
+    mcpOAuthApprovalsEnabled,
+  };
+  const operationalFlags = opts.operationalFlags
+    ?? (opts.mcpDcrEnabled !== undefined || opts.mcpOAuthApprovalsEnabled !== undefined
+      ? async () => staticOperationalFlags
+      : loadMcpOperationalFlags);
   const cliOauthBridgeEnabled = opts.cliOauthBridgeEnabled
     ?? featureFlag("CLI_OAUTH_BRIDGE_ENABLED", false);
   const publicSignupEnabled = opts.publicSignupEnabled
@@ -481,12 +494,15 @@ export function buildApp(opts: AppOptions = {}): App {
   // Deliberately tiny unauthenticated configuration surface. Self-service
   // signup must fail closed in the browser as well as in the provisioning
   // trigger; invitation signup remains a separate, token-bound path.
-  app.get("/api/public/config", (c) => c.json({
-    publicSignup: publicSignupEnabled,
-    mcpOAuth: mcpOAuthEnabled,
-    mcpOAuthApprovals: mcpOAuthApprovalsEnabled,
-    mcpDcr: mcpDcrEnabled,
-  }));
+  app.get("/api/public/config", async (c) => {
+    const flags = await operationalFlags();
+    return c.json({
+      publicSignup: publicSignupEnabled,
+      mcpOAuth: mcpOAuthEnabled,
+      mcpOAuthApprovals: flags.mcpOAuthApprovalsEnabled,
+      mcpDcr: flags.mcpDcrEnabled,
+    });
+  });
 
   app.post("/api/public/invitations/validate", async (c) => {
     const { email, token } = (await jsonBody(c)) ?? {};
@@ -529,9 +545,10 @@ export function buildApp(opts: AppOptions = {}): App {
   app.get("/api/me", async (c) => {
     const principal = humanPrincipal(c);
     if (!principal) return c.json({ error: "unauthorized" }, 401);
-    const [memberships, tenant] = await Promise.all([
+    const [memberships, tenant, flags] = await Promise.all([
       principalStore.listMemberships(principal.userId),
       currentTenant(),
+      operationalFlags(),
     ]);
     return c.json({
       user: { id: principal.userId, email: principal.email, role: principal.role },
@@ -540,8 +557,8 @@ export function buildApp(opts: AppOptions = {}): App {
       featureFlags: {
         publicSignup: publicSignupEnabled,
         mcpOAuth: mcpOAuthEnabled,
-        mcpOAuthApprovals: mcpOAuthApprovalsEnabled,
-        mcpDcr: mcpDcrEnabled,
+        mcpOAuthApprovals: flags.mcpOAuthApprovalsEnabled,
+        mcpDcr: flags.mcpDcrEnabled,
         cliOauthBridge: cliOauthBridgeEnabled,
         agentConnectionsUi: featureFlag("AGENT_CONNECTIONS_UI_ENABLED", true),
         legacyAgentTokens: featureFlag("LEGACY_AGENT_TOKENS_ENABLED", true),
@@ -730,7 +747,8 @@ export function buildApp(opts: AppOptions = {}): App {
     const principal = humanPrincipal(c);
     if (!principal) return c.json({ error: "unauthorized" }, 401);
     if (principal.role === "viewer") return c.json({ error: "forbidden" }, 403);
-    if (!mcpOAuthEnabled || !mcpOAuthApprovalsEnabled) {
+    const flags = await operationalFlags();
+    if (!mcpOAuthEnabled || !flags.mcpOAuthApprovalsEnabled) {
       return c.json({ error: "new agent connections are temporarily paused" }, 503);
     }
     if (!supabaseAuth || !c.get("accessToken")) {

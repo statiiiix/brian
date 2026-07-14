@@ -19,7 +19,13 @@ function nonCommandPlan(kind, instruction) {
   };
 }
 
-export function codexLoginPlan() {
+export function codexLoginPlan(runtime) {
+  if (runtime?.commandInfo && !runtime.commandInfo("codex").installed) {
+    return nonCommandPlan(
+      "unavailable",
+      "Install or upgrade Codex before authenticating Brian.",
+    );
+  }
   return commandPlan("codex", "Authenticate Brian now in Codex.");
 }
 

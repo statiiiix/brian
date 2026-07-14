@@ -8,6 +8,15 @@ This matrix is deliberately evidence-labeled. A CLI flag or menu item proves tha
 
 The canonical domain was rechecked without credentials on 2026-07-14 after deploying Edge Function `brian` version 8 (build marker `207b223821555ba5`). The earlier release smoke passed both RFC 9728 metadata locations, Supabase authorization-server discovery, PKCE S256 advertisement, the authorization route, and the `/mcp` `401` Bearer challenge. Dynamic Client Registration was enabled in Supabase on 2026-07-14 after the repository gained count-only registry audit, fail-closed stale cleanup, alert thresholds, and a documented kill switch. Authenticated testing remains gated on deploying Brian's new approval/availability markers and completing a disposable registration cleanup proof.
 
+A pre-deployment review on 2026-07-14 blocked release until the controlled
+probe stopped deriving a privileged Admin destination from discovery, cleanup
+failures produced nonzero workflow status, lifecycle evidence was rechecked per
+client, marker drift was computed, workflow secrets were step-scoped, and the
+runtime flags matched the documented database controls. Those corrections are
+implemented and locally tested on the guarded rollout branch; this is not yet
+production evidence. Migration 016, the refreshed Edge/web artifacts, and the
+controlled probe still must be deployed and run before the matrix advances.
+
 ## Dated OAuth evidence ledger
 
 These fields are independent. A later field never backfills an earlier one, and

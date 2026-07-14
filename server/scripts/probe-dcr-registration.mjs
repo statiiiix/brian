@@ -20,6 +20,28 @@ function authorizationServerMetadataUrl(issuer) {
   return new URL(`/.well-known/oauth-authorization-server${issuerPath}`, url.origin).toString();
 }
 
+function trustedSupabaseEndpoints(supabaseUrl) {
+  let url;
+  try {
+    url = new URL(supabaseUrl);
+  } catch {
+    throw new Error("DCR probe configuration failed");
+  }
+  if (url.protocol !== "https:"
+    || url.username
+    || url.password
+    || (url.pathname !== "/" && url.pathname !== "")
+    || url.search
+    || url.hash) {
+    throw new Error("DCR probe configuration failed");
+  }
+  return {
+    supabaseUrl: url.origin,
+    issuer: `${url.origin}/auth/v1`,
+    registrationEndpoint: `${url.origin}/auth/v1/oauth/clients/register`,
+  };
+}
+
 async function fetchJson(fetchFn, url, category, init = undefined) {
   let response;
   try {
@@ -48,7 +70,12 @@ function createProbeAdmin(supabaseUrl, secretKey) {
           .catch(() => { throw new Error("DCR probe verification failed"); });
         if (response.error) throw new Error("DCR probe verification failed");
         for (const row of response.data.clients) {
-          if (typeof row.client_id === "string") clients.push({ clientId: row.client_id });
+          if (typeof row.client_id === "string") {
+            clients.push({
+              clientId: row.client_id,
+              ...(typeof row.client_name === "string" ? { clientName: row.client_name } : {}),
+            });
+          }
         }
         const nextPage = response.data.nextPage ?? null;
         if (nextPage === null) break;
@@ -69,11 +96,14 @@ function createProbeAdmin(supabaseUrl, secretKey) {
 
 export async function runDcrRegistrationProbe({
   resourceUrl = DEFAULT_RESOURCE,
+  supabaseUrl,
   fetchFn = globalThis.fetch,
   admin: injectedAdmin,
+  adminFactory = createProbeAdmin,
   secretKey = "",
   runId = randomUUID(),
 }) {
+  const trusted = trustedSupabaseEndpoints(supabaseUrl);
   const metadata = await fetchJson(
     fetchFn,
     protectedResourceMetadataUrl(resourceUrl),
@@ -86,13 +116,15 @@ export async function runDcrRegistrationProbe({
     throw new Error("DCR probe discovery failed");
   }
   const issuer = metadata.authorization_servers[0];
+  if (issuer !== trusted.issuer) throw new Error("DCR probe discovery failed");
   const discovery = await fetchJson(
     fetchFn,
     authorizationServerMetadataUrl(issuer),
     "discovery",
     { headers: { accept: "application/json" } },
   );
-  if (discovery?.issuer !== issuer || typeof discovery.registration_endpoint !== "string") {
+  if (discovery?.issuer !== trusted.issuer
+    || discovery.registration_endpoint !== trusted.registrationEndpoint) {
     throw new Error("DCR probe discovery failed");
   }
   let registrationEndpoint;
@@ -103,6 +135,14 @@ export async function runDcrRegistrationProbe({
   }
   if (registrationEndpoint.protocol !== "https:") throw new Error("DCR probe discovery failed");
 
+  let admin;
+  try {
+    admin = injectedAdmin ?? adminFactory(trusted.supabaseUrl, secretKey);
+  } catch {
+    throw new Error("DCR probe configuration failed");
+  }
+  const clientName = `Brian controlled DCR probe ${runId}`;
+
   const registration = await fetchJson(
     fetchFn,
     registrationEndpoint,
@@ -111,7 +151,7 @@ export async function runDcrRegistrationProbe({
       method: "POST",
       headers: { accept: "application/json", "content-type": "application/json" },
       body: JSON.stringify({
-        client_name: "Brian controlled DCR probe",
+        client_name: clientName,
         redirect_uris: [CALLBACK],
         grant_types: ["authorization_code", "refresh_token"],
         response_types: ["code"],
@@ -119,13 +159,24 @@ export async function runDcrRegistrationProbe({
       }),
     },
   );
-  const clientId = typeof registration?.client_id === "string" ? registration.client_id : "";
-  if (!clientId || clientId.length > 512) throw new Error("DCR probe registration failed");
-  const admin = injectedAdmin ?? createProbeAdmin(new URL(issuer).origin, secretKey);
+  let clientId = typeof registration?.client_id === "string" ? registration.client_id : "";
+  let listed;
+  if (!clientId) {
+    try {
+      listed = await admin.listClients();
+    } catch {
+      throw new Error("DCR probe cleanup failed");
+    }
+    const matches = listed.filter((client) => client.clientName === clientName);
+    if (matches.length !== 1 || !matches[0].clientId) {
+      throw new Error("DCR probe cleanup failed");
+    }
+    clientId = matches[0].clientId;
+  }
   let verificationError = null;
   let cleanupError = null;
   try {
-    const listed = await admin.listClients().catch(() => {
+    listed ??= await admin.listClients().catch(() => {
       throw new Error("DCR probe verification failed");
     });
     if (!listed.some((client) => client.clientId === clientId)) {
@@ -154,12 +205,16 @@ if (direct) {
   const argv = process.argv.slice(2);
   if (argv.includes("--help") || argv.includes("-h")) {
     process.stdout.write(`${usage()}\n`);
-  } else if (argv.length !== 1 || argv[0] !== "--yes" || !process.env.SUPABASE_SECRET_KEY) {
-    process.stderr.write("DCR registration probe requires --yes and SUPABASE_SECRET_KEY.\n");
+  } else if (argv.length !== 1
+    || argv[0] !== "--yes"
+    || !process.env.SUPABASE_URL
+    || !process.env.SUPABASE_SECRET_KEY) {
+    process.stderr.write("DCR registration probe requires --yes, SUPABASE_URL, and SUPABASE_SECRET_KEY.\n");
     process.exitCode = 2;
   } else {
     runDcrRegistrationProbe({
       resourceUrl: process.env.MCP_SMOKE_RESOURCE || DEFAULT_RESOURCE,
+      supabaseUrl: process.env.SUPABASE_URL,
       secretKey: process.env.SUPABASE_SECRET_KEY,
     })
       .then((result) => process.stdout.write(`${JSON.stringify(result)}\n`))

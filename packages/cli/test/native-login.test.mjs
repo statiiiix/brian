@@ -15,6 +15,13 @@ test("Codex login uses one fixed executable and argument array", () => {
     retryCommand: "codex mcp login brian",
     instruction: "Authenticate Brian now in Codex.",
   });
+  assert.deepEqual(codexLoginPlan({ commandInfo: () => ({ installed: false, version: null }) }), {
+    kind: "unavailable",
+    executable: null,
+    args: [],
+    retryCommand: null,
+    instruction: "Install or upgrade Codex before authenticating Brian.",
+  });
 });
 
 test("Claude login is callable only when the exact subcommand is detected", () => {

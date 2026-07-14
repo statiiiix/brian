@@ -4,6 +4,8 @@ import {
   classifyRegistry,
   createSupabaseOAuthAdminAdapter,
   executeDcrMaintenance,
+  isClientLifecycleInactive,
+  loadDcrMarkerState,
   loadLifecycleEvidence,
   type ClientLifecycleEvidence,
   type RegistryClient,
@@ -85,7 +87,13 @@ describe("DCR registry maintenance output", () => {
       now: NOW,
       runId: "run-safe-001",
       mode: "cleanup",
-      markerDrift: false,
+      markerState: {
+        providerDcrAdvertised: true,
+        brianDcrEnabled: true,
+        brianApprovalsEnabled: false,
+        markerDrift: false,
+      },
+      revalidateClient: async () => true,
       deleteClient,
     });
 
@@ -101,9 +109,13 @@ describe("DCR registry maintenance output", () => {
       createdLast24Hours: 0,
       withBrianConnection: 0,
       staleEligible: 3,
+      revalidatedRetained: 0,
       deleted: 1,
       retained: 2,
       failed: 1,
+      providerDcrAdvertised: true,
+      brianDcrEnabled: true,
+      brianApprovalsEnabled: false,
       markerDrift: false,
     });
     expect(result.deletions).toHaveLength(2);
@@ -131,12 +143,96 @@ describe("DCR registry maintenance output", () => {
       now: NOW,
       runId: "run-audit-001",
       mode: "audit",
-      markerDrift: null,
+      markerState: null,
+      revalidateClient: async () => true,
       deleteClient,
     });
     expect(deleteClient).not.toHaveBeenCalled();
     expect(result.summary).toMatchObject({ mode: "audit", staleEligible: 1, deleted: 0, retained: 1 });
     expect(result.deletions).toEqual([]);
+  });
+
+  it("revalidates lifecycle evidence immediately before each deletion", async () => {
+    const deleteClient = vi.fn();
+    const revalidateClient = vi.fn().mockResolvedValue(false);
+    const result = await executeDcrMaintenance({
+      clients: [client("became-active", 48)],
+      evidence: evidence(),
+      protectedClientIds: new Set(),
+      now: NOW,
+      runId: "run-jit-001",
+      mode: "cleanup",
+      markerState: {
+        providerDcrAdvertised: true,
+        brianDcrEnabled: true,
+        brianApprovalsEnabled: true,
+        markerDrift: false,
+      },
+      revalidateClient,
+      deleteClient,
+    });
+
+    expect(revalidateClient).toHaveBeenCalledWith("became-active");
+    expect(deleteClient).not.toHaveBeenCalled();
+    expect(result.summary).toMatchObject({
+      staleEligible: 1,
+      revalidatedRetained: 1,
+      deleted: 0,
+      failed: 0,
+    });
+  });
+});
+
+describe("DCR marker drift", () => {
+  it("detects provider-on and Brian-marker-off drift", async () => {
+    const fetchFn = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === "https://project.supabase.co/.well-known/oauth-authorization-server/auth/v1") {
+        return new Response(JSON.stringify({
+          issuer: "https://project.supabase.co/auth/v1",
+          registration_endpoint: "https://project.supabase.co/auth/v1/oauth/clients/register",
+        }), { status: 200 });
+      }
+      if (url === "https://api.example.test/api/public/config") {
+        return new Response(JSON.stringify({ mcpDcr: false, mcpOAuthApprovals: false }), { status: 200 });
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    await expect(loadDcrMarkerState({
+      supabaseUrl: "https://project.supabase.co",
+      publicConfigUrl: "https://api.example.test/api/public/config",
+      fetchFn,
+    })).resolves.toEqual({
+      providerDcrAdvertised: true,
+      brianDcrEnabled: false,
+      brianApprovalsEnabled: false,
+      markerDrift: true,
+    });
+  });
+
+  it("reports an approvals-only pause separately from DCR drift", async () => {
+    const fetchFn = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("oauth-authorization-server")) {
+        return new Response(JSON.stringify({
+          issuer: "https://project.supabase.co/auth/v1",
+          registration_endpoint: "https://project.supabase.co/auth/v1/oauth/clients/register",
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ mcpDcr: true, mcpOAuthApprovals: false }), { status: 200 });
+    });
+
+    await expect(loadDcrMarkerState({
+      supabaseUrl: "https://project.supabase.co",
+      publicConfigUrl: "https://api.example.test/api/public/config",
+      fetchFn,
+    })).resolves.toEqual({
+      providerDcrAdvertised: true,
+      brianDcrEnabled: true,
+      brianApprovalsEnabled: false,
+      markerDrift: false,
+    });
   });
 });
 
@@ -261,6 +357,23 @@ describe("read-only lifecycle evidence", () => {
       connect: async () => ({ query, release }),
       end: async () => undefined,
     })).rejects.toThrow("DCR lifecycle schema attestation failed");
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("performs a read-only client-scoped lifecycle recheck", async () => {
+    const release = vi.fn();
+    const query = vi.fn(async (sql: string, values?: unknown[]) => {
+      if (sql.includes("transaction_read_only")) {
+        return { rows: [{ transaction_read_only: "on", is_superuser: false, is_database_owner: false }] };
+      }
+      expect(values).toEqual(["client-under-review"]);
+      return { rows: [{ inactive: false }] };
+    });
+
+    await expect(isClientLifecycleInactive({
+      connect: async () => ({ query, release }),
+      end: async () => undefined,
+    }, "client-under-review")).resolves.toBe(false);
     expect(release).toHaveBeenCalledOnce();
   });
 });

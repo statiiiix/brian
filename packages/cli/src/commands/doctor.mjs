@@ -73,10 +73,11 @@ export async function runDoctor(options, runtime) {
     ...network,
     ...detected.flatMap(({ client, platform }) => clientChecks(client, platform, runtime)),
   ];
-  const networkDcrPass = [
-    "dynamic-client-registration-advertised",
-    "brian-oauth-availability",
-  ].every((name) => network.some((item) => item.name === name && item.status === "pass"));
+  const networkCheck = (name) => network.find((item) => item.name === name);
+  const providerRegistration = networkCheck("dynamic-client-registration-advertised");
+  const brianDcrMarker = networkCheck("brian-dcr-marker");
+  const approvals = networkCheck("brian-oauth-approvals");
+  const markerDrift = networkCheck("dcr-marker-drift");
   const localReady = detected.length > 0 && detected.every(({ client, platform }) => {
     const login = platform.loginPlan(runtime);
     return client.config.brianState === "connected"
@@ -96,7 +97,14 @@ export async function runDoctor(options, runtime) {
       status,
       canonicalMcpUrl: CANONICAL_MCP_URL,
       oauthEvidence: {
-        registration: networkDcrPass ? "advertised" : "unavailable",
+        registration: providerRegistration?.status === "pass" ? "advertised" : "unavailable",
+        brianDcrMarker: brianDcrMarker?.status === "pass"
+          ? "enabled"
+          : brianDcrMarker?.status === "warn" ? "disabled" : "unavailable",
+        approvals: approvals?.status === "pass"
+          ? "enabled"
+          : approvals?.status === "warn" ? "paused" : "unavailable",
+        markerDrift: markerDrift?.status === "pass" ? "aligned" : "detected",
         localClient: localReady ? "ready" : "not-ready",
       },
       checks,

@@ -84,13 +84,17 @@ SUPABASE_URL
 SUPABASE_ANON_KEY
 BRIAN_APP_URL
 MCP_OAUTH_ENABLED
-MCP_OAUTH_APPROVALS_ENABLED
 LEGACY_AGENT_TOKENS_ENABLED
 MCP_RATE_LIMIT_ENABLED
 MCP_PREAUTH_RATE_LIMIT_REQUESTS
 MCP_AUTH_RATE_LIMIT_REQUESTS
 MCP_RATE_LIMIT_WINDOW_MS
 ```
+
+`MCP_DCR_ENABLED` and `MCP_OAUTH_APPROVALS_ENABLED` are non-secret,
+request-time controls in the owner-only `app_config` table (migration 016), not
+Edge environment variables. See [docs/mcp-oauth.md](docs/mcp-oauth.md) for the
+fail-closed rollout and kill-switch procedure.
 
 Provider connector variables are documented separately in [docs/connectors.md](docs/connectors.md).
 
