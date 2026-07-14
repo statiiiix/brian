@@ -3,7 +3,7 @@ import { saveLastHealth } from "../config/health.mjs";
 import { runNetworkDoctor } from "../doctor/network.mjs";
 import { selectedPlatforms } from "../platforms/index.mjs";
 
-function clientChecks(client) {
+function clientChecks(client, platform, runtime) {
   const checks = [];
   const config = client.config;
   const configured = config.brianState === "connected";
@@ -44,6 +44,15 @@ function clientChecks(client) {
       detail: "this client/version still requires a dated Brian staging OAuth result",
     });
   }
+  const login = platform.loginPlan(runtime);
+  const loginReady = login.kind === "command" || login.kind === "manual";
+  checks.push({
+    name: `${client.name}:native-login`,
+    status: loginReady ? "pass" : "warn",
+    detail: login.kind === "command"
+      ? `native login command is available: ${login.retryCommand}`
+      : login.instruction,
+  });
   return checks;
 }
 
@@ -54,9 +63,25 @@ export async function runDoctor(options, runtime) {
     timeoutMs: options.timeoutMs ?? 5000,
     allowHttp: Boolean(options.allowHttp),
   });
-  const clients = selectedPlatforms(options.only).map((platform) => platform.inspect(runtime));
-  const detected = clients.filter((client) => client.detected);
-  const checks = [...network, ...detected.flatMap(clientChecks)];
+  const rows = selectedPlatforms(options.only).map((platform) => ({
+    platform,
+    client: platform.inspect(runtime),
+  }));
+  const clients = rows.map(({ client }) => client);
+  const detected = rows.filter(({ client }) => client.detected);
+  const checks = [
+    ...network,
+    ...detected.flatMap(({ client, platform }) => clientChecks(client, platform, runtime)),
+  ];
+  const networkDcrPass = [
+    "dynamic-client-registration-advertised",
+    "brian-oauth-availability",
+  ].every((name) => network.some((item) => item.name === name && item.status === "pass"));
+  const localReady = detected.length > 0 && detected.every(({ client, platform }) => {
+    const login = platform.loginPlan(runtime);
+    return client.config.brianState === "connected"
+      && (login.kind === "command" || login.kind === "manual");
+  });
   const failed = checks.some((item) => item.status === "fail");
   const code = failed ? EXIT.FAILED : detected.length ? EXIT.OK : EXIT.NO_CLIENTS;
   const status = failed ? "issues-found" : detected.length ? "healthy" : "no-clients";
@@ -70,6 +95,10 @@ export async function runDoctor(options, runtime) {
       command: "doctor",
       status,
       canonicalMcpUrl: CANONICAL_MCP_URL,
+      oauthEvidence: {
+        registration: networkDcrPass ? "advertised" : "unavailable",
+        localClient: localReady ? "ready" : "not-ready",
+      },
       checks,
       clients,
     },

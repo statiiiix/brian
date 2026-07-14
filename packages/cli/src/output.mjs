@@ -78,6 +78,12 @@ export function renderHuman(result) {
   }
   if (result.command === "doctor") {
     const lines = [`Brian doctor: ${result.status}`, `Hosted MCP: ${result.canonicalMcpUrl}`];
+    if (result.oauthEvidence) {
+      lines.push(
+        `OAuth registration: ${result.oauthEvidence.registration}`,
+        `Local client readiness: ${result.oauthEvidence.localClient}`,
+      );
+    }
     for (const item of result.checks) {
       lines.push(`${icon(item.status)} ${item.name}: ${item.detail}${item.file ? ` (${item.file})` : ""}`);
     }

@@ -491,7 +491,7 @@ git commit -m "feat: authenticate Brian after CLI configuration"
 - Modify: `packages/cli/test/doctor.test.mjs`
 - Modify: `docs/cli.md`
 
-- [ ] **Step 1: Add failing readiness/evidence tests**
+- [x] **Step 1: Add failing readiness/evidence tests**
 
 Require a `native-login` check for each detected client and these categorical OAuth evidence states:
 
@@ -503,7 +503,7 @@ proven         never emitted by doctor
 
 Tests must assert `JSON.stringify(result)` never contains `proven`, and an older Claude version yields a warning with its upgrade instruction.
 
-- [ ] **Step 2: Run focused tests and observe failure**
+- [x] **Step 2: Run focused tests and observe failure**
 
 Run:
 
@@ -511,7 +511,7 @@ Run:
 cd packages/cli && node --test test/doctor.test.mjs
 ```
 
-- [ ] **Step 3: Implement local login readiness checks**
+- [x] **Step 3: Implement local login readiness checks**
 
 Call each platform's `loginPlan(runtime)` and emit pass for a command or actionable UI, warn for an unavailable old command surface. Add top-level:
 
@@ -524,7 +524,7 @@ oauthEvidence: {
 
 Do not execute DCR, native login, browser opening, or an authenticated request.
 
-- [ ] **Step 4: Document evidence labels and commit**
+- [x] **Step 4: Document evidence labels and commit**
 
 Run:
 

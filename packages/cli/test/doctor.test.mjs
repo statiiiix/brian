@@ -182,6 +182,13 @@ test("doctor records a private identity-free health result for status", async ()
     timeoutMs: 1000,
   }, runtime);
   assert.equal(doctor.result.status, "healthy");
+  assert.deepEqual(doctor.result.oauthEvidence, {
+    registration: "advertised",
+    localClient: "ready",
+  });
+  assert.equal(doctor.result.checks.some((item) =>
+    item.name === "cursor:native-login" && item.status === "pass"), true);
+  assert.equal(JSON.stringify(doctor.result).includes("proven"), false);
 
   const file = path.join(home, ".brian", "health.json");
   const contents = await readFile(file, "utf8");
@@ -197,6 +204,10 @@ test("doctor records a private identity-free health result for status", async ()
 
 test("doctor does not treat a native login command as completed OAuth compatibility evidence", async () => {
   const home = await temporaryHome("brian-native-unverified-");
+  await mkdir(path.join(home, ".claude"), { recursive: true });
+  await writeJson(path.join(home, ".claude.json"), {
+    mcpServers: { brian: { type: "http", url: CANONICAL_MCP_URL } },
+  });
   const resource = "http://resource.test/mcp";
   const issuer = "http://auth.test/issuer";
   const runtime = createRuntime({
@@ -204,6 +215,7 @@ test("doctor does not treat a native login command as completed OAuth compatibil
     platform: "linux",
     env: { HOME: home, PATH: "", DISPLAY: ":1" },
     commandInfo: () => ({ installed: true, version: "Claude Code 2.1.198" }),
+    commandSupports: () => false,
     fetch: goodFetch(resource, issuer, []),
   });
 
@@ -216,4 +228,13 @@ test("doctor does not treat a native login command as completed OAuth compatibil
   assert.equal(outcome.result.clients[0].oauthCapability, "native-command-surface-unverified");
   assert.equal(outcome.result.checks.some((item) =>
     item.name === "claude-code:oauth-compatibility" && item.status === "warn"), true);
+  const readiness = outcome.result.checks.find((item) => item.name === "claude-code:native-login");
+  assert.equal(readiness.status, "warn");
+  assert.equal(readiness.detail,
+    "Upgrade Claude Code or run the Brian connection from Claude's MCP settings.");
+  assert.deepEqual(outcome.result.oauthEvidence, {
+    registration: "advertised",
+    localClient: "not-ready",
+  });
+  assert.equal(JSON.stringify(outcome.result).includes("proven"), false);
 });
