@@ -804,7 +804,7 @@ git commit -m "test: add controlled DCR release probes"
 - Modify if generated: `supabase/functions/brian/deno.json`
 - Modify only if required by verified behavior: `Nextstep.md`
 
-- [ ] **Step 1: Run the full web suite and build**
+- [x] **Step 1: Run the full web suite and build**
 
 ```bash
 CI=true npm test -- --watchAll=false
@@ -813,7 +813,7 @@ npm run build
 
 Expected: pass; no React warnings from consent controls.
 
-- [ ] **Step 2: Install server dependencies and run full server verification**
+- [x] **Step 2: Install server dependencies and run full server verification**
 
 ```bash
 cd server
@@ -826,7 +826,7 @@ git diff --exit-code -- ../supabase/functions/brian/index.js ../supabase/functio
 
 If the Edge output changed because source changed, include the generated files, rerun `npm run edge:build`, and require a clean second diff.
 
-- [ ] **Step 3: Run the full CLI matrix locally**
+- [x] **Step 3: Run the full CLI matrix locally**
 
 ```bash
 cd ../packages/cli
@@ -838,7 +838,7 @@ npm pack --dry-run
 
 Install the tarball into a temporary prefix and verify `brian --version`, `brian connect --dry-run --json`, and `brian doctor --json` do not spawn login or print credentials.
 
-- [ ] **Step 4: Inspect the complete diff for secret and scope regressions**
+- [x] **Step 4: Inspect the complete diff for secret and scope regressions**
 
 ```bash
 cd ../..
@@ -849,7 +849,7 @@ git status --short
 
 Every match must be a fixed redaction rule, type/test fixture, or documentation warning—never credential handling in the public CLI/browser.
 
-- [ ] **Step 5: Commit generated artifacts or final verification corrections**
+- [x] **Step 5: Commit generated artifacts or final verification corrections**
 
 ```bash
 git add supabase/functions/brian/index.js supabase/functions/brian/deno.json Nextstep.md

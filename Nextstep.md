@@ -23,8 +23,17 @@ Implemented in the working tree:
 
 Verified locally so far:
 
-- frontend unit suites and production build;
-- server TypeScript build and the current non-live auth/API unit suites;
+- **2026-07-14 guarded-connection release verification:** frontend 9 suites,
+  50/50 tests, and the production build pass; CLI 46/46 tests, syntax check,
+  package dry-run, clean-prefix tarball install, version, URL-only dry-run, and
+  credential-free doctor output pass; the regenerated Edge bundle is
+  deterministic across consecutive builds (SHA-256
+  `e8e3147c5e4054ea774ea9c06eaf86fc3a52e6bf1de2ac4c654d2efeb210f544`).
+- server TypeScript build and 42 non-database files / 198 tests pass, including
+  the localhost hook suite; 43 DB-backed files / 193 tests skip in this
+  worktree because `TEST_DATABASE_URL` and `APP_TEST_DATABASE_URL` are not
+  available. Do not reinterpret that skip as a new DB proof; the last complete
+  isolated-DB evidence remains the dated 363/363 run below;
 - **2026-07-13 (founder machine): the complete DB-backed suite is green — 81 files, 363/363 tests — against the isolated test schema on the live Supabase host, including migrations 010–014, RLS leak (as `brian_app` via `APP_TEST_DATABASE_URL`), identity, tenancy, and privacy suites.** Three defects were found and fixed on first real execution of the previously unrun 014 slice:
   1. **Migration 014 (real production bug):** the `data_deletion_requests` actor/scope CHECK used strict `target is not distinct from requested_by`, but the two `on delete set null` FK actions fire as separate statements during auth-user deletion, so the transient one-null state violated the check and aborted the account deletion itself. Replaced with a null-tolerant named constraint `data_deletion_requests_actor_scope_check` plus a convergent fixup that drops the stale anonymous check; strict target=requester equality remains enforced by `request_data_deletion` at insert time.
   2. `migrate014.test.ts` referenced only `$1`/`$3` in the api_tokens seed while passing 3 params (unreferenced `$2` is untypable); second row now correctly uses tenant B.
