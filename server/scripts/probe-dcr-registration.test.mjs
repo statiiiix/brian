@@ -212,3 +212,20 @@ test("initializes the trusted Admin client before creating a registration", asyn
 
   assert.equal(calls.some((call) => call.url === registrationEndpoint), false);
 });
+
+test("proves the Admin credential works before creating a registration", async () => {
+  const { fetchFn, calls } = successfulFetch();
+
+  await assert.rejects(runDcrRegistrationProbe({
+    resourceUrl,
+    supabaseUrl,
+    fetchFn,
+    admin: {
+      listClients: async () => { throw new Error("provider secret"); },
+      deleteClient: async () => undefined,
+    },
+    runId: "safe-run-id",
+  }), /^Error: DCR probe configuration failed$/);
+
+  assert.equal(calls.some((call) => call.url === registrationEndpoint), false);
+});

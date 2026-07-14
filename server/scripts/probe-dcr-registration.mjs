@@ -141,6 +141,11 @@ export async function runDcrRegistrationProbe({
   } catch {
     throw new Error("DCR probe configuration failed");
   }
+  try {
+    await admin.listClients();
+  } catch {
+    throw new Error("DCR probe configuration failed");
+  }
   const clientName = `Brian controlled DCR probe ${runId}`;
 
   const registration = await fetchJson(
