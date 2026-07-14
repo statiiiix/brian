@@ -683,7 +683,7 @@ git commit -m "feat: audit and clean dynamic OAuth clients"
 - Modify: `docs/runbooks/oauth-outage.md`
 - Modify: `docs/mcp-oauth.md`
 
-- [ ] **Step 1: Add the scheduled workflow with least privilege**
+- [x] **Step 1: Add the scheduled workflow with least privilege**
 
 Create two jobs under both `workflow_dispatch` and cron:
 
@@ -703,11 +703,11 @@ on:
 
 Set `permissions: contents: read`, `timeout-minutes: 10`, Node 24, `working-directory: server`, `npm ci`, and environment values only from repository/environment secrets. Hourly runs execute audit. The daily cron and an explicit cleanup dispatch execute `npm run oauth:dcr:audit -- --delete-stale --yes`.
 
-- [ ] **Step 2: Keep GitHub logs count-only**
+- [x] **Step 2: Keep GitHub logs count-only**
 
 Do not enable shell tracing or upload raw output as an artifact. Route the single JSON summary and bounded deletion records to the configured log sink. Protect the cleanup job with the `production` GitHub environment so secret access and approvals remain centrally controlled.
 
-- [ ] **Step 3: Document warning, stop, and rollback actions**
+- [x] **Step 3: Document warning, stop, and rollback actions**
 
 Add exact thresholds:
 
@@ -725,7 +725,7 @@ The stop sequence is:
 5. Run `npm run oauth:dcr:audit` and record only its summary/run ID.
 6. Verify `/api/public/config` and `brian doctor` report registrations paused.
 
-- [ ] **Step 4: Validate workflow syntax and commit**
+- [x] **Step 4: Validate workflow syntax and commit**
 
 Run:
 

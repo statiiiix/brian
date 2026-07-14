@@ -97,7 +97,7 @@ denominator and minimum-volume clauses avoid low-traffic noise.
 | Consent/connection preparation failure | 1 in 10 minutes | 3 in 10 minutes |
 | Activation followed by MCP 401 symptom | At least 3 `agent_connection.activated` audits and ≥20% MCP 401s in the following 10-minute aggregate window | At least 5 activations and ≥50% MCP 401s in that window |
 | Signup/provisioning trigger failure | 1 matching Auth/Postgres trigger error | 3 in 10 minutes, or any sustained inability to create the synthetic tenant; set `PUBLIC_SIGNUP_ENABLED=false` |
-| DCR registrations | 2× trailing 7-day same-hour baseline | 5× baseline or 100 registrations in 10 minutes; disable DCR in Supabase when abuse is suspected |
+| DCR registrations | >2× trailing 7-day same-hour baseline | >5× baseline or ≥100 registrations in 10 minutes; stop the release and disable DCR in Supabase |
 | MCP initialize failure | ≥2% of at least 50 initializes in 10 minutes | ≥5% of at least 100 in 10 minutes |
 | Edge/API server errors | ≥1% of at least 100 requests in 5 minutes | ≥5% of at least 100 in 5 minutes |
 | Edge/API p95 latency | >1.5 seconds for 10 minutes | >3 seconds for 5 minutes |
@@ -146,3 +146,26 @@ Repository tests prove the local event shapes and secret exclusions. They do
 not prove provider ingestion, Supabase log-drain configuration, alert delivery,
 retention, or on-call response. A dated successful exercise remains the GA
 evidence gate.
+
+## Dynamic-client registry hygiene
+
+The scheduled DCR workflow runs a count-only audit at minute 17 of every hour.
+At 02:41 UTC it enters the protected `production` environment and requests
+cleanup of only those dynamic clients that are more than 24 hours old and have
+complete negative lifecycle evidence. A manual dispatch defaults to audit;
+cleanup requires the boolean input, production-environment approval, and the
+CLI's explicit `--delete-stale --yes` pair.
+
+The maintenance database credential must be a dedicated, read-only,
+non-owner/non-superuser role. Its startup settings and exact lifecycle schema
+are attested before classification. The job stops deletion after the first
+provider error. GitHub logs contain one count-only summary and bounded records
+with a SHA-256 client-ID hash, age bucket, categorical outcome, and run ID.
+Never enable shell tracing, print environment values, or upload raw output,
+registration responses, OAuth client metadata, callbacks, or credentials as
+artifacts.
+
+Treat registration volume above 2× the trailing seven-day same-hour baseline
+as a warning. Stop a release and execute the DCR containment sequence when the
+rate exceeds 5× that baseline or reaches 100 registrations in 10 minutes.
+Record only the maintenance run ID and aggregate summary in the incident.

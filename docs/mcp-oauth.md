@@ -79,6 +79,22 @@ itself remains in Supabase and must stay disabled there until the client matrix
 passes. `CLI_OAUTH_BRIDGE_ENABLED` remains false because the public CLI does not
 ship a bridge. Setting that marker cannot enable code that is not present.
 
+Dynamic registration is operated through two independent boundaries: the
+Supabase OAuth Server DCR setting is authoritative, while
+`MCP_DCR_ENABLED` truthfully publishes Brian's current release state. The
+hourly registry audit is read-only. Daily cleanup requires protected production
+approval plus `--delete-stale --yes`, and deletes only dynamic clients older
+than 24 hours after exact schema attestation proves they have no pending/active
+Brian connection, unexpired Supabase session/authorization, or protected-ID
+match. Maintenance logs are count-only and client IDs appear only as SHA-256
+hashes.
+
+If registrations exceed 5× the trailing seven-day same-hour baseline or reach
+100 in 10 minutes, disable DCR in Supabase first, set the Brian marker false,
+leave existing OAuth validation enabled, keep public signup off, run a
+read-only audit, and verify both the public marker and `brian doctor`. The full
+sequence is in the [OAuth outage runbook](./runbooks/oauth-outage.md).
+
 Rejected OAuth credentials emit only a bounded reason (`wrong_issuer`,
 `wrong_audience`, `expired`, `not_yet_valid`, `signature_or_key`,
 `invalid_resource_or_type`, `invalid_lifetime`, `malformed_claims`, or

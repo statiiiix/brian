@@ -28,6 +28,24 @@ Record incident time, environment, request IDs, affected client/version, and sta
 - Set the application marker `MCP_DCR_ENABLED=false` and disable DCR in Supabase if registration abuse is the cause and known launch clients have a safe pre-registered path. The Supabase setting is the enforcement boundary.
 - Revoke only affected grants for a client-specific compromise; rotate signing keys only for signing-key compromise.
 
+### DCR abuse or registration surge
+
+Use this exact stop sequence when DCR exceeds the release-stop threshold (>5×
+the trailing seven-day same-hour baseline or ≥100 registrations in 10 minutes),
+or when registration abuse is otherwise confirmed:
+
+1. Disable Dynamic Client Registration in Supabase Authentication → OAuth Server.
+2. Set `MCP_DCR_ENABLED=false` in Brian `app_config`.
+3. Leave `MCP_OAUTH_ENABLED=true` so existing token validation continues.
+4. Leave `PUBLIC_SIGNUP_ENABLED=false`.
+5. From `server`, run `npm run oauth:dcr:audit` without cleanup flags and record only its summary and run ID.
+6. Verify `/api/public/config` and `brian doctor` report registrations paused.
+
+Do not use cleanup as the first containment boundary: the Supabase DCR switch
+stops creation. Do not set `MCP_OAUTH_ENABLED=false` unless existing OAuth
+credentials themselves are unsafe. Cleanup remains protected, evidence-based,
+and stop-on-error after containment.
+
 ## Recovery
 
 1. Fix staging first and rerun public discovery, authorization, token exchange, claims, MCP initialize, tools filtering, access-token expiry/refresh, and revocation.
