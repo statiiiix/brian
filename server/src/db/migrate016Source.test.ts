@@ -14,6 +14,11 @@ describe("migration 016 MCP operational flags", () => {
     expect(sql).not.toContain("function public.brian_mcp_operational_flags");
   });
 
+  it("only revokes Supabase-specific roles when they exist", () => {
+    expect(sql).toContain("where rolname = 'anon'");
+    expect(sql).toContain("where rolname = 'authenticated'");
+  });
+
   it("exposes only fail-closed booleans through a narrow definer", () => {
     expect(sql).toContain("security definer");
     expect(sql).toContain("set search_path = ''");

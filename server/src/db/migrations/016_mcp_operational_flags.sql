@@ -35,12 +35,16 @@ begin
   execute format(
     'revoke all on function %I.brian_mcp_operational_flags() from public', s
   );
-  execute format(
-    'revoke all on function %I.brian_mcp_operational_flags() from anon', s
-  );
-  execute format(
-    'revoke all on function %I.brian_mcp_operational_flags() from authenticated', s
-  );
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute format(
+      'revoke all on function %I.brian_mcp_operational_flags() from anon', s
+    );
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then
+    execute format(
+      'revoke all on function %I.brian_mcp_operational_flags() from authenticated', s
+    );
+  end if;
   execute format(
     'grant execute on function %I.brian_mcp_operational_flags() to brian_app', s
   );
