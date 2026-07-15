@@ -7,14 +7,21 @@ const sql = readFileSync(
 );
 
 describe("migration 016 MCP operational flags", () => {
+  it("installs into the active migration schema instead of hardcoding public", () => {
+    expect(sql).toContain("s text := current_schema()");
+    expect(sql).toContain("format(");
+    expect(sql).not.toContain("public.app_config");
+    expect(sql).not.toContain("function public.brian_mcp_operational_flags");
+  });
+
   it("exposes only fail-closed booleans through a narrow definer", () => {
     expect(sql).toContain("security definer");
     expect(sql).toContain("set search_path = ''");
     expect(sql).toContain("where c.key = 'MCP_DCR_ENABLED'");
     expect(sql).toContain("where c.key = 'MCP_OAUTH_APPROVALS_ENABLED'");
-    expect(sql).toContain("revoke all on function public.brian_mcp_operational_flags() from public");
-    expect(sql).toContain("revoke all on function public.brian_mcp_operational_flags() from anon");
-    expect(sql).toContain("revoke all on function public.brian_mcp_operational_flags() from authenticated");
-    expect(sql).toContain("grant execute on function public.brian_mcp_operational_flags() to brian_app");
+    expect(sql).toContain("revoke all on function %I.brian_mcp_operational_flags() from public");
+    expect(sql).toContain("revoke all on function %I.brian_mcp_operational_flags() from anon");
+    expect(sql).toContain("revoke all on function %I.brian_mcp_operational_flags() from authenticated");
+    expect(sql).toContain("grant execute on function %I.brian_mcp_operational_flags() to brian_app");
   });
 });
