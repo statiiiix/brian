@@ -69,6 +69,57 @@ test("controlled DCR probe registers, verifies, cleans up, and returns only cate
   ]) assert.equal(json.includes(forbidden), false);
 });
 
+test("default Admin requests authenticate secret keys with apikey only", async () => {
+  const clientId = "registered-secret-key-client";
+  const secretKey = "sb_secret_probe_must_not_leak";
+  let registered = false;
+  let deleted = false;
+  const adminCalls = [];
+  const fetchFn = async (url, init = {}) => {
+    const href = String(url);
+    if (href === "https://api.example.test/.well-known/oauth-protected-resource/mcp") {
+      return responseJson({ resource: resourceUrl, authorization_servers: [issuer] });
+    }
+    if (href === discoveryUrl) {
+      return responseJson({ issuer, registration_endpoint: registrationEndpoint });
+    }
+    if (href.startsWith("https://project.supabase.co/auth/v1/admin/oauth/clients")) {
+      const headers = new Headers(init.headers);
+      adminCalls.push({ href, method: init.method || "GET", headers });
+      assert.equal(headers.get("apikey"), secretKey);
+      assert.equal(headers.has("authorization"), false);
+      if ((init.method || "GET") === "DELETE") {
+        assert.equal(href, `https://project.supabase.co/auth/v1/admin/oauth/clients/${clientId}`);
+        deleted = true;
+        return new Response(null, { status: 204 });
+      }
+      return new Response(JSON.stringify(registered ? {
+        clients: [{ client_id: clientId, client_name: "Brian controlled DCR probe safe-run-id" }],
+      } : {}), {
+        status: 200,
+        headers: { "content-type": "application/json", "x-total-count": registered ? "1" : "0" },
+      });
+    }
+    if (href === registrationEndpoint) {
+      registered = true;
+      return responseJson({ client_id: clientId }, 201);
+    }
+    return new Response("not found", { status: 404 });
+  };
+
+  const result = await runDcrRegistrationProbe({
+    resourceUrl,
+    supabaseUrl,
+    secretKey,
+    fetchFn,
+    runId: "safe-run-id",
+  });
+
+  assert.deepEqual(result, { registration: "proven", cleanup: "deleted", runId: "safe-run-id" });
+  assert.equal(deleted, true);
+  assert.equal(adminCalls.length, 3);
+});
+
 test("registration failure is fixed and does not attempt cleanup without a client ID", async () => {
   const deleted = [];
   const fetchFn = async (url) => {

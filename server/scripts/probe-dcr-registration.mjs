@@ -4,7 +4,6 @@
 // success. It never prints registration responses or OAuth client identifiers.
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { createClient } from "@supabase/supabase-js";
 
 const DEFAULT_RESOURCE = "https://api.brianthebrain.app/mcp";
 const CALLBACK = "http://127.0.0.1:49152/callback";
@@ -68,19 +67,50 @@ async function fetchJson(fetchFn, url, category, init = undefined) {
   }
 }
 
-function createProbeAdmin(supabaseUrl, secretKey) {
-  const supabase = createClient(supabaseUrl, secretKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+function createProbeAdmin(supabaseUrl, secretKey, fetchFn = globalThis.fetch) {
+  if (typeof secretKey !== "string" || !secretKey) {
+    throw new Error("DCR probe configuration failed");
+  }
+  const endpoint = `${supabaseUrl}/auth/v1/admin/oauth/clients`;
+  const request = async (url, category, init = {}) => {
+    let response;
+    try {
+      response = await fetchFn(url, {
+        redirect: "error",
+        ...init,
+        headers: {
+          accept: "application/json",
+          apikey: secretKey,
+          ...init.headers,
+        },
+      });
+    } catch {
+      throw new Error(`DCR probe ${category} failed`);
+    }
+    if (!response.ok) throw new Error(`DCR probe ${category} failed`);
+    return response;
+  };
   return {
     async listClients() {
       const clients = [];
-      let page = 1;
-      for (;;) {
-        const response = await supabase.auth.admin.oauth.listClients({ page, perPage: 100 })
-          .catch(() => { throw new Error("DCR probe verification failed"); });
-        if (response.error) throw new Error("DCR probe verification failed");
-        for (const row of response.data.clients) {
+      const perPage = 100;
+      for (let page = 1; page <= 1000; page += 1) {
+        const url = new URL(endpoint);
+        url.searchParams.set("page", String(page));
+        url.searchParams.set("per_page", String(perPage));
+        const response = await request(url, "verification");
+        let body;
+        try {
+          body = await response.json();
+        } catch {
+          throw new Error("DCR probe verification failed");
+        }
+        if (!body || typeof body !== "object" || Array.isArray(body)) {
+          throw new Error("DCR probe verification failed");
+        }
+        const rows = body.clients === undefined ? [] : body.clients;
+        if (!Array.isArray(rows)) throw new Error("DCR probe verification failed");
+        for (const row of rows) {
           if (typeof row.client_id === "string") {
             clients.push({
               clientId: row.client_id,
@@ -88,19 +118,14 @@ function createProbeAdmin(supabaseUrl, secretKey) {
             });
           }
         }
-        const nextPage = response.data.nextPage ?? null;
-        if (nextPage === null) break;
-        if (!Number.isInteger(nextPage) || nextPage <= page) {
-          throw new Error("DCR probe verification failed");
-        }
-        page = nextPage;
+        const total = Number.parseInt(response.headers.get("x-total-count") ?? "", 10);
+        if (Number.isInteger(total) && total >= 0 && clients.length >= total) return clients;
+        if (rows.length < perPage) return clients;
       }
-      return clients;
+      throw new Error("DCR probe verification failed");
     },
     async deleteClient(clientId) {
-      const response = await supabase.auth.admin.oauth.deleteClient(clientId)
-        .catch(() => { throw new Error("DCR probe cleanup failed"); });
-      if (response.error) throw new Error("DCR probe cleanup failed");
+      await request(`${endpoint}/${encodeURIComponent(clientId)}`, "cleanup", { method: "DELETE" });
     },
   };
 }
@@ -174,7 +199,7 @@ export async function runDcrRegistrationProbe({
 
   let admin;
   try {
-    admin = injectedAdmin ?? adminFactory(trusted.supabaseUrl, secretKey);
+    admin = injectedAdmin ?? adminFactory(trusted.supabaseUrl, secretKey, fetchFn);
   } catch {
     throw new Error("DCR probe configuration failed");
   }
