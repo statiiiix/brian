@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { buildApp } from "./app.js";
 import { testClient } from "../test/http.js";
 import { pool } from "../db/pool.js";
@@ -7,6 +7,11 @@ import { FOUNDING_TENANT_ID, runTenant } from "../db/tenant.js";
 import type { PrincipalStore } from "../auth/principal.js";
 import { createSkill } from "../skills/repo.js";
 import { getConnector, upsertConnector, insertEvidence, markPromoted } from "../connectors/repo.js";
+
+vi.mock("../db/embed.js", () => ({
+  EMBED_DIM: 1536,
+  embed: async () => new Array(1536).fill(0.01),
+}));
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;

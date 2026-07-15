@@ -13,7 +13,8 @@ d("002 context migration", () => {
   it("creates the context tables", async () => {
     const { rows } = await pool.query(
       `select table_name from information_schema.tables
-       where table_schema='public' and table_name in ('context_entries','context_versions')`
+       where table_schema=current_schema()
+         and table_name in ('context_entries','context_versions')`
     );
     expect(rows.map((r) => r.table_name).sort()).toEqual(["context_entries", "context_versions"]);
   });

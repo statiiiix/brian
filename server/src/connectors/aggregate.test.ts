@@ -1,10 +1,15 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { pool } from "../db/pool.js";
 import { runMigrations } from "../db/migrate.js";
 import { runTenant, FOUNDING_TENANT_ID } from "../db/tenant.js";
 import { upsertConnector, insertEvidence, unpromotedEvidence } from "./repo.js";
 import { aggregate } from "./aggregate.js";
 import type { LlmClient } from "../llm/complete.js";
+
+vi.mock("../db/embed.js", () => ({
+  EMBED_DIM: 1536,
+  embed: async () => new Array(1536).fill(0.01),
+}));
 
 const url = process.env.TEST_DATABASE_URL;
 const d = url ? describe : describe.skip;
