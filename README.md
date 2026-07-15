@@ -20,7 +20,7 @@ OAuth-capable clients configure that URL without a static bearer. An unauthentic
 
 ## Public connection quick start
 
-The CLI package is implemented and pack-tested locally, but must be published before the `npx` form works from npm:
+CLI version `0.1.0` is published publicly on npm, so the `npx` form works without cloning this repository:
 
 ```bash
 npx @brianthebrain/cli signup

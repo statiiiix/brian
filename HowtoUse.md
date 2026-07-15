@@ -632,7 +632,14 @@ For the complete credential model, see [token and secret handling](docs/security
 
 ### `npm` returns 404
 
-The package is not yet published or the requested version does not exist. From the repository root, use:
+Version `0.1.0` is published. A 404 now usually means the requested version does not exist, the package name was mistyped, or npm is configured to use a different registry. Check:
+
+```bash
+npm view @brianthebrain/cli version
+npm config get registry
+```
+
+For local repository development, use:
 
 ```bash
 node packages/cli/src/index.mjs --version

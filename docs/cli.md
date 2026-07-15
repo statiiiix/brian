@@ -6,7 +6,7 @@ The public package `@brianthebrain/cli` safely configures supported local AI cli
 https://api.brianthebrain.app/mcp
 ```
 
-The package is ESM, requires Node.js 22+, has zero runtime dependencies, and exposes the `brian` binary. Node 20 reached end of life before this release, so the plan's “Node 20+ or oldest actively supported version” rule resolves to Node 22. It is publishable from `packages/cli`, but this repository does not claim that version 0.1.0 has been published to npm.
+The package is ESM, requires Node.js 22+, has zero runtime dependencies, and exposes the `brian` binary. Node 20 reached end of life before this release, so the plan's “Node 20+ or oldest actively supported version” rule resolves to Node 22. Version `0.1.0` was published publicly to npm on 2026-07-15.
 
 ## Quick start
 
@@ -85,6 +85,6 @@ npm run check
 npm pack --dry-run
 ```
 
-Before publishing, install the generated tarball in a clean temporary project, execute its `brian` bin, run macOS arm64/x64 and Linux Node 22/24/26 CI, confirm package ownership/license, and complete the staging compatibility matrix. Publishing or changing npm/GitHub state requires an explicit release action; local implementation alone does not perform it.
+For every future version, install the generated tarball in a clean temporary project, execute its `brian` bin, run macOS arm64/x64 and Linux Node 22/24/26 CI, confirm package ownership/license, and recheck the compatibility matrix. The `0.1.0` release also passed a clean-cache public-registry `npx` execution after publication.
 
 The package-local [README](../packages/cli/README.md) contains the same command reference for npm consumers.

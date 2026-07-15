@@ -43,6 +43,10 @@ Verified locally so far:
   files / 193 tests skip without isolated test-database credentials; the Edge
   bundle regenerates successfully; and the credential-free production OAuth/DCR
   discovery smoke passes.
+- **2026-07-15 npm release:** npm organization `brianthebrain` was created with
+  the founder as owner, publishing 2FA was enabled, and
+  `@brianthebrain/cli@0.1.0` was published publicly. Registry metadata and a
+  fresh-cache `npx` execution both returned version `0.1.0`.
 
 - **2026-07-14 guarded-connection release verification:** frontend 9 suites,
   51/51 tests, and the production build pass; CLI 51/51 tests, syntax check,
@@ -114,7 +118,7 @@ Remaining release gates / not yet claimed complete externally:
 - DCR is now advertised, but disposable registration+cleanup, RFC 8707 `resource`, browser authentication, refresh rotation, provider-side revocation, and a real tenant-scoped OAuth tool call still need dated proof;
 - 2026-07-14 release reviews blocked two unsafe guarded artifacts, then cleared the corrected branch at `0a19304` with no remaining Critical or Important findings. The branch pins Admin calls to a Supabase-owned HTTPS origin, recovers and deletes ambiguous probe registrations by a unique marker, makes the hourly audit DB-only and secret-free, confines Admin deletion to a manually approved fully paused window, rechecks lifecycle evidence per client, distinguishes unknown marker evidence from real drift, and drives request-time flags through migration 016's boolean-only function. Migration 016 and Edge are live; the web artifact, maintenance authority, and real-client proofs remain gated;
 - Claude Code 2.1.198 and Codex CLI 0.144.2 command surfaces were inspected, but the full authenticated client matrix has not run end to end;
-- reviewed legal pages/subprocessors, production monitoring and alert delivery, a dated backup/restore exercise, the selected deep security scan in a fresh Codex session, npm scope/license/publish decisions, and deployment remain release actions.
+- reviewed legal pages/subprocessors, production monitoring and alert delivery, a dated backup/restore exercise, the selected deep security scan in a fresh Codex session, remaining license/release-policy decisions, and deployment remain release actions. The npm scope and initial CLI publication are complete.
 
 Keep public signup disabled and do not call the feature GA until those gates pass. The authoritative implementation plan is `docs/superpowers/plans/2026-07-12-public-signup-mcp-oauth-cli.md`; operational detail is linked from the root README.
 

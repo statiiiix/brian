@@ -12,7 +12,7 @@ It detects Claude Code, Claude Desktop, Cursor, and Codex, previews every change
 https://api.brianthebrain.app/mcp
 ```
 
-The package is implemented under `packages/cli` but must be published before a clean machine can resolve the `npx` command from npm.
+Version `0.1.0` is published publicly on npm. A clean machine with Node.js 22 or newer can resolve the `npx` command directly.
 
 ## Common commands
 
