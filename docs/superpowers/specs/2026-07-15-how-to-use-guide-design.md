@@ -9,6 +9,7 @@ Create a root-level `HowtoUse.md` that teaches both everyday users and Brian adm
 - Everyday users connecting Brian to Codex, Cursor, Claude Code, or Claude Desktop.
 - Brian administrators who need to understand connection approvals, permissions, revocation, security behavior, and operational checks.
 - Developers using the CLI from the repository before the npm package is published.
+- Companies using standards-compatible remote MCP agents that Brian's CLI does not recognize by name.
 
 ## Documentation approach
 
@@ -20,6 +21,7 @@ Clearly distinguish:
 - future `npx @brianthebrain/cli ...` and globally installed `brian ...` commands;
 - configuration from authentication: the CLI writes the hosted MCP URL, while the AI client owns OAuth tokens and launches browser login;
 - public user actions from administrator-only production operations.
+- known-client automation from universal protocol access: the CLI automates known configuration formats, while any other compatible agent connects manually to Brian's canonical MCP URL and follows MCP/OAuth discovery.
 
 ## Required sections
 
@@ -31,13 +33,14 @@ Clearly distinguish:
 6. Every public option: `--only`, `--dry-run`, `--yes`/`-y`, `--no-login`, `--json`, `--help`/`-h`, and `--version`.
 7. Interactive prompts, non-interactive behavior, backups, idempotency, malformed-config protection, and legacy-token warnings.
 8. Client-specific connection and authentication guidance for Codex, Cursor, Claude Code, and Claude Desktop.
-9. Browser login, company selection, permission review, approval, token refresh, and revocation lifecycle.
-10. Examples of using Brian from an AI conversation after connection.
-11. Administrator guidance for availability flags, monitoring, revocation, incident handling, and public signup boundaries.
-12. Security and credential-handling guarantees.
-13. Troubleshooting and recovery paths.
-14. Common workflows, command examples, and a compact quick-reference table.
-15. Current limitations and launch status without claiming unverified compatibility or publication.
+9. Manual connection guidance and a compatibility checklist for unknown or custom enterprise agents that implement remote MCP.
+10. Browser login, company selection, permission review, approval, token refresh, and revocation lifecycle.
+11. Examples of using Brian from an AI conversation after connection.
+12. Administrator guidance for availability flags, monitoring, revocation, incident handling, and public signup boundaries.
+13. Security and credential-handling guarantees.
+14. Troubleshooting and recovery paths.
+15. Common workflows, command examples, and a compact quick-reference table.
+16. Current limitations and launch status without claiming unverified compatibility or publication.
 
 ## Accuracy requirements
 
@@ -45,6 +48,7 @@ Clearly distinguish:
 - Use `https://api.brianthebrain.app/mcp` as the only public MCP resource.
 - Do not imply that the npm package is published until registry publication is verified.
 - Do not claim a client is production-compatible without a dated result in the compatibility matrix.
+- Describe universal access as support for any standards-compatible remote MCP client, not literally every AI product; agents without MCP or a compatible OAuth flow require an adapter or client upgrade.
 - Never instruct users to paste static bearer tokens into client configuration.
 - Explain that browser OAuth credentials are owned by the AI client, not stored by the Brian CLI.
 - Link to existing repository runbooks instead of copying large operational procedures.
