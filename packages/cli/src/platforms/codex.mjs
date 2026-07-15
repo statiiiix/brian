@@ -4,12 +4,26 @@ import { codexLoginPlan } from "../login/native.mjs";
 import { inspectMarkerFile, planMarkerConnect, planMarkerDisconnect } from "../config/markers.mjs";
 import { inspectTomlConfig, planTomlConnect, planTomlDisconnect, safeTomlInspection } from "../config/toml.mjs";
 
+function findProjectConfig(context, globalConfig) {
+  let directory = path.resolve(context.cwd);
+  const globalPath = path.resolve(globalConfig);
+  while (true) {
+    const candidate = path.join(directory, ".codex", "config.toml");
+    if (path.resolve(candidate) !== globalPath && existsSync(candidate)) return candidate;
+    const parent = path.dirname(directory);
+    if (parent === directory) return null;
+    directory = parent;
+  }
+}
+
 function paths(context) {
   const directory = path.join(context.home, ".codex");
+  const config = path.join(directory, "config.toml");
   return {
     directory,
-    config: path.join(directory, "config.toml"),
+    config,
     agents: path.join(directory, "AGENTS.md"),
+    projectConfig: findProjectConfig(context, config),
   };
 }
 
@@ -57,12 +71,19 @@ export const codex = {
     const located = paths(context);
     const config = planTomlConnect(located.config);
     const marker = planMarkerConnect(located.agents);
+    const errors = [...config.errors, ...marker.errors];
+    if (located.projectConfig) {
+      const project = inspectTomlConfig(located.projectConfig);
+      if (project.brianState === "local") {
+        errors.push(`project-level Codex config defines Brian as a local server: ${located.projectConfig}`);
+      }
+    }
     return {
       name: this.name,
       label: this.label,
       before: this.inspect(context),
       changes: [...config.changes, ...marker.changes],
-      errors: [...config.errors, ...marker.errors],
+      errors,
       warnings: [...(config.inspection.warnings ?? [])],
       nextStep: 'Run "codex mcp login brian" or open Codex and authenticate Brian.',
       restartRequired: true,

@@ -27,12 +27,36 @@ export interface OAuthAuthorizationDetails {
   user: { id: string; email: string };
 }
 
+function runtimeEnv(name: string): string | undefined {
+  const nodeValue = process.env[name];
+  if (nodeValue) return nodeValue;
+  try {
+    const deno = (globalThis as typeof globalThis & {
+      Deno?: { env?: { get?: (key: string) => string | undefined } };
+    }).Deno;
+    return deno?.env?.get?.(name);
+  } catch {
+    return undefined;
+  }
+}
+
+function defaultPublishableKey(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  try {
+    const keys = JSON.parse(raw) as Record<string, unknown>;
+    return typeof keys.default === "string" && keys.default ? keys.default : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function supabaseAuthFromEnv(): SupabaseAuthConfig | null {
   if (process.env.VITEST) return null;
-  const url = process.env.SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY;
+  const url = runtimeEnv("SUPABASE_URL");
+  const anonKey = runtimeEnv("SUPABASE_ANON_KEY")
+    ?? defaultPublishableKey(runtimeEnv("SUPABASE_PUBLISHABLE_KEYS"));
   return url && anonKey
-    ? { url, anonKey, dashboardAudience: process.env.DASHBOARD_JWT_AUDIENCE ?? "authenticated" }
+    ? { url, anonKey, dashboardAudience: runtimeEnv("DASHBOARD_JWT_AUDIENCE") ?? "authenticated" }
     : null;
 }
 

@@ -58,6 +58,7 @@ import {
   type PrincipalStore,
 } from "../auth/principal.js";
 import {
+  DEFAULT_AGENT_PERMISSIONS,
   hasPermission,
   permissionsForOAuthScope,
   validateSelectedAgentPermissions,
@@ -793,7 +794,14 @@ export function buildApp(opts: AppOptions = {}): App {
     // Supabase remains authoritative for the client and authorization request.
     // Brian's closed permission policy is authoritative for the explicit
     // tenant grant selected on the consent page.
-    const validatedPermissions = validateSelectedAgentPermissions(body.permissions, selected.role);
+    // Consent pages deployed before optional permissions were introduced did
+    // not send this field. Keep those pages compatible, but grant only the
+    // closed required defaults; null, malformed, unknown, and duplicate
+    // values still fail closed.
+    const requestedPermissions = body.permissions === undefined
+      ? DEFAULT_AGENT_PERMISSIONS
+      : body.permissions;
+    const validatedPermissions = validateSelectedAgentPermissions(requestedPermissions, selected.role);
     if (!validatedPermissions.ok) {
       const status = validatedPermissions.reason === "actions:execute requires an owner or admin"
         ? 403

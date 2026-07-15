@@ -99,6 +99,14 @@ describe("OAuth grant permission boundary", () => {
     }));
   });
 
+  it("uses only the closed default permission set for an older consent page that omits permissions", async () => {
+    const response = await prepare(undefined);
+    expect(response.statusCode).toBe(201);
+    expect(prepareAgentConnection).toHaveBeenCalledWith(expect.objectContaining({
+      permissions: ["skills:read", "context:read", "executions:write"],
+    }));
+  });
+
   it("accepts explicit knowledge capture for experts", async () => {
     const response = await prepare([
       "skills:read",
@@ -153,7 +161,6 @@ describe("OAuth grant permission boundary", () => {
   });
 
   it.each([
-    [undefined, "missing"],
     ["skills:read", "non-array"],
     [["skills:read"], "missing defaults"],
     [["skills:read", "context:read", "executions:write", "unknown:permission"], "unknown"],

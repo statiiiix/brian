@@ -2,7 +2,7 @@
 
 > Context-preservation doc. Snapshot of where the Company Brain backend stands and
 > what to do next, so we can resume without re-deriving anything.
-> Last updated: 2026-07-14.
+> Last updated: 2026-07-15.
 
 ---
 
@@ -22,6 +22,27 @@ Implemented in the working tree:
 - architecture, security, operations, privacy, signup, OAuth, compatibility, CLI, migration, incident, legacy-token, backup, and retention documentation.
 
 Verified locally so far:
+
+- **2026-07-15 real Codex production E2E:** Codex dynamically registered with
+  Supabase, opened Brian's browser consent, authenticated the founder, approved
+  the default closed permission set for tenant `sokoon`, and completed an actual
+  `find_skill` MCP call from a fresh process using the saved OAuth session. The
+  active Brian connection was then revoked and the same saved credential was
+  rejected with `invalid_token` before MCP initialization, proving immediate
+  Brian-side denial. A final reconnect was started so the user's client is not
+  intentionally left revoked. Forced access-token expiry and refresh rotation
+  remain untested and must not be marked passed.
+- Production Edge `brian` version 13 is ACTIVE. It includes Edge-compatible
+  Supabase publishable-key resolution and a fail-closed compatibility path for
+  an older cached consent page that omitted the permissions field: omission
+  receives only Brian's three closed defaults, while null, malformed, duplicate,
+  or unknown permissions still fail. The production tenant display name is now
+  exactly `sokoon`.
+- **2026-07-15 post-fix verification:** CLI 52/52 tests pass; server TypeScript
+  build passes; 44 runnable server files / 211 tests pass and 43 database-backed
+  files / 193 tests skip without isolated test-database credentials; the Edge
+  bundle regenerates successfully; and the credential-free production OAuth/DCR
+  discovery smoke passes.
 
 - **2026-07-14 guarded-connection release verification:** frontend 9 suites,
   51/51 tests, and the production build pass; CLI 51/51 tests, syntax check,

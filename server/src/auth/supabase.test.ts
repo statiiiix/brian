@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   getOAuthAuthorizationDetails,
   looksLikeSupabaseToken,
+  supabaseAuthFromEnv,
   verifySupabaseToken,
 } from "./supabase.js";
 
@@ -14,6 +15,41 @@ const dashboardToken = (extra: object = {}) => token({
   ...extra,
 });
 const cfg = (fetchFn: any) => ({ url: "https://x.supabase.co", anonKey: "anon", fetchFn });
+
+describe("supabaseAuthFromEnv", () => {
+  it("reads Supabase Edge Function default secrets through Deno.env", () => {
+    const previousUrl = process.env.SUPABASE_URL;
+    const previousAnonKey = process.env.SUPABASE_ANON_KEY;
+    const previousVitest = process.env.VITEST;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_ANON_KEY;
+    delete process.env.VITEST;
+    vi.stubGlobal("Deno", {
+      env: {
+        get: (name: string) => ({
+          SUPABASE_URL: "https://edge.supabase.co",
+          SUPABASE_PUBLISHABLE_KEYS: JSON.stringify({ default: "sb_publishable_edge" }),
+        }[name]),
+      },
+    });
+
+    try {
+      expect(supabaseAuthFromEnv()).toMatchObject({
+        url: "https://edge.supabase.co",
+        anonKey: "sb_publishable_edge",
+        dashboardAudience: "authenticated",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      if (previousUrl === undefined) delete process.env.SUPABASE_URL;
+      else process.env.SUPABASE_URL = previousUrl;
+      if (previousAnonKey === undefined) delete process.env.SUPABASE_ANON_KEY;
+      else process.env.SUPABASE_ANON_KEY = previousAnonKey;
+      if (previousVitest === undefined) delete process.env.VITEST;
+      else process.env.VITEST = previousVitest;
+    }
+  });
+});
 
 describe("looksLikeSupabaseToken", () => {
   it("matches only three-part JWTs with a Supabase Auth issuer", () => {

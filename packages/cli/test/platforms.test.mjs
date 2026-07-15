@@ -87,6 +87,27 @@ test("multi-client preflight failure prevents every planned write", async () => 
   await assert.rejects(readFile(path.join(home, ".cursor", "mcp.json"), "utf8"));
 });
 
+test("Codex connect blocks a conflicting project-level local Brian server", async () => {
+  const home = await temporaryHome("brian-project-collision-home-");
+  const project = await temporaryHome("brian-project-collision-workspace-");
+  await mkdir(path.join(home, ".codex"), { recursive: true });
+  await mkdir(path.join(project, ".codex"), { recursive: true });
+  await writeFile(
+    path.join(project, ".codex", "config.toml"),
+    '[mcp_servers.brian]\ncommand = "npm"\nargs = ["run", "mcp"]\n',
+  );
+
+  const outcome = await runConnect(
+    { only: ["codex"], dryRun: false, yes: true, json: true },
+    fixtureRuntime(home, { cwd: project }),
+  );
+
+  assert.equal(outcome.code, 1);
+  assert.equal(outcome.result.status, "blocked");
+  assert.match(outcome.result.errors[0].reason, /project-level Codex config defines Brian as a local server/);
+  await assert.rejects(readFile(path.join(home, ".codex", "config.toml"), "utf8"));
+});
+
 test("disconnect preserves unrelated JSON and marker content", async () => {
   const home = await temporaryHome("brian-platform-");
   const cursorDir = path.join(home, ".cursor");

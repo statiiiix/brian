@@ -67,6 +67,7 @@ export function createRuntime(overrides = {}) {
   const platform = overrides.platform ?? process.platform;
   const runtime = {
     home: overrides.home ?? env.HOME ?? homedir(),
+    cwd: overrides.cwd ?? process.cwd(),
     env,
     platform,
     arch: overrides.arch ?? process.arch,
