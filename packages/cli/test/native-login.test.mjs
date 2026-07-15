@@ -63,7 +63,7 @@ test("desktop clients return fixed manual UI instructions", () => {
     executable: null,
     args: [],
     retryCommand: null,
-    instruction: "Restart Claude Desktop, open Brian in Connectors, and choose Connect.",
+    instruction: "Open https://claude.ai/customize/connectors, choose Add custom connector, name it Brian, and enter https://api.brianthebrain.app/mcp.",
   });
 });
 

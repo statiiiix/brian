@@ -7,10 +7,15 @@ function clientChecks(client, platform, runtime) {
   const checks = [];
   const config = client.config;
   const configured = config.brianState === "connected";
+  const externallyManaged = config.brianState === "external-ui";
   checks.push({
     name: `${client.name}:configuration`,
-    status: configured ? "pass" : "fail",
-    detail: configured ? "canonical OAuth MCP URL configured" : `configuration state is ${config.brianState}`,
+    status: configured ? "pass" : externallyManaged ? "warn" : "fail",
+    detail: configured
+      ? "canonical OAuth MCP URL configured"
+      : externallyManaged
+        ? "account-level connector setup must be verified in the client's UI"
+        : `configuration state is ${config.brianState}`,
     file: config.file,
   });
   if (config.staticCredential) {
@@ -80,7 +85,7 @@ export async function runDoctor(options, runtime) {
   const markerDrift = networkCheck("dcr-marker-drift");
   const localReady = detected.length > 0 && detected.every(({ client, platform }) => {
     const login = platform.loginPlan(runtime);
-    return client.config.brianState === "connected"
+    return (client.config.brianState === "connected" || client.config.brianState === "external-ui")
       && (login.kind === "command" || login.kind === "manual");
   });
   const failed = checks.some((item) => item.status === "fail");

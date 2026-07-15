@@ -49,6 +49,6 @@ export function cursorLoginPlan() {
 export function claudeDesktopLoginPlan() {
   return nonCommandPlan(
     "manual",
-    "Restart Claude Desktop, open Brian in Connectors, and choose Connect.",
+    "Open https://claude.ai/customize/connectors, choose Add custom connector, name it Brian, and enter https://api.brianthebrain.app/mcp.",
   );
 }

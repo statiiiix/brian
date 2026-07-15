@@ -379,16 +379,21 @@ Restart Cursor, open MCP settings, select Brian, and choose **Connect**. The exa
 
 ### Claude Desktop
 
-The CLI uses one of these paths:
+Claude Desktop hosts remote connectors at the account level. Open:
 
 ```text
-macOS:  ~/Library/Application Support/Claude/claude_desktop_config.json
-Linux:  ~/.config/Claude/claude_desktop_config.json
+https://claude.ai/customize/connectors
 ```
 
-If `mcp.json` already exists in the Claude configuration directory, the CLI can use it instead of creating the primary file.
+Choose **Add custom connector**, name it `Brian`, and enter:
 
-Restart Claude Desktop, open Brian in **Connectors**, and choose **Connect**. Remote MCP OAuth support varies by version.
+```text
+https://api.brianthebrain.app/mcp
+```
+
+Do not add a client ID, client secret, static token, or Authorization header. Claude should discover Brian's OAuth metadata, dynamically register, and open browser login/approval.
+
+Do not put Brian's remote HTTPS URL in `claude_desktop_config.json`. Claude Desktop treats that file as local MCP server configuration and rejects a `{ "type": "http", "url": "..." }` entry. Brian CLI `0.1.1` and newer never creates that invalid entry; it safely removes an old Brian entry while preserving unrelated local servers and settings.
 
 ### Any unknown or custom enterprise AI agent
 

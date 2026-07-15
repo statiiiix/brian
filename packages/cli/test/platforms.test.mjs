@@ -24,7 +24,7 @@ function fixtureRuntime(home, overrides = {}) {
   });
 }
 
-test("all four adapters connect hermetically with exact URL-only config", async () => {
+test("file-configured adapters connect hermetically with exact URL-only config", async () => {
   const home = await temporaryHome();
   await mkdir(path.join(home, ".claude"), { recursive: true });
   await mkdir(path.join(home, ".cursor"), { recursive: true });
@@ -38,7 +38,6 @@ test("all four adapters connect hermetically with exact URL-only config", async 
   const jsonFiles = [
     path.join(home, ".claude.json"),
     path.join(home, ".cursor", "mcp.json"),
-    path.join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json"),
   ];
   for (const file of jsonFiles) {
     const document = JSON.parse(await readFile(file, "utf8"));
@@ -48,6 +47,54 @@ test("all four adapters connect hermetically with exact URL-only config", async 
   const codex = await readFile(path.join(home, ".codex", "config.toml"), "utf8");
   assert.match(codex, /oauth_resource/);
   assert.equal(/bearer|authorization/i.test(codex), false);
+});
+
+test("Claude Desktop connect removes the invalid local HTTP entry and preserves unrelated settings", async () => {
+  const home = await temporaryHome("brian-claude-desktop-migration-");
+  const directory = path.join(home, "Library", "Application Support", "Claude");
+  const configPath = path.join(directory, "claude_desktop_config.json");
+  await mkdir(directory, { recursive: true });
+  await writeJson(configPath, {
+    keep: "yes",
+    mcpServers: {
+      other: { command: "other-server" },
+      brian: { type: "http", url: CANONICAL_MCP_URL },
+    },
+  });
+
+  const outcome = await runConnect(
+    { only: ["claude-desktop"], dryRun: false, yes: true, json: true },
+    fixtureRuntime(home),
+  );
+
+  assert.equal(outcome.code, 0);
+  assert.equal(outcome.result.status, "applied");
+  assert.equal(outcome.result.clients[0].restartRequired, false);
+  assert.match(outcome.result.clients[0].nextStep, /Customize.*Connectors.*Add custom connector/i);
+  assert.match(outcome.result.clients[0].nextStep, new RegExp(CANONICAL_MCP_URL.replaceAll("/", "\\/")));
+  const config = JSON.parse(await readFile(configPath, "utf8"));
+  assert.equal(config.keep, "yes");
+  assert.deepEqual(config.mcpServers.other, { command: "other-server" });
+  assert.equal(config.mcpServers.brian, undefined);
+});
+
+test("fresh Claude Desktop connect never writes a remote server into the local-server config", async () => {
+  const home = await temporaryHome("brian-claude-desktop-clean-");
+  const directory = path.join(home, "Library", "Application Support", "Claude");
+  const configPath = path.join(directory, "claude_desktop_config.json");
+  await mkdir(directory, { recursive: true });
+
+  const outcome = await runConnect(
+    { only: ["claude-desktop"], dryRun: false, yes: true, json: true },
+    fixtureRuntime(home),
+  );
+
+  assert.equal(outcome.code, 0);
+  assert.equal(outcome.result.status, "unchanged");
+  assert.equal(outcome.result.changes.length, 0);
+  assert.equal(outcome.result.authentication[0].authentication, "manual");
+  assert.match(outcome.result.authentication[0].instruction, /claude\.ai\/customize\/connectors/);
+  await assert.rejects(readFile(configPath, "utf8"));
 });
 
 test("platform paths are architecture-neutral and Windows APPDATA is injectable", async () => {

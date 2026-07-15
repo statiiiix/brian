@@ -16,7 +16,7 @@ Implemented in the working tree:
 - fail-closed Supabase dashboard identity, separate MCP JWT/JWKS/resource/grant validation, RFC 9728 discovery/challenge, per-tool permissions, and immediate Brian-side revocation;
 - PKCE Supabase browser sessions, signup/confirmation/recovery/reset, safe continuations, email-bound invitation preflight/acceptance, durable onboarding, verified OAuth consent, and Settings → Agents & connections;
 - account/company deletion UI and APIs, a 30-day grace workflow with immediate credential revocation, owner-only due-deletion processing, and bounded 365/180-day audit/execution retention defaults;
-- publishable `packages/cli` with URL-only Claude Code/Desktop, Cursor, and Codex adapters plus signup/connect/status/doctor/disconnect, private last-health state, backups, refusal safety, and fixture tests;
+- publishable `packages/cli` with URL-only Claude Code, Cursor, and Codex adapters, account-level Claude Desktop custom-connector guidance and legacy cleanup, plus signup/connect/status/doctor/disconnect, private last-health state, backups, refusal safety, and fixture tests;
 - guarded universal MCP connection work: explicit server-authoritative Brian permissions, native post-configuration login orchestration, doctor readiness labels, a pinned Supabase OAuth Admin adapter, count-only DCR audit, fail-closed stale cleanup with read-only schema attestation, scheduled hygiene, alert thresholds, and a kill-switch runbook;
 - pinned CI across web/server and Node 22/24/26 Linux plus macOS arm64/x64 tarball installs, with deterministic Edge generation and drift enforcement;
 - architecture, security, operations, privacy, signup, OAuth, compatibility, CLI, migration, incident, legacy-token, backup, and retention documentation.
@@ -38,15 +38,30 @@ Verified locally so far:
   receives only Brian's three closed defaults, while null, malformed, duplicate,
   or unknown permissions still fail. The production tenant display name is now
   exactly `sokoon`.
-- **2026-07-15 post-fix verification:** CLI 52/52 tests pass; server TypeScript
+- **2026-07-15 post-fix verification:** CLI 54/54 tests pass; server TypeScript
   build passes; 44 runnable server files / 211 tests pass and 43 database-backed
   files / 193 tests skip without isolated test-database credentials; the Edge
   bundle regenerates successfully; and the credential-free production OAuth/DCR
   discovery smoke passes.
-- **2026-07-15 npm release:** npm organization `brianthebrain` was created with
-  the founder as owner, publishing 2FA was enabled, and
-  `@brianthebrain/cli@0.1.0` was published publicly. Registry metadata and a
-  fresh-cache `npx` execution both returned version `0.1.0`.
+- **2026-07-15 npm releases:** npm organization `brianthebrain` was created with
+  the founder as owner and publishing 2FA enabled. The initial
+  `@brianthebrain/cli@0.1.0` release was followed by `0.1.1`, which fixes Claude
+  Desktop setup: remote connectors are account-level and must not be written to
+  `claude_desktop_config.json`. The upgrade safely removes only an obsolete
+  local Brian entry, preserves unrelated local servers/settings, and directs the
+  user to Claude's custom connector UI. A fresh-cache public-registry `npx`
+  execution returns `0.1.1`, and the founder's global `brian` command is updated
+  to `0.1.1`.
+- **2026-07-15 Claude Desktop diagnosis:** the desktop startup modal was
+  reproduced in `main.log`; Claude rejected the former `{ type: "http", url }`
+  file entry before any network request. That entry is removed from the
+  founder's live config with a timestamped backup, and restart no longer has
+  that invalid configuration source. The remaining proof is manual creation of
+  the account-level Brian connector at `https://claude.ai/customize/connectors`,
+  followed by browser consent and an authenticated MCP tool call. Browser
+  automation cannot access `claude.ai` under the active enterprise network
+  policy, so this final UI action remains a founder handoff rather than a passed
+  E2E result.
 
 - **2026-07-14 guarded-connection release verification:** frontend 9 suites,
   51/51 tests, and the production build pass; CLI 51/51 tests, syntax check,
@@ -115,9 +130,9 @@ Remaining release gates / not yet claimed complete externally:
 - production still needs a verified non-owner `brian_app` runtime credential, deployment of the guarded DCR/approval markers and maintenance workflow secrets, signup rate-limit configuration, and Turnstile;
 - `api.brianthebrain.app` is attached to the Vercel `brian` project, the branded proxy is reachable, and the current credential-free public OAuth/MCP release smoke passes. Public signup remains server-side disabled with an explicit `PUBLIC_SIGNUP_ENABLED=false` row;
 - **Supabase OAuth dashboard setup completed and verified 2026-07-14:** OAuth 2.1 is enabled; Site URL is `https://brianthebrain.app`; Authorization Path is `/oauth/consent`; exact web callback `https://brianthebrain.app/auth/callback` is allowlisted; `public.custom_access_token_hook` is enabled as the Postgres custom access-token hook with execute restricted to `supabase_auth_admin`; authorization-server discovery now returns HTTP 200 with authorization/token/JWKS/DCR endpoints and PKCE S256. Dynamic OAuth app registration is enabled under the guarded rollout decision above;
-- DCR is now advertised, but disposable registration+cleanup, RFC 8707 `resource`, browser authentication, refresh rotation, provider-side revocation, and a real tenant-scoped OAuth tool call still need dated proof;
+- DCR, RFC 8707 resource binding, browser authentication, a tenant-scoped tool call, saved-session reuse, and Brian-side revocation are proven for Codex. Forced refresh rotation, the disposable registration-cleanup probe, and other client families still need dated proof;
 - 2026-07-14 release reviews blocked two unsafe guarded artifacts, then cleared the corrected branch at `0a19304` with no remaining Critical or Important findings. The branch pins Admin calls to a Supabase-owned HTTPS origin, recovers and deletes ambiguous probe registrations by a unique marker, makes the hourly audit DB-only and secret-free, confines Admin deletion to a manually approved fully paused window, rechecks lifecycle evidence per client, distinguishes unknown marker evidence from real drift, and drives request-time flags through migration 016's boolean-only function. Migration 016 and Edge are live; the web artifact, maintenance authority, and real-client proofs remain gated;
-- Claude Code 2.1.198 and Codex CLI 0.144.2 command surfaces were inspected, but the full authenticated client matrix has not run end to end;
+- Claude Code and Claude Desktop surfaces were inspected, but neither has a completed authenticated Brian E2E row yet. Codex has the dated production E2E described above;
 - reviewed legal pages/subprocessors, production monitoring and alert delivery, a dated backup/restore exercise, the selected deep security scan in a fresh Codex session, remaining license/release-policy decisions, and deployment remain release actions. The npm scope and initial CLI publication are complete.
 
 Keep public signup disabled and do not call the feature GA until those gates pass. The authoritative implementation plan is `docs/superpowers/plans/2026-07-12-public-signup-mcp-oauth-cli.md`; operational detail is linked from the root README.

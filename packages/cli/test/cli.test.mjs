@@ -108,7 +108,7 @@ test("CLI returns no-client exit code and exposes help/version", async () => {
   assert.equal(help.code, 0);
   assert.match(help.stdout, /Brian CLI/);
   const version = await runCli(["--version"], home);
-  assert.equal(version.stdout.trim(), "0.1.0");
+  assert.equal(version.stdout.trim(), "0.1.1");
 });
 
 test("--no-login is accepted only by connect and remains JSON-safe", async () => {
@@ -130,6 +130,6 @@ test("CLI runs when invoked through an installed-bin style symlink", async () =>
   const bin = path.join(home, "brian");
   await symlink(cliPath, bin);
   const result = await exec(bin, ["--version"]);
-  assert.equal(result.stdout.trim(), "0.1.0");
+  assert.equal(result.stdout.trim(), "0.1.1");
   assert.equal(result.stderr, "");
 });
