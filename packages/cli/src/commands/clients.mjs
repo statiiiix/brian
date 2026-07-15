@@ -27,6 +27,69 @@ function safePlan(plan) {
   };
 }
 
+function authenticationRecord(platform, plan, authentication, extra = {}) {
+  return {
+    client: platform.name,
+    configured: true,
+    authentication,
+    retryCommand: plan.retryCommand,
+    instruction: plan.instruction,
+    ...extra,
+  };
+}
+
+async function authenticateConfiguredClients(platforms, options, runtime) {
+  const suppressCommands = options.json
+    || options.dryRun
+    || options.noLogin
+    || !runtime.isInteractive;
+  const records = [];
+  for (const platform of platforms) {
+    const plan = platform.loginPlan(runtime);
+    if (plan.kind === "manual") {
+      records.push(authenticationRecord(platform, plan, "manual"));
+      continue;
+    }
+    if (plan.kind !== "command" || suppressCommands) {
+      records.push(authenticationRecord(platform, plan, "skipped"));
+      continue;
+    }
+    const approved = typeof runtime.confirmLogin === "function"
+      ? await runtime.confirmLogin({
+        name: platform.name,
+        label: platform.label,
+        retryCommand: plan.retryCommand,
+      })
+      : false;
+    if (!approved) {
+      records.push(authenticationRecord(platform, plan, "skipped"));
+      continue;
+    }
+    let result;
+    try {
+      result = await runtime.runInteractiveCommand(plan.executable, [...plan.args]);
+    } catch {
+      result = { status: "failed", exitCode: null };
+    }
+    if (result?.status === "succeeded") {
+      records.push(authenticationRecord(platform, plan, "authenticated"));
+      continue;
+    }
+    const exitCode = Number.isInteger(result?.exitCode)
+      && result.exitCode >= 0
+      && result.exitCode <= 255
+      ? result.exitCode
+      : null;
+    records.push(authenticationRecord(
+      platform,
+      plan,
+      "failed",
+      exitCode === null ? {} : { exitCode },
+    ));
+  }
+  return records;
+}
+
 export function runStatus(options, runtime) {
   const selected = selectedPlatforms(options.only);
   const clients = selected.map((platform) => platform.inspect(runtime));
@@ -90,11 +153,7 @@ async function runMutation(command, options, runtime) {
   if (options.dryRun) {
     return { code: EXIT.OK, result: { ...baseResult, status: "dry-run" } };
   }
-  if (!changes.length) {
-    return { code: EXIT.OK, result: { ...baseResult, status: "unchanged", applied: [] } };
-  }
-
-  if (!options.yes) {
+  if (changes.length && !options.yes) {
     if (options.json || typeof runtime.confirm !== "function") {
       return {
         code: EXIT.DECLINED,
@@ -107,19 +166,29 @@ async function runMutation(command, options, runtime) {
     }
   }
 
-  const applied = applyChanges(changes, { now: runtime.now });
-  if (applied.errors.length) {
-    return {
-      code: EXIT.FAILED,
-      result: { ...baseResult, status: "failed", applied: applied.applied, errors: applied.errors },
-    };
+  let applied = { applied: [], errors: [] };
+  if (changes.length) {
+    applied = applyChanges(changes, { now: runtime.now });
+    if (applied.errors.length) {
+      return {
+        code: EXIT.FAILED,
+        result: { ...baseResult, status: "failed", applied: applied.applied, errors: applied.errors },
+      };
+    }
   }
+  const configurationStatus = changes.length ? "applied" : "unchanged";
+  const authentication = command === "connect"
+    ? await authenticateConfiguredClients(detected.map(({ platform }) => platform), options, runtime)
+    : [];
+  const authenticationFailed = authentication.some((item) => item.authentication === "failed");
   return {
-    code: EXIT.OK,
+    code: authenticationFailed ? EXIT.FAILED : EXIT.OK,
     result: {
       ...baseResult,
-      status: "applied",
+      status: authenticationFailed ? "authentication-failed" : configurationStatus,
+      configurationStatus,
       applied: applied.applied,
+      ...(command === "connect" ? { authentication } : {}),
       ...(command === "disconnect"
         ? { revocation: "Local configuration removed only. Revoke the server-side grant in the Brian dashboard if desired." }
         : {}),

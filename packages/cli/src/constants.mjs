@@ -1,4 +1,4 @@
-export const PACKAGE_VERSION = "0.1.0";
+export const PACKAGE_VERSION = "0.1.1";
 
 export const CANONICAL_MCP_URL = "https://api.brianthebrain.app/mcp";
 export const SIGNUP_URL = "https://brianthebrain.app/signup?source=cli";

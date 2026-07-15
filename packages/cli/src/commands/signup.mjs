@@ -3,7 +3,8 @@ import { isHeadless, launchBrowser } from "../browser.mjs";
 
 export async function runSignup(options, runtime) {
   const headless = isHeadless(runtime);
-  if (options.dryRun || headless) {
+  const noninteractive = options.json || runtime.isInteractive === false;
+  if (options.dryRun || headless || noninteractive) {
     return {
       code: 0,
       result: {
@@ -12,7 +13,9 @@ export async function runSignup(options, runtime) {
         url: SIGNUP_URL,
         opened: false,
         headless,
-        message: headless ? "Open this URL in a browser to sign up." : "Dry run; browser was not opened.",
+        message: options.dryRun
+          ? "Dry run; browser was not opened."
+          : "Open this URL in a browser to sign up.",
       },
     };
   }

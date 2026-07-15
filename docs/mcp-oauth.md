@@ -57,8 +57,6 @@ Brian-side revocation immediately makes its principal resolver return no row, so
 SUPABASE_URL=https://<project-ref>.supabase.co
 SUPABASE_ANON_KEY=<publishable-or-anon-key>
 MCP_OAUTH_ENABLED=true
-MCP_OAUTH_APPROVALS_ENABLED=false  # set true only after staging authorization passes
-MCP_DCR_ENABLED=false              # mirror the Supabase-side DCR release gate
 CLI_OAUTH_BRIDGE_ENABLED=false     # v1 ships no compatibility bridge
 LEGACY_AGENT_TOKENS_ENABLED=true   # migration only; set false after retirement
 MCP_RATE_LIMIT_ENABLED=true
@@ -66,6 +64,21 @@ MCP_PREAUTH_RATE_LIMIT_REQUESTS=120
 MCP_AUTH_RATE_LIMIT_REQUESTS=600
 MCP_RATE_LIMIT_WINDOW_MS=60000
 ```
+
+The two live release controls are non-secret rows in owner-only `app_config`,
+not deployment environment variables:
+
+```sql
+insert into public.app_config (key, value) values
+  ('MCP_OAUTH_APPROVALS_ENABLED', 'false'),
+  ('MCP_DCR_ENABLED', 'false')
+on conflict (key) do update set value = excluded.value, updated_at = now();
+```
+
+Migration 016 exposes only those two fail-closed booleans to `brian_app`
+through `public.brian_mcp_operational_flags()`. The API reads them on each
+public-config, dashboard-profile, and grant-preparation request, so containment
+does not depend on an Edge redeploy.
 
 `MCP_OAUTH_APPROVALS_ENABLED` is the fail-closed switch for preparing new
 agent grants and enabling the consent page's Approve action. Keep
@@ -78,6 +91,25 @@ are paused and records only server-verified, redacted client metadata.
 itself remains in Supabase and must stay disabled there until the client matrix
 passes. `CLI_OAUTH_BRIDGE_ENABLED` remains false because the public CLI does not
 ship a bridge. Setting that marker cannot enable code that is not present.
+
+Dynamic registration is operated through two independent boundaries: the
+Supabase OAuth Server DCR setting is authoritative, while
+`MCP_DCR_ENABLED` truthfully publishes Brian's current release state. The
+hourly registry audit is read-only. Daily cleanup requires protected production
+approval plus `--delete-stale --yes`, and deletes only dynamic clients older
+than 24 hours after exact schema attestation and a client-scoped recheck
+immediately before deletion prove they have no pending/active Brian connection,
+unexpired Supabase session/authorization, or protected-ID match. The audit
+compares provider DCR advertisement with Brian's marker and exits nonzero on
+drift or cleanup failure. Maintenance logs are count-only and client IDs appear
+only as SHA-256 hashes. Privileged workflow secrets are scoped only to the final
+maintenance command step.
+
+If registrations exceed 5× the trailing seven-day same-hour baseline or reach
+100 in 10 minutes, disable DCR in Supabase first, set the Brian marker false,
+leave existing OAuth validation enabled, keep public signup off, run a
+read-only audit, and verify both the public marker and `brian doctor`. The full
+sequence is in the [OAuth outage runbook](./runbooks/oauth-outage.md).
 
 Rejected OAuth credentials emit only a bounded reason (`wrong_issuer`,
 `wrong_audience`, `expired`, `not_yet_valid`, `signature_or_key`,
@@ -96,7 +128,7 @@ globally coordinated rate limit at the branded production gateway; the gateway
 must overwrite `CF-Connecting-IP`, `X-Real-IP`, or `X-Forwarded-For` rather than
 trusting a caller-supplied value.
 
-Use an asymmetric Supabase signing key supported by the verifier (`ES256` or `RS256`). Configure the Supabase OAuth authorization path as Brian's `/oauth/consent` route and select `public.custom_access_token_hook` as the custom access-token hook after the identity/OAuth migrations 010-012 are applied. Apply the complete current migration set through 014 before releasing the product.
+Use an asymmetric Supabase signing key supported by the verifier (`ES256` or `RS256`). Configure the Supabase OAuth authorization path as Brian's `/oauth/consent` route and select `public.custom_access_token_hook` as the custom access-token hook after the identity/OAuth migrations 010-012 are applied. Apply the complete current migration set through 016 before releasing the product.
 
 Brian rejects MCP access tokens whose declared lifetime exceeds one hour, even
 when their signature is otherwise valid. Configure Supabase access-token

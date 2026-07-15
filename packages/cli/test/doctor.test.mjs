@@ -12,6 +12,7 @@ import { temporaryHome, writeJson } from "./helpers.mjs";
 function goodFetch(resource, issuer, calls) {
   const metadataUrl = "http://resource.test/.well-known/oauth-protected-resource/mcp";
   const rootUrl = "http://resource.test/.well-known/oauth-protected-resource";
+  const publicConfigUrl = "http://resource.test/api/public/config";
   const discoveryUrl = authorizationServerMetadataUrl(issuer);
   return async (url, init = {}) => {
     calls.push({ url, init });
@@ -27,7 +28,16 @@ function goodFetch(resource, issuer, calls) {
         issuer,
         authorization_endpoint: "http://auth.test/authorize",
         token_endpoint: "http://auth.test/token",
+        registration_endpoint: "http://auth.test/oauth/clients/register",
         code_challenge_methods_supported: ["S256"],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (url === publicConfigUrl) {
+      return new Response(JSON.stringify({
+        publicSignup: false,
+        mcpOAuth: true,
+        mcpOAuthApprovals: true,
+        mcpDcr: true,
       }), { status: 200, headers: { "content-type": "application/json" } });
     }
     if (url === resource) {
@@ -50,10 +60,103 @@ test("network doctor validates metadata, discovery, and exact 401 challenge with
     allowHttp: true,
     timeoutMs: 1000,
   });
-  assert.equal(checks.length, 4);
+  assert.equal(checks.length, 9);
   assert.equal(checks.every((item) => item.status === "pass"), true);
   assert.equal(JSON.stringify(checks).includes("body-secret-must-not-leak"), false);
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 5);
+});
+
+test("network doctor fails when authorization discovery does not advertise DCR", async () => {
+  const resource = "http://resource.test/mcp";
+  const issuer = "http://auth.test/issuer";
+  const discoveryUrl = authorizationServerMetadataUrl(issuer);
+  const base = goodFetch(resource, issuer, []);
+  const fetchFn = async (url, init) => {
+    if (url === discoveryUrl) {
+      return new Response(JSON.stringify({
+        issuer,
+        authorization_endpoint: "http://auth.test/authorize",
+        token_endpoint: "http://auth.test/token",
+        code_challenge_methods_supported: ["S256"],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return base(url, init);
+  };
+
+  const checks = await runNetworkDoctor({ resourceUrl: resource, fetchFn, allowHttp: true });
+  assert.equal(checks.find((item) => item.name === "dynamic-client-registration-advertised").status, "fail");
+});
+
+test("network doctor reports marker comparison unavailable when discovery fails", async () => {
+  const resource = "http://resource.test/mcp";
+  const issuer = "http://auth.test/issuer";
+  const discoveryUrl = authorizationServerMetadataUrl(issuer);
+  const base = goodFetch(resource, issuer, []);
+  const fetchFn = async (url, init) => (
+    url === discoveryUrl ? new Response("down", { status: 503 }) : base(url, init)
+  );
+
+  const checks = await runNetworkDoctor({ resourceUrl: resource, fetchFn, allowHttp: true });
+  assert.equal(checks.find((item) => item.name === "dcr-marker-drift").status, "warn");
+});
+
+test("network doctor reports marker comparison unavailable when Brian config fails", async () => {
+  const resource = "http://resource.test/mcp";
+  const issuer = "http://auth.test/issuer";
+  const base = goodFetch(resource, issuer, []);
+  const fetchFn = async (url, init) => (
+    url === "http://resource.test/api/public/config"
+      ? new Response("down", { status: 503 })
+      : base(url, init)
+  );
+
+  const checks = await runNetworkDoctor({ resourceUrl: resource, fetchFn, allowHttp: true });
+  assert.equal(checks.find((item) => item.name === "dcr-marker-drift").status, "warn");
+});
+
+test("network doctor reports Brian marker drift independently from approvals", async () => {
+  const resource = "http://resource.test/mcp";
+  const issuer = "http://auth.test/issuer";
+  const base = goodFetch(resource, issuer, []);
+  const fetchFn = async (url, init) => {
+    if (url === "http://resource.test/api/public/config") {
+      return new Response(JSON.stringify({
+        publicSignup: false,
+        mcpOAuth: true,
+        mcpOAuthApprovals: true,
+        mcpDcr: false,
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return base(url, init);
+  };
+
+  const checks = await runNetworkDoctor({ resourceUrl: resource, fetchFn, allowHttp: true });
+  assert.equal(checks.find((item) => item.name === "brian-dcr-marker").status, "warn");
+  assert.equal(checks.find((item) => item.name === "brian-oauth-approvals").status, "pass");
+  assert.equal(checks.find((item) => item.name === "dcr-marker-drift").status, "fail");
+});
+
+test("network doctor keeps provider registration available during an approvals-only pause", async () => {
+  const resource = "http://resource.test/mcp";
+  const issuer = "http://auth.test/issuer";
+  const base = goodFetch(resource, issuer, []);
+  const fetchFn = async (url, init) => {
+    if (url === "http://resource.test/api/public/config") {
+      return new Response(JSON.stringify({
+        publicSignup: false,
+        mcpOAuth: true,
+        mcpOAuthApprovals: false,
+        mcpDcr: true,
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return base(url, init);
+  };
+
+  const checks = await runNetworkDoctor({ resourceUrl: resource, fetchFn, allowHttp: true });
+  assert.equal(checks.find((item) => item.name === "dynamic-client-registration-advertised").status, "pass");
+  assert.equal(checks.find((item) => item.name === "brian-dcr-marker").status, "pass");
+  assert.equal(checks.find((item) => item.name === "brian-oauth-approvals").status, "warn");
+  assert.equal(checks.find((item) => item.name === "dcr-marker-drift").status, "pass");
 });
 
 test("network doctor fails closed on wrong challenge metadata", async () => {
@@ -131,6 +234,16 @@ test("doctor records a private identity-free health result for status", async ()
     timeoutMs: 1000,
   }, runtime);
   assert.equal(doctor.result.status, "healthy");
+  assert.deepEqual(doctor.result.oauthEvidence, {
+    registration: "advertised",
+    brianDcrMarker: "enabled",
+    approvals: "enabled",
+    markerDrift: "aligned",
+    localClient: "ready",
+  });
+  assert.equal(doctor.result.checks.some((item) =>
+    item.name === "cursor:native-login" && item.status === "pass"), true);
+  assert.equal(JSON.stringify(doctor.result).includes("proven"), false);
 
   const file = path.join(home, ".brian", "health.json");
   const contents = await readFile(file, "utf8");
@@ -146,6 +259,10 @@ test("doctor records a private identity-free health result for status", async ()
 
 test("doctor does not treat a native login command as completed OAuth compatibility evidence", async () => {
   const home = await temporaryHome("brian-native-unverified-");
+  await mkdir(path.join(home, ".claude"), { recursive: true });
+  await writeJson(path.join(home, ".claude.json"), {
+    mcpServers: { brian: { type: "http", url: CANONICAL_MCP_URL } },
+  });
   const resource = "http://resource.test/mcp";
   const issuer = "http://auth.test/issuer";
   const runtime = createRuntime({
@@ -153,6 +270,7 @@ test("doctor does not treat a native login command as completed OAuth compatibil
     platform: "linux",
     env: { HOME: home, PATH: "", DISPLAY: ":1" },
     commandInfo: () => ({ installed: true, version: "Claude Code 2.1.198" }),
+    commandSupports: () => false,
     fetch: goodFetch(resource, issuer, []),
   });
 
@@ -165,4 +283,41 @@ test("doctor does not treat a native login command as completed OAuth compatibil
   assert.equal(outcome.result.clients[0].oauthCapability, "native-command-surface-unverified");
   assert.equal(outcome.result.checks.some((item) =>
     item.name === "claude-code:oauth-compatibility" && item.status === "warn"), true);
+  const readiness = outcome.result.checks.find((item) => item.name === "claude-code:native-login");
+  assert.equal(readiness.status, "warn");
+  assert.equal(readiness.detail,
+    "Upgrade Claude Code or run the Brian connection from Claude's MCP settings.");
+  assert.deepEqual(outcome.result.oauthEvidence, {
+    registration: "advertised",
+    brianDcrMarker: "enabled",
+    approvals: "enabled",
+    markerDrift: "aligned",
+    localClient: "not-ready",
+  });
+  assert.equal(JSON.stringify(outcome.result).includes("proven"), false);
+});
+
+test("a stale Codex directory without the Codex command is not native-login ready", async () => {
+  const home = await temporaryHome("brian-stale-codex-");
+  await mkdir(path.join(home, ".codex"), { recursive: true });
+  await import("node:fs/promises").then(({ writeFile }) => writeFile(
+    path.join(home, ".codex", "config.toml"),
+    `[mcp_servers.brian]\nurl = "${CANONICAL_MCP_URL}"\n`,
+  ));
+  const resource = "http://resource.test/mcp";
+  const issuer = "http://auth.test/issuer";
+  const runtime = createRuntime({
+    home,
+    platform: "linux",
+    env: { HOME: home, PATH: "", DISPLAY: ":1" },
+    commandInfo: () => ({ installed: false, version: null }),
+    fetch: goodFetch(resource, issuer, []),
+  });
+
+  const outcome = await runDoctor({
+    only: ["codex"], resourceUrl: resource, allowHttp: true, timeoutMs: 1000,
+  }, runtime);
+  const readiness = outcome.result.checks.find((item) => item.name === "codex:native-login");
+  assert.equal(readiness.status, "warn");
+  assert.equal(outcome.result.oauthEvidence.localClient, "not-ready");
 });

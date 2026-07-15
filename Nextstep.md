@@ -2,7 +2,7 @@
 
 > Context-preservation doc. Snapshot of where the Company Brain backend stands and
 > what to do next, so we can resume without re-deriving anything.
-> Last updated: 2026-07-14.
+> Last updated: 2026-07-15.
 
 ---
 
@@ -12,23 +12,74 @@
 
 Implemented in the working tree:
 
-- migrations 010-014 for identity/provisioning/OAuth claims, legacy-token retirement, privacy deletion/retention, narrow security-definer resolvers, and the Supabase custom access-token hook;
+- migrations 010-016 for identity/provisioning/OAuth claims, legacy-token retirement, privacy deletion/retention, narrow security-definer resolvers, the Supabase custom access-token hook, and request-time guarded MCP release flags;
 - fail-closed Supabase dashboard identity, separate MCP JWT/JWKS/resource/grant validation, RFC 9728 discovery/challenge, per-tool permissions, and immediate Brian-side revocation;
 - PKCE Supabase browser sessions, signup/confirmation/recovery/reset, safe continuations, email-bound invitation preflight/acceptance, durable onboarding, verified OAuth consent, and Settings → Agents & connections;
 - account/company deletion UI and APIs, a 30-day grace workflow with immediate credential revocation, owner-only due-deletion processing, and bounded 365/180-day audit/execution retention defaults;
-- publishable `packages/cli` with URL-only Claude Code/Desktop, Cursor, and Codex adapters plus signup/connect/status/doctor/disconnect, private last-health state, backups, refusal safety, and fixture tests;
+- publishable `packages/cli` with URL-only Claude Code, Cursor, and Codex adapters, account-level Claude Desktop custom-connector guidance and legacy cleanup, plus signup/connect/status/doctor/disconnect, private last-health state, backups, refusal safety, and fixture tests;
+- guarded universal MCP connection work: explicit server-authoritative Brian permissions, native post-configuration login orchestration, doctor readiness labels, a pinned Supabase OAuth Admin adapter, count-only DCR audit, fail-closed stale cleanup with read-only schema attestation, scheduled hygiene, alert thresholds, and a kill-switch runbook;
 - pinned CI across web/server and Node 22/24/26 Linux plus macOS arm64/x64 tarball installs, with deterministic Edge generation and drift enforcement;
 - architecture, security, operations, privacy, signup, OAuth, compatibility, CLI, migration, incident, legacy-token, backup, and retention documentation.
 
 Verified locally so far:
 
-- frontend unit suites and production build;
-- server TypeScript build and the current non-live auth/API unit suites;
+- **2026-07-15 real Codex production E2E:** Codex dynamically registered with
+  Supabase, opened Brian's browser consent, authenticated the founder, approved
+  the default closed permission set for tenant `sokoon`, and completed an actual
+  `find_skill` MCP call from a fresh process using the saved OAuth session. The
+  active Brian connection was then revoked and the same saved credential was
+  rejected with `invalid_token` before MCP initialization, proving immediate
+  Brian-side denial. A final reconnect was started so the user's client is not
+  intentionally left revoked. Forced access-token expiry and refresh rotation
+  remain untested and must not be marked passed.
+- Production Edge `brian` version 13 is ACTIVE. It includes Edge-compatible
+  Supabase publishable-key resolution and a fail-closed compatibility path for
+  an older cached consent page that omitted the permissions field: omission
+  receives only Brian's three closed defaults, while null, malformed, duplicate,
+  or unknown permissions still fail. The production tenant display name is now
+  exactly `sokoon`.
+- **2026-07-15 post-fix verification:** CLI 54/54 tests pass; server TypeScript
+  build passes; 44 runnable server files / 211 tests pass and 43 database-backed
+  files / 193 tests skip without isolated test-database credentials; the Edge
+  bundle regenerates successfully; and the credential-free production OAuth/DCR
+  discovery smoke passes.
+- **2026-07-15 npm releases:** npm organization `brianthebrain` was created with
+  the founder as owner and publishing 2FA enabled. The initial
+  `@brianthebrain/cli@0.1.0` release was followed by `0.1.1`, which fixes Claude
+  Desktop setup: remote connectors are account-level and must not be written to
+  `claude_desktop_config.json`. The upgrade safely removes only an obsolete
+  local Brian entry, preserves unrelated local servers/settings, and directs the
+  user to Claude's custom connector UI. A fresh-cache public-registry `npx`
+  execution returns `0.1.1`, and the founder's global `brian` command is updated
+  to `0.1.1`.
+- **2026-07-15 Claude Desktop diagnosis:** the desktop startup modal was
+  reproduced in `main.log`; Claude rejected the former `{ type: "http", url }`
+  file entry before any network request. That entry is removed from the
+  founder's live config with a timestamped backup, and restart no longer has
+  that invalid configuration source. The remaining proof is manual creation of
+  the account-level Brian connector at `https://claude.ai/customize/connectors`,
+  followed by browser consent and an authenticated MCP tool call. Browser
+  automation cannot access `claude.ai` under the active enterprise network
+  policy, so this final UI action remains a founder handoff rather than a passed
+  E2E result.
+
+- **2026-07-14 guarded-connection release verification:** frontend 9 suites,
+  51/51 tests, and the production build pass; CLI 51/51 tests, syntax check,
+  package dry-run, clean-prefix tarball install, version, URL-only dry-run, and
+  credential-free doctor output pass; the regenerated Edge bundle is
+  deterministic across consecutive builds (SHA-256
+  `661add722cace59f7011b43bd0d4f55babdb65fbb3baf871a968313cfe575f62`).
+- server TypeScript build and 44 non-database files / 208 tests pass, including
+  the localhost hook suite; 43 DB-backed files / 193 tests skip in this
+  worktree because `TEST_DATABASE_URL` and `APP_TEST_DATABASE_URL` are not
+  available. Do not reinterpret that skip as a new DB proof; the last complete
+  isolated-DB evidence remains the dated 363/363 run below;
 - **2026-07-13 (founder machine): the complete DB-backed suite is green — 81 files, 363/363 tests — against the isolated test schema on the live Supabase host, including migrations 010–014, RLS leak (as `brian_app` via `APP_TEST_DATABASE_URL`), identity, tenancy, and privacy suites.** Three defects were found and fixed on first real execution of the previously unrun 014 slice:
   1. **Migration 014 (real production bug):** the `data_deletion_requests` actor/scope CHECK used strict `target is not distinct from requested_by`, but the two `on delete set null` FK actions fire as separate statements during auth-user deletion, so the transient one-null state violated the check and aborted the account deletion itself. Replaced with a null-tolerant named constraint `data_deletion_requests_actor_scope_check` plus a convergent fixup that drops the stale anonymous check; strict target=requester equality remains enforced by `request_data_deletion` at insert time.
   2. `migrate014.test.ts` referenced only `$1`/`$3` in the api_tokens seed while passing 3 params (unreferenced `$2` is untypable); second row now correctly uses tenant B.
   3. `authRoutes.test.ts` predated fail-closed memberships: a legacy JWT is honored only when its user id has an active membership, so the test now seeds the founding membership (mirroring the trusted backfill) instead of expecting an unmembered 200.
-- CLI test suite (31/31 on Node 24), syntax check, package dry run, tarball install/bin smoke;
+- CLI test suite (51/51 on Node 24), syntax check, package dry run, and native-login orchestration fixtures;
+- DCR registry/CLI/workflow/probe suites: 34 focused tests, with Supabase-owned Admin-host pinning and credential preflight, retrying ambiguous-response recovery cleanup across network/5xx/malformed/missing-ID outcomes, redaction, nonzero failure/drift status, per-client lifecycle and paused-window rechecks, a secret-free read-only hourly audit, manual protected cleanup restricted to a fully paused window, and cleanup-after-registration coverage; server TypeScript build passes;
 - deterministic generated Edge bundle build and drift check (rebuilt 2026-07-13 from current source).
 - **2026-07-14 registration-boundary probe:** the credential-free production
   OAuth smoke passed again. An isolated Codex CLI 0.144.2 login reached Brian's
@@ -43,24 +94,46 @@ Verified locally so far:
   concrete: manually register this Codex client, configure its public client ID,
   enable new OAuth approvals for the controlled test, then run consent, an MCP
   tool call, refresh, and revocation. Open DCR is not required for this proof.
+- **2026-07-14 guarded DCR enablement:** the founder explicitly chose the
+  universal-registration path. Supabase Authentication → OAuth Server → Allow
+  Dynamic OAuth Apps was enabled and saved successfully. Production discovery
+  now advertises a valid `registration_endpoint`. The extended public smoke
+  intentionally stops at the next deployment gate because the live Brian Edge
+  bundle predates the new `mcpOAuth`, `mcpOAuthApprovals`, and `mcpDcr` public
+  markers. No disposable client was created: the controlled probe will not run
+  until `SUPABASE_SECRET_KEY` is available so Admin-API deletion is guaranteed.
 
 Applied to live production on 2026-07-13/14 (founder explicitly approved in-session):
 
-- **migrations 010–015 are applied to the live Supabase project** via the Supabase MCP. Two live-only defects surfaced and were fixed convergently in the repo files:
+- **guarded control rollout advanced on 2026-07-14:** migration 016 is applied;
+  explicit `false` rows now exist for `MCP_DCR_ENABLED`,
+  `MCP_OAUTH_APPROVALS_ENABLED`, and `PUBLIC_SIGNUP_ENABLED`; function privileges
+  are verified as execute=true only for `brian_app` and false for `anon` and
+  `authenticated`. Edge `brian` version 9 is ACTIVE with `verify_jwt=false`,
+  direct build marker `426539cd9d66b208`, and the branded credential-free OAuth
+  smoke passes. Public config returns OAuth enabled with signup, DCR marker, and
+  approvals all paused. The reviewed Vercel web/consent artifact is not yet
+  deployed because the external code upload requires explicit founder approval;
+- the disposable registration probe remains intentionally unrun: no
+  `SUPABASE_SECRET_KEY` or maintenance database credential exists in the local
+  environment, so Admin-API cleanup cannot yet be guaranteed. Do not create a
+  disposable client until that server-only authority is provisioned;
+- **migrations 010–016 are applied to the live Supabase project** via the Supabase MCP. Two earlier live-only defects surfaced and were fixed convergently in the repo files:
   1. `citext` had been installed into the isolated `test` schema by earlier test runs, so migration 010's unqualified `citext` column type failed on live `public`. 010 now resolves the installed extension's actual schema (`pg_extension`/`pg_namespace`) and qualifies the type.
   2. Supabase default privileges grant EXECUTE on new public-schema functions directly to `anon`/`authenticated`; `revoke ... from public` does not remove those direct grants. Seven SECURITY DEFINER resolvers/trigger functions from 012/014 were therefore RPC-callable (they still failed closed internally on the `app.user_id` binding, but violated default-deny). 012/014 now revoke `anon`/`authenticated` explicitly, and live migration `015_function_execute_hardening` applied the same revokes; the security advisor WARNs are cleared.
 - **the founding owner membership is provisioned on live**: the founder's auth user received trusted `app_metadata` (`brian_tenant_id` founding tenant + `brian_role` owner), which fired the migration-011 trigger — active default owner membership, onboarding_state row, and `membership.provisioned_trusted` audit event all verified. `identity_membership_report` flags exactly one remaining row: the second auth user with zero memberships (fail-closed by design; founder to review/delete);
-- **the current Edge Function bundle is deployed and verified on live (2026-07-14):** `brian` version 8 is ACTIVE with `verify_jwt=false` so public OAuth discovery can reach Brian's own JWT/resource/grant validation. The live `/__build` endpoint returns the exact deterministic marker `207b223821555ba5`. The credential-free `npm run smoke:mcp-oauth` release smoke passes protected-resource metadata, Supabase authorization-server discovery, PKCE S256 advertisement, the authorization route, and the unauthenticated `/mcp` 401 `WWW-Authenticate` challenge. Authenticated token-binding and `tools/list` checks were skipped because no `MCP_SMOKE_ACCESS_TOKEN` was supplied;
+- **the current Edge Function bundle is deployed and verified on live (2026-07-14):** `brian` version 9 is ACTIVE with `verify_jwt=false` so public OAuth discovery can reach Brian's own JWT/resource/grant validation. The direct live `/__build` endpoint returns `426539cd9d66b208`. The credential-free `npm run smoke:mcp-oauth` release smoke passes protected-resource metadata, Supabase authorization-server discovery, PKCE S256 advertisement, the authorization route, and the unauthenticated `/mcp` 401 `WWW-Authenticate` challenge. Authenticated token-binding and `tools/list` checks were skipped because no `MCP_SMOKE_ACCESS_TOKEN` was supplied;
 - remaining security advisors after hardening: `vector` extension in public (known, low priority), owner-only `app_config` with RLS and no policies (intentional), and Auth leaked-password protection disabled (founder dashboard toggle).
 
 Remaining release gates / not yet claimed complete externally:
 
-- production still needs a verified non-owner `brian_app` runtime credential, a DCR/abuse-control decision, signup rate-limit configuration, and Turnstile;
-- `api.brianthebrain.app` is attached to the Vercel `brian` project, the branded proxy is reachable, and the current credential-free public OAuth/MCP release smoke passes. Public signup remains server-side disabled (`PUBLIC_SIGNUP_ENABLED` defaults false and is unset in `app_config`);
-- **Supabase OAuth dashboard setup completed and verified 2026-07-14:** OAuth 2.1 is enabled; Site URL is `https://brianthebrain.app`; Authorization Path is `/oauth/consent`; exact web callback `https://brianthebrain.app/auth/callback` is allowlisted; `public.custom_access_token_hook` is enabled as the Postgres custom access-token hook with execute restricted to `supabase_auth_admin`; authorization-server discovery now returns HTTP 200 with authorization/token/JWKS endpoints and PKCE S256. Dynamic OAuth app registration remains off intentionally until the documented abuse-control decision;
-- RFC 8707 `resource`, DCR, refresh rotation, provider-side revocation, and a real tenant-scoped OAuth tool call need staging proof;
-- Claude Code 2.1.198 and Codex CLI 0.144.2 command surfaces were inspected, but the full authenticated client matrix has not run end to end;
-- reviewed legal pages/subprocessors, production monitoring and alert delivery, a dated backup/restore exercise, the selected deep security scan in a fresh Codex session, npm scope/license/publish decisions, and deployment remain release actions.
+- production still needs a verified non-owner `brian_app` runtime credential, deployment of the guarded DCR/approval markers and maintenance workflow secrets, signup rate-limit configuration, and Turnstile;
+- `api.brianthebrain.app` is attached to the Vercel `brian` project, the branded proxy is reachable, and the current credential-free public OAuth/MCP release smoke passes. Public signup remains server-side disabled with an explicit `PUBLIC_SIGNUP_ENABLED=false` row;
+- **Supabase OAuth dashboard setup completed and verified 2026-07-14:** OAuth 2.1 is enabled; Site URL is `https://brianthebrain.app`; Authorization Path is `/oauth/consent`; exact web callback `https://brianthebrain.app/auth/callback` is allowlisted; `public.custom_access_token_hook` is enabled as the Postgres custom access-token hook with execute restricted to `supabase_auth_admin`; authorization-server discovery now returns HTTP 200 with authorization/token/JWKS/DCR endpoints and PKCE S256. Dynamic OAuth app registration is enabled under the guarded rollout decision above;
+- DCR, RFC 8707 resource binding, browser authentication, a tenant-scoped tool call, saved-session reuse, and Brian-side revocation are proven for Codex. Forced refresh rotation, the disposable registration-cleanup probe, and other client families still need dated proof;
+- 2026-07-14 release reviews blocked two unsafe guarded artifacts, then cleared the corrected branch at `0a19304` with no remaining Critical or Important findings. The branch pins Admin calls to a Supabase-owned HTTPS origin, recovers and deletes ambiguous probe registrations by a unique marker, makes the hourly audit DB-only and secret-free, confines Admin deletion to a manually approved fully paused window, rechecks lifecycle evidence per client, distinguishes unknown marker evidence from real drift, and drives request-time flags through migration 016's boolean-only function. Migration 016 and Edge are live; the web artifact, maintenance authority, and real-client proofs remain gated;
+- Claude Code and Claude Desktop surfaces were inspected, but neither has a completed authenticated Brian E2E row yet. Codex has the dated production E2E described above;
+- reviewed legal pages/subprocessors, production monitoring and alert delivery, a dated backup/restore exercise, the selected deep security scan in a fresh Codex session, remaining license/release-policy decisions, and deployment remain release actions. The npm scope and initial CLI publication are complete.
 
 Keep public signup disabled and do not call the feature GA until those gates pass. The authoritative implementation plan is `docs/superpowers/plans/2026-07-12-public-signup-mcp-oauth-cli.md`; operational detail is linked from the root README.
 

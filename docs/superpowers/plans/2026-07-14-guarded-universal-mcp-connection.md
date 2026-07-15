@@ -32,7 +32,7 @@
 - Modify: `packages/cli/src/doctor/network.mjs`
 - Modify: `packages/cli/test/doctor.test.mjs`
 
-- [ ] **Step 1: Add failing API tests for the public marker contract**
+- [x] **Step 1: Add failing API tests for the public marker contract**
 
 Change the public-config test to require a fixed, boolean-only shape:
 
@@ -54,7 +54,7 @@ expect(on.json()).toEqual({
 
 Construct the enabled app with all four explicit options. Add a case proving that DCR may be true while approvals are false and OAuth token validation remains true.
 
-- [ ] **Step 2: Run the focused server test and observe the expected failure**
+- [x] **Step 2: Run the focused server test and observe the expected failure**
 
 Run:
 
@@ -64,7 +64,7 @@ cd server && npm test -- src/api/authLoginConfig.test.ts
 
 Expected: failure because `/api/public/config` currently returns only `publicSignup`.
 
-- [ ] **Step 3: Implement the minimal public marker response**
+- [x] **Step 3: Implement the minimal public marker response**
 
 Replace the response with:
 
@@ -79,7 +79,7 @@ app.get("/api/public/config", (c) => c.json({
 
 Do not expose Supabase URLs, keys, client IDs, tenant values, or environment diagnostics.
 
-- [ ] **Step 4: Add failing doctor fixtures for registration discovery and public markers**
+- [x] **Step 4: Add failing doctor fixtures for registration discovery and public markers**
 
 Extend `goodFetch` so authorization metadata includes:
 
@@ -100,7 +100,7 @@ and `/api/public/config` returns:
 
 Require separate checks named `dynamic-client-registration-advertised` and `brian-oauth-availability`. Add mismatch cases for missing `registration_endpoint` and `mcpDcr: false`; the former is a failure, while the latter is a warning that registrations are paused.
 
-- [ ] **Step 5: Run the focused CLI test and observe the expected failure**
+- [x] **Step 5: Run the focused CLI test and observe the expected failure**
 
 Run:
 
@@ -110,7 +110,7 @@ cd packages/cli && node --test test/doctor.test.mjs
 
 Expected: new checks are absent.
 
-- [ ] **Step 6: Implement doctor validation without registering a client**
+- [x] **Step 6: Implement doctor validation without registering a client**
 
 In `runNetworkDoctor`, retain the authorization document and validate that `registration_endpoint` is a valid HTTPS endpoint (or HTTP only under `allowHttp`). Fetch `${new URL(resourceUrl).origin}/api/public/config` without an Authorization header and validate the exact four booleans. Emit:
 
@@ -124,7 +124,7 @@ check(
 
 Return a `warn` status for a valid public marker response with `mcpDcr === false` or `mcpOAuthApprovals === false`; extend `check` to accept an explicit status rather than converting every non-pass to `fail`.
 
-- [ ] **Step 7: Re-run focused tests and commit**
+- [x] **Step 7: Re-run focused tests and commit**
 
 Run:
 
@@ -152,12 +152,13 @@ git commit -m "feat: publish guarded MCP OAuth availability"
 - Add: `server/src/auth/permissions.test.ts`
 - Modify: `server/src/api/app.ts`
 - Modify: `server/src/api/identityApi.test.ts`
+- Add: `server/src/api/oauthGrantPolicy.test.ts`
 - Modify: `src/app/permissions.js`
 - Modify: `src/pages/OAuthConsent.js`
 - Modify: `src/pages/OAuthConsent.css`
 - Modify: `src/pages/AuthPages.test.js`
 
-- [ ] **Step 1: Add failing unit tests for selected-permission policy**
+- [x] **Step 1: Add failing unit tests for selected-permission policy**
 
 Define tests for a new function with this signature:
 
@@ -187,7 +188,7 @@ validateSelectedAgentPermissions([...DEFAULT_AGENT_PERMISSIONS, "unknown"], "own
 // => error, never silently filter
 ```
 
-- [ ] **Step 2: Run the permission test and observe the import failure**
+- [x] **Step 2: Run the permission test and observe the import failure**
 
 Run:
 
@@ -197,11 +198,11 @@ cd server && npm test -- src/auth/permissions.test.ts
 
 Expected: the function does not exist.
 
-- [ ] **Step 3: Implement closed permission validation**
+- [x] **Step 3: Implement closed permission validation**
 
 Keep output order equal to `AGENT_PERMISSIONS`, reject duplicates and unknown strings, require every `DEFAULT_AGENT_PERMISSIONS` member, and reject `actions:execute` unless role is `owner` or `admin`. Do not derive optional Brian permissions from the OAuth identity scope.
 
-- [ ] **Step 4: Add failing identity API tests**
+- [x] **Step 4: Add failing identity API tests**
 
 Change the attack-body test: an unknown permission must now return `400`, not be ignored. Add cases proving:
 
@@ -213,7 +214,7 @@ Change the attack-body test: an unknown permission must now return `400`, not be
 - omitted defaults, unknown values, duplicates, and non-arrays return `400`;
 - Supabase-verified client ID/name/URI/redirect still override every browser-supplied metadata field.
 
-- [ ] **Step 5: Run the identity API tests and observe policy failures**
+- [x] **Step 5: Run the identity API tests and observe policy failures**
 
 Run:
 
@@ -223,7 +224,7 @@ cd server && npm test -- src/api/identityApi.test.ts --maxWorkers=1
 
 Expected: current endpoint ignores the browser permission field and derives permissions from OAuth scope.
 
-- [ ] **Step 6: Enforce selected permissions in `/api/oauth/grants/prepare`**
+- [x] **Step 6: Enforce selected permissions in `/api/oauth/grants/prepare`**
 
 Replace `permissionsForOAuthScope(details.scope)` in this endpoint with `validateSelectedAgentPermissions(body.permissions, selected.role)`. Return fixed errors only:
 
@@ -236,7 +237,7 @@ if (!validated.ok) {
 
 Pass `validated.permissions` to `prepareAgentConnection`. Keep `permissionsForOAuthScope` for token/request compatibility where it is still needed; do not globally redefine OAuth scope semantics.
 
-- [ ] **Step 7: Add failing React consent tests**
+- [x] **Step 7: Add failing React consent tests**
 
 Tests must require:
 
@@ -250,7 +251,7 @@ Tests must require:
 - a loopback redirect shows `This agent will return through a local callback on this device.`;
 - an HTTPS remote callback does not show the loopback warning.
 
-- [ ] **Step 8: Run the focused React tests and observe failures**
+- [x] **Step 8: Run the focused React tests and observe failures**
 
 Run:
 
@@ -260,7 +261,7 @@ CI=true npm test -- --watchAll=false src/pages/AuthPages.test.js
 
 Expected: optional controls, request permissions, and loopback warning are missing.
 
-- [ ] **Step 9: Implement consent state and safe redirect display**
+- [x] **Step 9: Implement consent state and safe redirect display**
 
 Add:
 
@@ -284,7 +285,7 @@ body: {
 
 Replace `redirectOrigin` with a helper returning `{ label, hostname, loopback }`. Treat `localhost`, `127.0.0.1`, and `[::1]` as loopback. Show the exact `host` value (hostname plus port), while keeping all values in React text nodes.
 
-- [ ] **Step 10: Run all focused tests and commit**
+- [x] **Step 10: Run all focused tests and commit**
 
 Run:
 
@@ -311,13 +312,15 @@ git commit -m "feat: add explicit MCP permission consent"
 - Modify: `packages/cli/src/runtime.mjs`
 - Add: `packages/cli/src/login/native.mjs`
 - Add: `packages/cli/test/native-login.test.mjs`
+- Add: `packages/cli/test/runtime.test.mjs`
+- Modify: `packages/cli/src/platforms/shared.mjs`
 - Modify: `packages/cli/src/platforms/claudeCode.mjs`
 - Modify: `packages/cli/src/platforms/codex.mjs`
 - Modify: `packages/cli/src/platforms/cursor.mjs`
 - Modify: `packages/cli/src/platforms/claudeDesktop.mjs`
 - Modify: `packages/cli/test/platforms.test.mjs`
 
-- [ ] **Step 1: Add failing native-login policy tests**
+- [x] **Step 1: Add failing native-login policy tests**
 
 Define the adapter result:
 
@@ -333,7 +336,7 @@ Define the adapter result:
 
 Tests must prove Codex always returns the fixed command when detected; Claude returns it only when `runtime.commandSupports("claude", ["mcp", "login", "--help"])` succeeds; Cursor and Claude Desktop return manual UI instructions; no client/config value enters `executable` or `args`.
 
-- [ ] **Step 2: Run tests and observe the missing module**
+- [x] **Step 2: Run tests and observe the missing module**
 
 Run:
 
@@ -343,7 +346,7 @@ cd packages/cli && node --test test/native-login.test.mjs test/platforms.test.mj
 
 Expected: native-login policy is absent.
 
-- [ ] **Step 3: Extend the runtime with injectable command probes and execution**
+- [x] **Step 3: Extend the runtime with injectable command probes and execution**
 
 Add runtime methods with fixed-array calling conventions:
 
@@ -355,7 +358,7 @@ runtime.isInteractive = overrides.isInteractive ?? Boolean(overrides.stdin?.isTT
 
 Implement `defaultCommandSupports(executable, args)` with `execFileSync(executable, args, { stdio: "ignore", timeout: 2000 })`. Implement native execution with `spawnSync(executable, args, { stdio: "inherit", shell: false, env })`. Return only `{ status, exitCode }`; never include stdout/stderr.
 
-- [ ] **Step 4: Add `loginPlan(runtime)` to every platform**
+- [x] **Step 4: Add `loginPlan(runtime)` to every platform**
 
 Use exact command arrays:
 
@@ -370,7 +373,7 @@ Claude Desktop instruction: `Restart Claude Desktop, open Brian in Connectors, a
 
 For an older Claude command surface, return: `Upgrade Claude Code or run the Brian connection from Claude's MCP settings.`
 
-- [ ] **Step 5: Re-run tests and commit**
+- [x] **Step 5: Re-run tests and commit**
 
 Run:
 
@@ -400,7 +403,7 @@ git commit -m "feat: model native MCP login capabilities"
 - Modify: `packages/cli/test/cli.test.mjs`
 - Modify: `packages/cli/test/platforms.test.mjs`
 
-- [ ] **Step 1: Add failing parser and orchestration tests**
+- [x] **Step 1: Add failing parser and orchestration tests**
 
 Add `--no-login` to connect only. Require:
 
@@ -414,7 +417,7 @@ Add `--no-login` to connect only. Require:
 - manual clients report `configured: true`, `authentication: "manual"`;
 - the result contains no child stdout/stderr or token-shaped fixture.
 
-- [ ] **Step 2: Run tests and observe failures**
+- [x] **Step 2: Run tests and observe failures**
 
 Run:
 
@@ -424,7 +427,7 @@ cd packages/cli && node --test test/cli.test.mjs test/platforms.test.mjs
 
 Expected: parser rejects `--no-login` and connect never invokes login.
 
-- [ ] **Step 3: Parse and document `--no-login`**
+- [x] **Step 3: Parse and document `--no-login`**
 
 Initialize:
 
@@ -434,7 +437,7 @@ const options = { only: null, dryRun: false, yes: false, json: false, noLogin: f
 
 Add `--no-login` to help and accept it only for `connect`.
 
-- [ ] **Step 4: Separate configuration outcome from authentication outcome**
+- [x] **Step 4: Separate configuration outcome from authentication outcome**
 
 After `applyChanges` succeeds—or when the config is already unchanged—build a login queue from detected platform `loginPlan` values. Skip execution when:
 
@@ -456,11 +459,11 @@ Use a new `runtime.confirmLogin({ name, label, retryCommand })` prompt with defa
 
 Do not rollback file writes on login failure. Keep the command exit code out of machine output unless it is an ordinary bounded integer.
 
-- [ ] **Step 5: Render the two-stage result clearly**
+- [x] **Step 5: Render the two-stage result clearly**
 
 Human output must lead with `Configuration installed` and then print each authentication state. JSON preserves the stable `authentication` array and never prompts or spawns.
 
-- [ ] **Step 6: Run the CLI suite and commit**
+- [x] **Step 6: Run the CLI suite and commit**
 
 Run:
 
@@ -488,7 +491,7 @@ git commit -m "feat: authenticate Brian after CLI configuration"
 - Modify: `packages/cli/test/doctor.test.mjs`
 - Modify: `docs/cli.md`
 
-- [ ] **Step 1: Add failing readiness/evidence tests**
+- [x] **Step 1: Add failing readiness/evidence tests**
 
 Require a `native-login` check for each detected client and these categorical OAuth evidence states:
 
@@ -500,7 +503,7 @@ proven         never emitted by doctor
 
 Tests must assert `JSON.stringify(result)` never contains `proven`, and an older Claude version yields a warning with its upgrade instruction.
 
-- [ ] **Step 2: Run focused tests and observe failure**
+- [x] **Step 2: Run focused tests and observe failure**
 
 Run:
 
@@ -508,7 +511,7 @@ Run:
 cd packages/cli && node --test test/doctor.test.mjs
 ```
 
-- [ ] **Step 3: Implement local login readiness checks**
+- [x] **Step 3: Implement local login readiness checks**
 
 Call each platform's `loginPlan(runtime)` and emit pass for a command or actionable UI, warn for an unavailable old command surface. Add top-level:
 
@@ -521,7 +524,7 @@ oauthEvidence: {
 
 Do not execute DCR, native login, browser opening, or an authenticated request.
 
-- [ ] **Step 4: Document evidence labels and commit**
+- [x] **Step 4: Document evidence labels and commit**
 
 Run:
 
@@ -549,7 +552,7 @@ git commit -m "feat: diagnose MCP registration and login readiness"
 - Add: `server/src/operations/dcrMaintenanceCli.ts`
 - Add: `server/src/operations/dcrMaintenanceCli.test.ts`
 
-- [ ] **Step 1: Pin the supported Supabase server SDK**
+- [x] **Step 1: Pin the supported Supabase server SDK**
 
 Add `@supabase/supabase-js` version `2.110.2` to `server/package.json` and regenerate only `server/package-lock.json`:
 
@@ -559,7 +562,7 @@ cd server && npm install --save-exact @supabase/supabase-js@2.110.2
 
 Verify the installed type exposes `auth.admin.oauth.listClients` and `deleteClient`.
 
-- [ ] **Step 2: Add failing domain tests for registry classification**
+- [x] **Step 2: Add failing domain tests for registry classification**
 
 Define narrow internal types:
 
@@ -579,7 +582,7 @@ export interface ClientLifecycleEvidence {
 
 Test `classifyRegistry` at a fixed clock. A stale candidate must be dynamic, older than 24 hours, absent from both sets, absent from `protectedClientIds`, and have `evidenceComplete === true`. Test every predicate independently and assert ambiguity produces `retained_evidence_incomplete`.
 
-- [ ] **Step 3: Add failing redaction and stop-on-error tests**
+- [x] **Step 3: Add failing redaction and stop-on-error tests**
 
 Require output to contain only:
 
@@ -601,7 +604,7 @@ export interface DcrAuditSummary {
 
 Deletion records may include only `{ clientIdHash, ageBucket, outcome, runId }`. Feed token/client-name/URI/redirect fixtures and assert none appear in JSON. Make the second deletion fail and prove the third is never attempted.
 
-- [ ] **Step 4: Run tests and observe missing implementation**
+- [x] **Step 4: Run tests and observe missing implementation**
 
 Run:
 
@@ -609,7 +612,7 @@ Run:
 cd server && npm test -- src/operations/dcrRegistry.test.ts src/operations/dcrMaintenanceCli.test.ts
 ```
 
-- [ ] **Step 5: Implement the Supabase OAuth Admin adapter**
+- [x] **Step 5: Implement the Supabase OAuth Admin adapter**
 
 Create the admin client server-side:
 
@@ -621,7 +624,7 @@ const supabase = createClient(supabaseUrl, secretKey, {
 
 Paginate `supabase.auth.admin.oauth.listClients({ page, perPage: 100 })` until `nextPage` is null. Map only `client_id`, `registration_type`, and `created_at`; discard every other field immediately. Delete only through `supabase.auth.admin.oauth.deleteClient(clientId)`. Convert provider errors to fixed categories without including upstream messages.
 
-- [ ] **Step 6: Implement read-only lifecycle evidence with schema attestation**
+- [x] **Step 6: Implement read-only lifecycle evidence with schema attestation**
 
 Connect a dedicated `pg.Pool` to `DCR_MAINTENANCE_DATABASE_URL` with `application_name=brian_dcr_audit`, `statement_timeout=10000`, and `default_transaction_read_only=on`. At startup, query `information_schema.columns` for:
 
@@ -635,7 +638,7 @@ The production rollout may proceed only if this exact schema attestation passes.
 
 Query open Brian rows with `status in ('pending','active')`. Query Supabase evidence where a session is unexpired or an authorization is pending/approved and unexpired. All SQL is `SELECT`; `assertReadOnlyMaintenanceConnection` must verify `current_setting('transaction_read_only') = 'on'` and reject an owner/superuser connection.
 
-- [ ] **Step 7: Implement CLI parsing and explicit cleanup confirmation**
+- [x] **Step 7: Implement CLI parsing and explicit cleanup confirmation**
 
 Use:
 
@@ -644,7 +647,7 @@ npm run oauth:dcr:audit
 npm run oauth:dcr:audit -- --delete-stale --yes
 ```
 
-`--delete-stale` without `--yes` is a usage error. Audit is default and read-only. Require `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, and `DCR_MAINTENANCE_DATABASE_URL`; accept protected IDs only from `DCR_PROTECTED_CLIENT_IDS` as a comma-separated server environment variable. Never print environment values.
+`--delete-stale` without `--yes` is a usage error. Audit is default and reads the minimal OAuth client inventory plus lifecycle evidence through the attested read-only database role; it requires no Admin secret. Cleanup additionally requires `SUPABASE_SECRET_KEY`, a manually approved production environment, and a provider/Brian state where DCR and new approvals are paused and aligned. Accept protected IDs only from `DCR_PROTECTED_CLIENT_IDS` as a comma-separated server environment variable. Never print environment values.
 
 Add:
 
@@ -652,7 +655,7 @@ Add:
 "oauth:dcr:audit": "tsx src/operations/dcrMaintenanceCli.ts"
 ```
 
-- [ ] **Step 8: Run tests/build and commit**
+- [x] **Step 8: Run tests/build and commit**
 
 Run:
 
@@ -680,9 +683,9 @@ git commit -m "feat: audit and clean dynamic OAuth clients"
 - Modify: `docs/runbooks/oauth-outage.md`
 - Modify: `docs/mcp-oauth.md`
 
-- [ ] **Step 1: Add the scheduled workflow with least privilege**
+- [x] **Step 1: Add the scheduled workflow with least privilege**
 
-Create two jobs under both `workflow_dispatch` and cron:
+Create a secret-free hourly audit job and a separate manual cleanup job:
 
 ```yaml
 on:
@@ -695,16 +698,15 @@ on:
         type: boolean
   schedule:
     - cron: "17 * * * *"
-    - cron: "41 2 * * *"
 ```
 
-Set `permissions: contents: read`, `timeout-minutes: 10`, Node 24, `working-directory: server`, `npm ci`, and environment values only from repository/environment secrets. Hourly runs execute audit. The daily cron and an explicit cleanup dispatch execute `npm run oauth:dcr:audit -- --delete-stale --yes`.
+Set `permissions: contents: read`, `timeout-minutes: 10`, Node 24, `working-directory: server`, `npm ci`, and environment values only from repository/environment secrets. Hourly runs execute read-only audit in `production-audit` without `SUPABASE_SECRET_KEY`. Only an explicit protected-environment dispatch may execute `npm run oauth:dcr:audit -- --delete-stale --yes`, and it fails closed unless provider DCR, Brian's DCR marker, and new approvals are paused and aligned.
 
-- [ ] **Step 2: Keep GitHub logs count-only**
+- [x] **Step 2: Keep GitHub logs count-only**
 
 Do not enable shell tracing or upload raw output as an artifact. Route the single JSON summary and bounded deletion records to the configured log sink. Protect the cleanup job with the `production` GitHub environment so secret access and approvals remain centrally controlled.
 
-- [ ] **Step 3: Document warning, stop, and rollback actions**
+- [x] **Step 3: Document warning, stop, and rollback actions**
 
 Add exact thresholds:
 
@@ -722,7 +724,7 @@ The stop sequence is:
 5. Run `npm run oauth:dcr:audit` and record only its summary/run ID.
 6. Verify `/api/public/config` and `brian doctor` report registrations paused.
 
-- [ ] **Step 4: Validate workflow syntax and commit**
+- [x] **Step 4: Validate workflow syntax and commit**
 
 Run:
 
@@ -752,11 +754,11 @@ git commit -m "ops: schedule guarded DCR maintenance"
 - Modify: `docs/mcp-client-compatibility.md`
 - Modify: `Nextstep.md`
 
-- [ ] **Step 1: Add a credential-free public smoke assertion**
+- [x] **Step 1: Add a credential-free public smoke assertion**
 
 Require authorization metadata to advertise a valid `registration_endpoint`, then fetch `/api/public/config` and assert `mcpOAuth`, `mcpOAuthApprovals`, and `mcpDcr` are booleans. The normal smoke must not call the registration endpoint.
 
-- [ ] **Step 2: Add an explicit disposable DCR probe**
+- [x] **Step 2: Add an explicit disposable DCR probe**
 
 The probe must be a separate script requiring both `--yes` and `SUPABASE_SECRET_KEY`. It should:
 
@@ -768,7 +770,7 @@ The probe must be a separate script requiring both `--yes` and `SUPABASE_SECRET_
 
 It must never print the registration response, client ID, secret, callback query, or provider error body. Add `smoke:dcr-registration` to `server/package.json`. This probe is controlled-operations evidence, never `brian doctor` behavior.
 
-- [ ] **Step 3: Add tests around the probe adapters**
+- [x] **Step 3: Add tests around the probe adapters**
 
 Factor the probe into an injected function and test success, registration failure, verification failure, and cleanup failure with fake fetch/admin adapters. Assert cleanup runs after every post-registration path and output excludes all secret fixtures.
 
@@ -784,7 +786,7 @@ Expected before production enablement: public OAuth checks pass; availability ma
 
 Update compatibility and next-step documents with separate dated fields for `advertised`, `registered`, `authenticated`, `refreshed`, and `revoked`. Do not mark unperformed fields passed.
 
-- [ ] **Step 5: Commit smoke changes**
+- [x] **Step 5: Commit smoke changes**
 
 ```bash
 git add server/scripts/smoke-mcp-oauth.mjs server/scripts/probe-dcr-registration.mjs server/package.json docs/mcp-client-compatibility.md Nextstep.md
@@ -801,7 +803,7 @@ git commit -m "test: add controlled DCR release probes"
 - Modify if generated: `supabase/functions/brian/deno.json`
 - Modify only if required by verified behavior: `Nextstep.md`
 
-- [ ] **Step 1: Run the full web suite and build**
+- [x] **Step 1: Run the full web suite and build**
 
 ```bash
 CI=true npm test -- --watchAll=false
@@ -810,7 +812,7 @@ npm run build
 
 Expected: pass; no React warnings from consent controls.
 
-- [ ] **Step 2: Install server dependencies and run full server verification**
+- [x] **Step 2: Install server dependencies and run full server verification**
 
 ```bash
 cd server
@@ -823,7 +825,7 @@ git diff --exit-code -- ../supabase/functions/brian/index.js ../supabase/functio
 
 If the Edge output changed because source changed, include the generated files, rerun `npm run edge:build`, and require a clean second diff.
 
-- [ ] **Step 3: Run the full CLI matrix locally**
+- [x] **Step 3: Run the full CLI matrix locally**
 
 ```bash
 cd ../packages/cli
@@ -835,7 +837,7 @@ npm pack --dry-run
 
 Install the tarball into a temporary prefix and verify `brian --version`, `brian connect --dry-run --json`, and `brian doctor --json` do not spawn login or print credentials.
 
-- [ ] **Step 4: Inspect the complete diff for secret and scope regressions**
+- [x] **Step 4: Inspect the complete diff for secret and scope regressions**
 
 ```bash
 cd ../..
@@ -846,7 +848,7 @@ git status --short
 
 Every match must be a fixed redaction rule, type/test fixture, or documentation warning—never credential handling in the public CLI/browser.
 
-- [ ] **Step 5: Commit generated artifacts or final verification corrections**
+- [x] **Step 5: Commit generated artifacts or final verification corrections**
 
 ```bash
 git add supabase/functions/brian/index.js supabase/functions/brian/deno.json Nextstep.md
@@ -868,7 +870,7 @@ Skip this commit when those paths are unchanged.
 
 - [ ] **Step 1: Establish DCR maintenance evidence before enablement**
 
-Provision the `DCR_MAINTENANCE_DATABASE_URL` role with `LOGIN`, `default_transaction_read_only=on`, and `SELECT` only on the attested Auth lifecycle tables plus `public.agent_connections` and the DCR marker source. Run:
+Provision the `DCR_MAINTENANCE_DATABASE_URL` role with `LOGIN`, `default_transaction_read_only=on`, and `SELECT` only on `auth.oauth_clients(id, registration_type, created_at, deleted_at)`, the attested Auth lifecycle columns, and `public.agent_connections`. The hourly audit environment must not receive `SUPABASE_SECRET_KEY`. Run:
 
 ```bash
 cd server && npm run oauth:dcr:audit
@@ -910,7 +912,7 @@ Run the same URL-only journey with the current Claude Code version. If its exact
 
 - [ ] **Step 6: Exercise cleanup, alert, and kill switches**
 
-Create a disposable unapproved DCR registration, age only the isolated staging fixture past 24 hours, and prove daily cleanup deletes it while retaining a protected/manual/connected client. Exercise the synthetic volume alert and verify delivery. Disable Supabase DCR plus `MCP_DCR_ENABLED`, prove new registration stops while an existing approved connection still works, then restore both only if alert and rollback evidence are complete.
+Create a disposable unapproved DCR registration and age only the isolated staging fixture past 24 hours. Pause Supabase DCR, `MCP_DCR_ENABLED`, and new approvals, then manually approve the protected cleanup workflow and prove it deletes the stale fixture while retaining a protected/manual/connected client. Exercise the synthetic volume alert and verify delivery. Prove new registration stops while an existing approved connection still works, then restore DCR and approvals only if alert and rollback evidence are complete.
 
 - [ ] **Step 7: Publish the verified CLI package**
 

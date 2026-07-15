@@ -80,5 +80,9 @@ export function createJsonPlatform(spec) {
     };
   }
 
-  return { name: spec.name, label: spec.label, detect, inspect, connectPlan, disconnectPlan };
+  function loginPlan(context) {
+    return spec.loginPlan(context);
+  }
+
+  return { name: spec.name, label: spec.label, detect, inspect, connectPlan, disconnectPlan, loginPlan };
 }

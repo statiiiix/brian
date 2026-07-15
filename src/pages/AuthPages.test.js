@@ -192,7 +192,225 @@ test('consent shows verified client details, one company, and plain-language per
   expect(await screen.findByRole('heading', { name: 'Connect Claude Code?' })).toBeInTheDocument();
   expect(screen.getByText('Acme')).toBeInTheDocument();
   expect(screen.getByText('Read approved skills')).toBeInTheDocument();
+  expect(screen.getAllByText('Required')).toHaveLength(3);
+  expect(screen.getByRole('checkbox', { name: 'Capture knowledge' })).not.toBeChecked();
+  expect(screen.getByRole('checkbox', { name: 'Act through connected tools' })).not.toBeChecked();
+  expect(screen.getByText('127.0.0.1:49152')).toBeInTheDocument();
+  expect(screen.getByText('This agent will return through a local callback on this device.')).toBeInTheDocument();
   await waitFor(() => expect(screen.getByRole('button', { name: 'Approve connection' })).toBeEnabled());
+});
+
+test('consent sends exact default permissions when optional access stays unchecked', async () => {
+  useAuth.mockReturnValue({
+    session: { user: { id: 'u1' } },
+    loading: false,
+    profileLoading: false,
+    profileError: '',
+    profile: {
+      memberships: [{ tenant_id: 't1', role: 'owner', status: 'active', tenant: { id: 't1', name: 'Acme' } }],
+      featureFlags: { MCP_OAUTH_ENABLED: true, MCP_OAUTH_APPROVALS_ENABLED: true },
+    },
+  });
+  supabase.auth.oauth.getAuthorizationDetails.mockResolvedValue({
+    data: {
+      authorization_id: 'auth-defaults',
+      redirect_uri: 'https://agent.example/oauth/callback',
+      scope: 'email',
+      client: { id: 'client-1', name: 'Safe Agent', uri: 'https://agent.example' },
+    },
+    error: null,
+  });
+  api.mockImplementation(async (path) => (
+    path === '/api/oauth/grants/prepare' ? { grant: { id: 'grant-1' } } : { denied: true }
+  ));
+  supabase.auth.oauth.approveAuthorization.mockResolvedValue({ data: null, error: new Error('stop after prepare') });
+
+  render(<MemoryRouter initialEntries={['/oauth/consent?authorization_id=auth-defaults']}><OAuthConsent /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Approve connection' }));
+
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/oauth/grants/prepare', {
+    method: 'POST',
+    body: {
+      authorizationId: 'auth-defaults',
+      tenantId: 't1',
+      permissions: ['skills:read', 'context:read', 'executions:write'],
+    },
+  }));
+  expect(screen.queryByText(/local callback on this device/i)).not.toBeInTheDocument();
+  expect(screen.getByText('agent.example')).toBeInTheDocument();
+});
+
+test('owners can explicitly add both optional Brian permissions', async () => {
+  useAuth.mockReturnValue({
+    session: { user: { id: 'u1' } },
+    loading: false,
+    profileLoading: false,
+    profileError: '',
+    profile: {
+      memberships: [{ tenant_id: 't1', role: 'owner', status: 'active', tenant: { id: 't1', name: 'Acme' } }],
+      featureFlags: { MCP_OAUTH_ENABLED: true, MCP_OAUTH_APPROVALS_ENABLED: true },
+    },
+  });
+  supabase.auth.oauth.getAuthorizationDetails.mockResolvedValue({
+    data: {
+      authorization_id: 'auth-optional',
+      redirect_uri: 'http://localhost:1455/callback',
+      scope: 'email',
+      client: { id: 'client-1', name: 'Optional Agent', uri: 'https://agent.example' },
+    },
+    error: null,
+  });
+  api.mockImplementation(async (path) => (
+    path === '/api/oauth/grants/prepare' ? { grant: { id: 'grant-2' } } : { denied: true }
+  ));
+  supabase.auth.oauth.approveAuthorization.mockResolvedValue({ data: null, error: new Error('stop after prepare') });
+
+  render(<MemoryRouter initialEntries={['/oauth/consent?authorization_id=auth-optional']}><OAuthConsent /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('checkbox', { name: 'Capture knowledge' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Act through connected tools' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Approve connection' }));
+
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/oauth/grants/prepare', {
+    method: 'POST',
+    body: {
+      authorizationId: 'auth-optional',
+      tenantId: 't1',
+      permissions: [
+        'skills:read',
+        'context:read',
+        'executions:write',
+        'knowledge:write',
+        'actions:execute',
+      ],
+    },
+  }));
+});
+
+test('switching to a non-admin company removes role-ineligible optional actions', async () => {
+  useAuth.mockReturnValue({
+    session: { user: { id: 'u1' } },
+    loading: false,
+    profileLoading: false,
+    profileError: '',
+    profile: {
+      memberships: [
+        { tenant_id: 'owner-tenant', role: 'owner', status: 'active', tenant: { id: 'owner-tenant', name: 'Owner Co' } },
+        { tenant_id: 'expert-tenant', role: 'expert', status: 'active', tenant: { id: 'expert-tenant', name: 'Expert Co' } },
+      ],
+      featureFlags: { MCP_OAUTH_ENABLED: true, MCP_OAUTH_APPROVALS_ENABLED: true },
+    },
+  });
+  supabase.auth.oauth.getAuthorizationDetails.mockResolvedValue({
+    data: {
+      authorization_id: 'auth-role-switch',
+      redirect_uri: 'http://127.0.0.1:49152/callback',
+      scope: 'email',
+      client: { id: 'client-1', name: 'Role Switch Agent', uri: 'https://agent.example' },
+    },
+    error: null,
+  });
+  api.mockImplementation(async (path) => (
+    path === '/api/oauth/grants/prepare' ? { grant: { id: 'grant-role-switch' } } : { denied: true }
+  ));
+  supabase.auth.oauth.approveAuthorization.mockResolvedValue({ data: null, error: new Error('stop after prepare') });
+
+  render(<MemoryRouter initialEntries={['/oauth/consent?authorization_id=auth-role-switch']}><OAuthConsent /></MemoryRouter>);
+  const company = await screen.findByLabelText('Company');
+  fireEvent.change(company, { target: { value: 'owner-tenant' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Act through connected tools' }));
+  fireEvent.change(company, { target: { value: 'expert-tenant' } });
+  expect(screen.queryByRole('checkbox', { name: 'Act through connected tools' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Approve connection' }));
+
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/oauth/grants/prepare', {
+    method: 'POST',
+    body: {
+      authorizationId: 'auth-role-switch',
+      tenantId: 'expert-tenant',
+      permissions: ['skills:read', 'context:read', 'executions:write'],
+    },
+  }));
+});
+
+test('experts may capture knowledge but cannot select business-tool actions', async () => {
+  useAuth.mockReturnValue({
+    session: { user: { id: 'u1' } },
+    loading: false,
+    profileLoading: false,
+    profileError: '',
+    profile: {
+      memberships: [{ tenant_id: 't1', role: 'expert', status: 'active', tenant: { id: 't1', name: 'Acme' } }],
+      featureFlags: { MCP_OAUTH_ENABLED: true, MCP_OAUTH_APPROVALS_ENABLED: true },
+    },
+  });
+  supabase.auth.oauth.getAuthorizationDetails.mockResolvedValue({
+    data: {
+      authorization_id: 'auth-expert',
+      redirect_uri: 'http://[::1]:49152/callback',
+      scope: 'email actions:execute',
+      client: { id: 'client-1', name: 'Expert Agent', uri: 'https://agent.example' },
+    },
+    error: null,
+  });
+
+  render(<MemoryRouter initialEntries={['/oauth/consent?authorization_id=auth-expert']}><OAuthConsent /></MemoryRouter>);
+  expect(await screen.findByRole('checkbox', { name: 'Capture knowledge' })).toBeInTheDocument();
+  expect(screen.queryByRole('checkbox', { name: 'Act through connected tools' })).not.toBeInTheDocument();
+  expect(screen.getByText('[::1]:49152')).toBeInTheDocument();
+  expect(screen.getByText(/local callback on this device/i)).toBeInTheDocument();
+});
+
+test('dynamic client metadata is rendered as inert text', async () => {
+  useAuth.mockReturnValue({
+    session: { user: { id: 'u1' } },
+    loading: false,
+    profileLoading: false,
+    profileError: '',
+    profile: {
+      memberships: [{ tenant_id: 't1', role: 'owner', status: 'active', tenant: { id: 't1', name: 'Acme' } }],
+      featureFlags: { MCP_OAUTH_ENABLED: true, MCP_OAUTH_APPROVALS_ENABLED: true },
+    },
+  });
+  supabase.auth.oauth.getAuthorizationDetails.mockResolvedValue({
+    data: {
+      authorization_id: 'auth-untrusted',
+      redirect_uri: 'https://callback.example/return',
+      scope: 'email',
+      client: { id: 'client-1', name: '<script>alert(1)</script>', uri: 'javascript:alert(2)' },
+    },
+    error: null,
+  });
+
+  const { container } = render(<MemoryRouter initialEntries={['/oauth/consent?authorization_id=auth-untrusted']}><OAuthConsent /></MemoryRouter>);
+  expect(await screen.findByRole('heading', { name: 'Connect <script>alert(1)</script>?' })).toBeInTheDocument();
+  expect(container.querySelector('script')).toBeNull();
+  expect(screen.getByText('javascript:alert(2)')).toBeInTheDocument();
+});
+
+test('consent refuses an insecure remote callback', async () => {
+  useAuth.mockReturnValue({
+    session: { user: { id: 'u1' } },
+    loading: false,
+    profileLoading: false,
+    profileError: '',
+    profile: {
+      memberships: [{ tenant_id: 't1', role: 'owner', status: 'active', tenant: { id: 't1', name: 'Acme' } }],
+      featureFlags: { MCP_OAUTH_ENABLED: true, MCP_OAUTH_APPROVALS_ENABLED: true },
+    },
+  });
+  supabase.auth.oauth.getAuthorizationDetails.mockResolvedValue({
+    data: {
+      authorization_id: 'auth-unsafe',
+      redirect_uri: 'http://agent.example/oauth/callback',
+      scope: 'email',
+      client: { id: 'client-1', name: 'Unsafe Agent', uri: 'https://agent.example' },
+    },
+    error: null,
+  });
+
+  render(<MemoryRouter initialEntries={['/oauth/consent?authorization_id=auth-unsafe']}><OAuthConsent /></MemoryRouter>);
+  expect(await screen.findByRole('button', { name: 'Approve connection' })).toBeDisabled();
+  expect(screen.getByText('This callback is not safe to approve. Return to your agent and cancel the connection.')).toBeInTheDocument();
 });
 
 test('denial records the verified request without preparing an agent grant', async () => {

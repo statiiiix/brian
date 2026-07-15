@@ -6,13 +6,13 @@ The public onboarding path is the standalone Brian CLI:
 npx @brianthebrain/cli connect
 ```
 
-It detects Claude Code, Claude Desktop, Cursor, and Codex, previews every change, backs up existing configuration, and writes only the hosted OAuth resource:
+It detects Claude Code, Claude Desktop, Cursor, and Codex, previews every change, and backs up existing configuration. File-configured clients receive only the hosted OAuth resource:
 
 ```text
 https://api.brianthebrain.app/mcp
 ```
 
-The package is implemented under `packages/cli` but must be published before a clean machine can resolve the `npx` command from npm.
+Version `0.1.0` is published publicly on npm. A clean machine with Node.js 22 or newer can resolve the `npx` command directly.
 
 ## Common commands
 
@@ -32,7 +32,8 @@ After connection:
 
 - Claude Code: run `claude mcp login brian` (or `--no-browser` over SSH).
 - Codex: run `codex mcp login brian`.
-- Claude Desktop and Cursor: restart, then use the client's Brian connection UI. Treat OAuth as version-dependent until its exact version is in [the compatibility matrix](mcp-client-compatibility.md).
+- Cursor: restart, then use the client's Brian connection UI. Treat OAuth as version-dependent until its exact version is in [the compatibility matrix](mcp-client-compatibility.md).
+- Claude Desktop: open `https://claude.ai/customize/connectors`, choose **Add custom connector**, name it `Brian`, and enter `https://api.brianthebrain.app/mcp`. Do not put this remote URL in `claude_desktop_config.json`; that file accepts local MCP server definitions, while remote connectors are account-level.
 
 ## Safety
 

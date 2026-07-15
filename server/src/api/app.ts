@@ -23,6 +23,10 @@ import {
 import { runPrincipal, runTenant } from "../db/tenant.js";
 import { secret } from "../config/secrets.js";
 import {
+  loadMcpOperationalFlags,
+  type McpOperationalFlags,
+} from "../config/operationalFlags.js";
+import {
   createInterview, getInterview, listInterviews, appendMessage as appendInterviewMessage,
   completeInterview, abandonInterview, resumeInterview,
 } from "../interviews/repo.js";
@@ -53,7 +57,12 @@ import {
   type HumanRole,
   type PrincipalStore,
 } from "../auth/principal.js";
-import { hasPermission, permissionsForOAuthScope } from "../auth/permissions.js";
+import {
+  DEFAULT_AGENT_PERMISSIONS,
+  hasPermission,
+  permissionsForOAuthScope,
+  validateSelectedAgentPermissions,
+} from "../auth/permissions.js";
 import {
   AgentConnectionConflict,
   createInvitation,
@@ -109,6 +118,7 @@ export interface AppOptions {
   mcpOAuthEnabled?: boolean;
   mcpOAuthApprovalsEnabled?: boolean;
   mcpDcrEnabled?: boolean;
+  operationalFlags?: () => Promise<McpOperationalFlags>;
   cliOauthBridgeEnabled?: boolean;
   publicSignupEnabled?: boolean;
   legacyPasswordLoginEnabled?: boolean;
@@ -160,6 +170,20 @@ function requestReturnOrigin(c: Context): string | undefined {
     return configured.includes(url.origin) || loopback ? url.origin : undefined;
   } catch {
     return undefined;
+  }
+}
+
+function safeOAuthRedirectUri(value: unknown): boolean {
+  if (typeof value !== "string" || value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+    return !url.username
+      && !url.password
+      && !url.hash
+      && (url.protocol === "https:" || (url.protocol === "http:" && loopback));
+  } catch {
+    return false;
   }
 }
 
@@ -266,12 +290,20 @@ export function buildApp(opts: AppOptions = {}): App {
   // New grants are release-gated independently from validation of existing
   // short-lived MCP credentials. Missing configuration fails closed.
   const mcpOAuthApprovalsEnabled = opts.mcpOAuthApprovalsEnabled
-    ?? featureFlag("MCP_OAUTH_APPROVALS_ENABLED", false);
+    ?? false;
   // Supabase owns DCR and the public CLI intentionally ships no credential
   // bridge in v1. Keep both controls visible and fail closed until their
   // respective compatibility/release gates have passed.
   const mcpDcrEnabled = opts.mcpDcrEnabled
-    ?? featureFlag("MCP_DCR_ENABLED", false);
+    ?? false;
+  const staticOperationalFlags: McpOperationalFlags = {
+    mcpDcrEnabled,
+    mcpOAuthApprovalsEnabled,
+  };
+  const operationalFlags = opts.operationalFlags
+    ?? (opts.mcpDcrEnabled !== undefined || opts.mcpOAuthApprovalsEnabled !== undefined
+      ? async () => staticOperationalFlags
+      : loadMcpOperationalFlags);
   const cliOauthBridgeEnabled = opts.cliOauthBridgeEnabled
     ?? featureFlag("CLI_OAUTH_BRIDGE_ENABLED", false);
   const publicSignupEnabled = opts.publicSignupEnabled
@@ -463,7 +495,15 @@ export function buildApp(opts: AppOptions = {}): App {
   // Deliberately tiny unauthenticated configuration surface. Self-service
   // signup must fail closed in the browser as well as in the provisioning
   // trigger; invitation signup remains a separate, token-bound path.
-  app.get("/api/public/config", (c) => c.json({ publicSignup: publicSignupEnabled }));
+  app.get("/api/public/config", async (c) => {
+    const flags = await operationalFlags();
+    return c.json({
+      publicSignup: publicSignupEnabled,
+      mcpOAuth: mcpOAuthEnabled,
+      mcpOAuthApprovals: flags.mcpOAuthApprovalsEnabled,
+      mcpDcr: flags.mcpDcrEnabled,
+    });
+  });
 
   app.post("/api/public/invitations/validate", async (c) => {
     const { email, token } = (await jsonBody(c)) ?? {};
@@ -506,9 +546,10 @@ export function buildApp(opts: AppOptions = {}): App {
   app.get("/api/me", async (c) => {
     const principal = humanPrincipal(c);
     if (!principal) return c.json({ error: "unauthorized" }, 401);
-    const [memberships, tenant] = await Promise.all([
+    const [memberships, tenant, flags] = await Promise.all([
       principalStore.listMemberships(principal.userId),
       currentTenant(),
+      operationalFlags(),
     ]);
     return c.json({
       user: { id: principal.userId, email: principal.email, role: principal.role },
@@ -517,8 +558,8 @@ export function buildApp(opts: AppOptions = {}): App {
       featureFlags: {
         publicSignup: publicSignupEnabled,
         mcpOAuth: mcpOAuthEnabled,
-        mcpOAuthApprovals: mcpOAuthApprovalsEnabled,
-        mcpDcr: mcpDcrEnabled,
+        mcpOAuthApprovals: flags.mcpOAuthApprovalsEnabled,
+        mcpDcr: flags.mcpDcrEnabled,
         cliOauthBridge: cliOauthBridgeEnabled,
         agentConnectionsUi: featureFlag("AGENT_CONNECTIONS_UI_ENABLED", true),
         legacyAgentTokens: featureFlag("LEGACY_AGENT_TOKENS_ENABLED", true),
@@ -707,7 +748,8 @@ export function buildApp(opts: AppOptions = {}): App {
     const principal = humanPrincipal(c);
     if (!principal) return c.json({ error: "unauthorized" }, 401);
     if (principal.role === "viewer") return c.json({ error: "forbidden" }, 403);
-    if (!mcpOAuthEnabled || !mcpOAuthApprovalsEnabled) {
+    const flags = await operationalFlags();
+    if (!mcpOAuthEnabled || !flags.mcpOAuthApprovalsEnabled) {
       return c.json({ error: "new agent connections are temporarily paused" }, 503);
     }
     if (!supabaseAuth || !c.get("accessToken")) {
@@ -746,12 +788,25 @@ export function buildApp(opts: AppOptions = {}): App {
       });
       return c.json({ error: "invalid or expired authorization request" }, 400);
     }
-    // Permission authority is the verified Supabase authorization request and
-    // Brian's policy, never the browser body. Standard identity-only scopes
-    // resolve to Brian's conservative default grant.
-    const requestedPermissions = permissionsForOAuthScope(details.scope);
-    if (selected.role === "expert" && requestedPermissions.includes("actions:execute")) {
-      return c.json({ error: "actions:execute requires an owner or admin" }, 403);
+    if (!safeOAuthRedirectUri(details.redirect_uri)) {
+      return c.json({ error: "unsafe OAuth redirect" }, 400);
+    }
+    // Supabase remains authoritative for the client and authorization request.
+    // Brian's closed permission policy is authoritative for the explicit
+    // tenant grant selected on the consent page.
+    // Consent pages deployed before optional permissions were introduced did
+    // not send this field. Keep those pages compatible, but grant only the
+    // closed required defaults; null, malformed, unknown, and duplicate
+    // values still fail closed.
+    const requestedPermissions = body.permissions === undefined
+      ? DEFAULT_AGENT_PERMISSIONS
+      : body.permissions;
+    const validatedPermissions = validateSelectedAgentPermissions(requestedPermissions, selected.role);
+    if (!validatedPermissions.ok) {
+      const status = validatedPermissions.reason === "actions:execute requires an owner or admin"
+        ? 403
+        : 400;
+      return c.json({ error: validatedPermissions.reason }, status);
     }
     const selectedPrincipal: HumanPrincipal = {
       kind: "human",
@@ -767,7 +822,7 @@ export function buildApp(opts: AppOptions = {}): App {
         clientName: details.client.name,
         clientUri: details.client.uri,
         redirectUri: details.redirect_uri,
-        permissions: requestedPermissions,
+        permissions: validatedPermissions.permissions,
         requestId: c.get("requestId"),
       }));
     } catch (error) {

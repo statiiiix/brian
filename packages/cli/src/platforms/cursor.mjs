@@ -1,4 +1,5 @@
 import path from "node:path";
+import { cursorLoginPlan } from "../login/native.mjs";
 import { createJsonPlatform } from "./shared.mjs";
 
 export const cursor = createJsonPlatform({
@@ -9,6 +10,7 @@ export const cursor = createJsonPlatform({
   detectPaths: (context) => [path.join(context.home, ".cursor")],
   configPath: (context) => path.join(context.home, ".cursor", "mcp.json"),
   markerPath: (context) => path.join(context.home, ".cursor", "AGENTS.md"),
+  loginPlan: cursorLoginPlan,
   nextStep: "Restart Cursor, open the Brian MCP connection, and complete browser authorization if prompted.",
   disconnectStep: "Restart Cursor. Revoke the server-side grant separately from the Brian dashboard if desired.",
 });

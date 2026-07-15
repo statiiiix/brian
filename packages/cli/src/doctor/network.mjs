@@ -5,8 +5,8 @@ import {
   rootProtectedResourceMetadataUrl,
 } from "../constants.mjs";
 
-function check(name, ok, detail) {
-  return { name, status: ok ? "pass" : "fail", detail };
+function check(name, ok, detail, failureStatus = "fail") {
+  return { name, status: ok ? "pass" : failureStatus, detail };
 }
 
 function validEndpoint(value, allowHttp) {
@@ -62,6 +62,7 @@ export async function runNetworkDoctor({
   const metadataUrl = protectedResourceMetadataUrl(resourceUrl);
   const rootMetadataUrl = rootProtectedResourceMetadataUrl(resourceUrl);
   let metadata = null;
+  let providerDcrState = null;
 
   try {
     const result = await fetchJson(fetchFn, metadataUrl, timeoutMs);
@@ -109,10 +110,92 @@ export async function runNetworkDoctor({
           Boolean(endpointsValid),
           endpointsValid ? "authorization server advertises authorization code + PKCE S256" : "discovery document is incomplete or issuer mismatched",
         ));
+        if (endpointsValid) {
+          providerDcrState = validEndpoint(document.registration_endpoint, allowHttp);
+        }
       }
     } catch {
       checks.push(check("authorization-server-discovery", false, "request failed"));
     }
+  }
+
+  const registrationValid = providerDcrState === true;
+  checks.push(check(
+    "dynamic-client-registration-advertised",
+    registrationValid,
+    registrationValid
+      ? "authorization server advertises DCR; no client was created"
+      : "registration endpoint is missing or invalid",
+  ));
+
+  try {
+    const publicConfigUrl = new URL("/api/public/config", new URL(resourceUrl).origin).toString();
+    const result = await fetchJson(fetchFn, publicConfigUrl, timeoutMs);
+    if (result.error) {
+      checks.push(
+        check("brian-mcp-oauth-validation", false, result.error),
+        check("brian-dcr-marker", false, "public DCR marker is unavailable"),
+        check("brian-oauth-approvals", false, "public approval marker is unavailable"),
+        check("dcr-marker-drift", false, "provider and Brian markers could not be compared", "warn"),
+      );
+    } else {
+      const config = result.value;
+      const valid = config
+        && typeof config === "object"
+        && typeof config.publicSignup === "boolean"
+        && typeof config.mcpOAuth === "boolean"
+        && typeof config.mcpOAuthApprovals === "boolean"
+        && typeof config.mcpDcr === "boolean";
+      if (!valid) {
+        checks.push(
+          check("brian-mcp-oauth-validation", false, "public OAuth markers are incomplete"),
+          check("brian-dcr-marker", false, "public DCR marker is unavailable"),
+          check("brian-oauth-approvals", false, "public approval marker is unavailable"),
+          check("dcr-marker-drift", false, "provider and Brian markers could not be compared", "warn"),
+        );
+      } else {
+        checks.push(
+          check(
+            "brian-mcp-oauth-validation",
+            config.mcpOAuth,
+            config.mcpOAuth ? "MCP OAuth validation is enabled" : "MCP OAuth validation is disabled",
+          ),
+          check(
+            "brian-dcr-marker",
+            config.mcpDcr,
+            config.mcpDcr ? "Brian marks DCR enabled" : "Brian marks DCR paused",
+            "warn",
+          ),
+          check(
+            "brian-oauth-approvals",
+            config.mcpOAuthApprovals,
+            config.mcpOAuthApprovals ? "new connection approvals are enabled" : "new connection approvals are paused",
+            "warn",
+          ),
+          providerDcrState === null
+            ? check(
+              "dcr-marker-drift",
+              false,
+              "provider advertisement was unavailable; marker drift is unknown",
+              "warn",
+            )
+            : check(
+              "dcr-marker-drift",
+              providerDcrState === config.mcpDcr,
+              providerDcrState === config.mcpDcr
+                ? "provider advertisement and Brian DCR marker agree"
+                : "provider advertisement and Brian DCR marker disagree",
+            ),
+        );
+      }
+    }
+  } catch {
+    checks.push(
+      check("brian-mcp-oauth-validation", false, "request failed"),
+      check("brian-dcr-marker", false, "public DCR marker is unavailable"),
+      check("brian-oauth-approvals", false, "public approval marker is unavailable"),
+      check("dcr-marker-drift", false, "provider and Brian markers could not be compared", "warn"),
+    );
   }
 
   try {

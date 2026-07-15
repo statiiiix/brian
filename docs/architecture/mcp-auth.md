@@ -75,7 +75,7 @@ This keeps Brian out of OAuth cryptography and refresh-token storage, gives each
 
 Code and isolated-schema tests are complete. General availability still requires all of the following external work:
 
-- apply the complete current migration set through 014 to staging, then production;
+- apply the complete current migration set through 016 to staging, then production;
 - connect the runtime as the non-owner `brian_app` role so RLS is an effective backstop;
 - enable Supabase OAuth, configure the Brian consent path, asymmetric signing, custom hook, redirect allowlists, and abuse controls;
 - prove `resource` propagation, refresh rotation, DCR, revocation, and the access-token hook against staging;

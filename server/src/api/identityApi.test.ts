@@ -10,6 +10,7 @@ import { testClient } from "../test/http.js";
 import { pool } from "../db/pool.js";
 import { runMigrations } from "../db/migrate.js";
 import type { HttpLogSink, OperationalLog } from "../operations/http.js";
+import { DEFAULT_AGENT_PERMISSIONS } from "../auth/permissions.js";
 
 const d = process.env.TEST_DATABASE_URL ? describe : describe.skip;
 const USER = "13000000-0000-4000-8000-000000000001";
@@ -131,9 +132,7 @@ d("identity and agent-connection API", () => {
       payload: {
         authorizationId: "auth_1",
         tenantId: TENANT,
-        // Browser permission escalation is ignored. The verified authorization
-        // has only the standard email scope, so Brian's safe defaults win.
-        permissions: ["skills:read", "actions:execute", "unknown:permission"],
+        permissions: DEFAULT_AGENT_PERMISSIONS,
         // These are deliberately ignored in favor of server-fetched details.
         oauthClientId: "attacker-client",
         clientName: "Attacker Name",
@@ -205,6 +204,24 @@ d("identity and agent-connection API", () => {
     expect(serializedMetrics).not.toContain("attacker.example");
   });
 
+  it("rejects an invalid browser permission selection before preparing a grant", async () => {
+    const response = await client().inject({
+      method: "POST",
+      url: "/api/oauth/grants/prepare",
+      headers: auth,
+      payload: {
+        authorizationId: "auth_1",
+        tenantId: TENANT,
+        permissions: [...DEFAULT_AGENT_PERMISSIONS, "unknown:permission"],
+      },
+    });
+    expect(response.statusCode).toBe(400);
+    expect((await pool.query(
+      "select count(*)::int as count from agent_connections where user_id=$1",
+      [USER],
+    )).rows[0].count).toBe(0);
+  });
+
   it("reuses one open row for expanded reauthorization and invalidates old tokens until activation", async () => {
     const inserted = await pool.query(
       `insert into agent_connections
@@ -223,14 +240,18 @@ d("identity and agent-connection API", () => {
       method: "POST",
       url: "/api/oauth/grants/prepare",
       headers: auth,
-      payload: { authorizationId: "auth_1", tenantId: TENANT },
+      payload: {
+        authorizationId: "auth_1",
+        tenantId: TENANT,
+        permissions: [...DEFAULT_AGENT_PERMISSIONS, "actions:execute"],
+      },
     });
     expect(prepared.statusCode).toBe(201);
     expect(prepared.json().grant).toMatchObject({
       id: connectionId,
       status: "pending",
       approvedAt: null,
-      permissions: ["skills:read", "actions:execute"],
+      permissions: ["skills:read", "context:read", "executions:write", "actions:execute"],
     });
     expect(prepared.json().grant.expiresAt).toEqual(expect.any(String));
     expect(await resolveMcpGrant()).toEqual([]);
@@ -253,11 +274,11 @@ d("identity and agent-connection API", () => {
       status: "active",
       approved: true,
       expires_at: null,
-      permissions: ["skills:read", "actions:execute"],
+      permissions: ["skills:read", "context:read", "executions:write", "actions:execute"],
     });
     expect(await resolveMcpGrant()).toEqual([expect.objectContaining({
       connection_id: connectionId,
-      permissions: ["skills:read", "actions:execute"],
+      permissions: ["skills:read", "context:read", "executions:write", "actions:execute"],
     })]);
   });
 
@@ -275,7 +296,7 @@ d("identity and agent-connection API", () => {
       method: "POST",
       url: "/api/oauth/grants/prepare",
       headers: auth,
-      payload: { authorizationId: "auth_1", tenantId: TENANT },
+      payload: { authorizationId: "auth_1", tenantId: TENANT, permissions: DEFAULT_AGENT_PERMISSIONS },
     });
     expect(prepared.statusCode).toBe(201);
     expect(prepared.json().grant).toMatchObject({ id: originalId, status: "pending" });
@@ -299,7 +320,7 @@ d("identity and agent-connection API", () => {
       method: "POST",
       url: "/api/oauth/grants/prepare",
       headers: auth,
-      payload: { authorizationId: "auth_1", tenantId: TENANT },
+      payload: { authorizationId: "auth_1", tenantId: TENANT, permissions: DEFAULT_AGENT_PERMISSIONS },
     });
     expect(retried.statusCode).toBe(201);
     expect(retried.json().grant.id).not.toBe(originalId);
@@ -439,7 +460,7 @@ d("identity and agent-connection API", () => {
     );
     const response = await client().inject({
       method: "POST", url: "/api/oauth/grants/prepare", headers: auth,
-      payload: { authorizationId: "auth_1", tenantId: TENANT },
+      payload: { authorizationId: "auth_1", tenantId: TENANT, permissions: DEFAULT_AGENT_PERMISSIONS },
     });
     expect(response.statusCode).toBe(403);
   });
@@ -458,7 +479,7 @@ d("identity and agent-connection API", () => {
       method: "POST",
       url: "/api/oauth/grants/prepare",
       headers: auth,
-      payload: { authorizationId: "auth_1", tenantId: TENANT },
+      payload: { authorizationId: "auth_1", tenantId: TENANT, permissions: DEFAULT_AGENT_PERMISSIONS },
     });
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({
@@ -473,7 +494,7 @@ d("identity and agent-connection API", () => {
       method: "POST",
       url: "/api/oauth/grants/prepare",
       headers: auth,
-      payload: { authorizationId: "auth_1", tenantId: TENANT },
+      payload: { authorizationId: "auth_1", tenantId: TENANT, permissions: DEFAULT_AGENT_PERMISSIONS },
     });
     expect(prepared.statusCode).toBe(503);
     expect(prepared.json().error).toMatch(/paused/i);

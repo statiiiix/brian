@@ -1,3 +1,5 @@
+import type { HumanRole } from "./principal.js";
+
 export const AGENT_PERMISSIONS = [
   "skills:read",
   "context:read",
@@ -36,6 +38,25 @@ export function permissionsForOAuthScope(scope: unknown): AgentPermission[] {
     ? normalizePermissions(scope.split(/\s+/).filter(Boolean))
     : [];
   return requested.length > 0 ? requested : [...DEFAULT_AGENT_PERMISSIONS];
+}
+
+export function validateSelectedAgentPermissions(
+  value: unknown,
+  role: HumanRole,
+): { ok: true; permissions: AgentPermission[] } | { ok: false; reason: string } {
+  if (!Array.isArray(value)
+    || value.some((permission) => !isAgentPermission(permission))
+    || new Set(value).size !== value.length) {
+    return { ok: false, reason: "invalid agent permissions" };
+  }
+  const permissions = AGENT_PERMISSIONS.filter((permission) => value.includes(permission));
+  if (!DEFAULT_AGENT_PERMISSIONS.every((permission) => permissions.includes(permission))) {
+    return { ok: false, reason: "default agent permissions are required" };
+  }
+  if (permissions.includes("actions:execute") && role !== "owner" && role !== "admin") {
+    return { ok: false, reason: "actions:execute requires an owner or admin" };
+  }
+  return { ok: true, permissions };
 }
 
 export function requiredPermissionForTool(toolName: string): AgentPermission {

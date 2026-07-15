@@ -20,13 +20,16 @@
     "sync": "tsx src/scripts/syncCli.ts",
     "edge:build": "node scripts/edge-build.mjs",
     "smoke:mcp-oauth": "node scripts/smoke-mcp-oauth.mjs",
+    "smoke:dcr-registration": "node scripts/probe-dcr-registration.mjs",
     "privacy:maintain": "tsx src/privacy/maintenanceCli.ts",
+    "oauth:dcr:audit": "tsx src/operations/dcrMaintenanceCli.ts",
     "seed:supabase-admin": "tsx src/scripts/seedSupabaseAdmin.ts"
   },
   "dependencies": {
     "@hono/mcp": "^0.3.0",
     "@hono/node-server": "^2.0.8",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@supabase/supabase-js": "2.110.2",
     "bcryptjs": "^3.0.3",
     "hono": "^4.12.28",
     "jose": "6.2.3",

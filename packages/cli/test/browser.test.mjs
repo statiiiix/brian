@@ -40,3 +40,21 @@ test("signup dry run never invokes opener", async () => {
   assert.equal(outcome.result.status, "dry-run");
   assert.equal(called, false);
 });
+
+test("signup JSON and noninteractive modes never invoke opener", async () => {
+  for (const options of [
+    { dryRun: false, json: true, isInteractive: true },
+    { dryRun: false, json: false, isInteractive: false },
+  ]) {
+    let called = false;
+    const outcome = await runSignup(options, {
+      platform: "darwin",
+      env: {},
+      isInteractive: options.isInteractive,
+      openBrowser: async () => { called = true; return true; },
+    });
+    assert.equal(outcome.result.status, "browser-skipped");
+    assert.equal(outcome.result.opened, false);
+    assert.equal(called, false);
+  }
+});

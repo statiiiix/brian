@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../app/auth';
 import { api } from '../app/api';
-import { permissionDetails, permissionsForAuthorization } from '../app/permissions';
+import { DEFAULT_AGENT_PERMISSIONS, permissionDetails } from '../app/permissions';
 import { supabase } from '../lib/supabase';
 import { authorizationReturnTo, withReturnTo } from '../lib/returnTo';
 import AuthShell from './AuthShell';
@@ -16,14 +16,24 @@ function tenantNameFor(membership) {
   return membership.tenant?.name || membership.tenant_name || membership.tenantName || 'Company';
 }
 
-function redirectOrigin(uri) {
+function redirectDetails(uri) {
   try {
     const url = new URL(uri);
-    return url.origin === 'null' ? uri : url.origin;
+    const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    return {
+      label: url.host || uri,
+      loopback,
+      safe: !url.username
+        && !url.password
+        && !url.hash
+        && (url.protocol === 'https:' || (url.protocol === 'http:' && loopback)),
+    };
   } catch {
-    return 'Registered application callback';
+    return { label: 'Registered application callback', loopback: false, safe: false };
   }
 }
+
+const OPTIONAL_AGENT_PERMISSIONS = ['knowledge:write', 'actions:execute'];
 
 export default function OAuthConsent() {
   const location = useLocation();
@@ -32,6 +42,7 @@ export default function OAuthConsent() {
   const continuation = authorizationReturnTo(authorizationId);
   const [details, setDetails] = useState(null);
   const [selectedTenantId, setSelectedTenantId] = useState('');
+  const [optionalPermissions, setOptionalPermissions] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
 
@@ -49,6 +60,7 @@ export default function OAuthConsent() {
         window.location.assign(data.redirect_url);
         return;
       }
+      setOptionalPermissions([]);
       setDetails(data);
     });
     return () => { active = false; };
@@ -64,17 +76,32 @@ export default function OAuthConsent() {
   }, [memberships]);
 
   const selectedMembership = memberships.find((membership) => tenantIdFor(membership) === selectedTenantId);
-  const permissions = useMemo(() => permissionsForAuthorization(details || {}), [details]);
-  const displayPermissions = useMemo(() => permissionDetails(permissions), [permissions]);
+  useEffect(() => {
+    if (selectedMembership?.role !== 'owner' && selectedMembership?.role !== 'admin') {
+      setOptionalPermissions((current) => current.filter((permission) => permission !== 'actions:execute'));
+    }
+  }, [selectedMembership?.role]);
+  const permissions = useMemo(
+    () => [...DEFAULT_AGENT_PERMISSIONS, ...optionalPermissions],
+    [optionalPermissions],
+  );
+  const displayPermissions = useMemo(() => permissionDetails(DEFAULT_AGENT_PERMISSIONS), []);
+  const optionalPermissionDetails = useMemo(() => permissionDetails(OPTIONAL_AGENT_PERMISSIONS), []);
+  const redirect = useMemo(() => redirectDetails(details?.redirect_uri), [details]);
   const mcpEnabled = profile?.featureFlags?.mcpOAuth !== false && profile?.featureFlags?.MCP_OAUTH_ENABLED !== false;
   const approvalsEnabled = profile?.featureFlags?.mcpOAuthApprovals === true
     || profile?.featureFlags?.MCP_OAUTH_APPROVALS_ENABLED === true;
   const newConnectionsEnabled = mcpEnabled && approvalsEnabled;
-  const roleBlocksRequestedActions = selectedMembership?.role === 'expert' && permissions.includes('actions:execute');
   const canApprove = Boolean(selectedMembership)
     && selectedMembership.role !== 'viewer'
-    && !roleBlocksRequestedActions
+    && redirect.safe
     && newConnectionsEnabled;
+
+  function togglePermission(permission, checked) {
+    setOptionalPermissions((current) => checked
+      ? [...current, permission]
+      : current.filter((candidate) => candidate !== permission));
+  }
 
   if (authLoading) {
     return <AuthShell><section className="login-card"><h1>Opening authorization…</h1><p className="login-sub">Checking your Brian session.</p></section></AuthShell>;
@@ -93,6 +120,7 @@ export default function OAuthConsent() {
       body: {
         authorizationId,
         tenantId: selectedTenantId,
+        permissions,
       },
     });
     if (!response?.grant?.id) throw new Error('Brian could not prepare this agent connection.');
@@ -163,8 +191,10 @@ export default function OAuthConsent() {
             <dl className="consent-client">
               <div><dt>Client</dt><dd>{details.client.name || 'Unnamed OAuth client'}</dd></div>
               <div><dt>Website</dt><dd>{details.client.uri || 'Not provided'}</dd></div>
-              <div><dt>Returns to</dt><dd>{redirectOrigin(details.redirect_uri)}</dd></div>
+              <div><dt>Returns to</dt><dd>{redirect.label}</dd></div>
             </dl>
+            {redirect.loopback && <p className="consent-loopback">This agent will return through a local callback on this device.</p>}
+            {!redirect.safe && <p className="login-error">This callback is not safe to approve. Return to your agent and cancel the connection.</p>}
             <label htmlFor="consent-company">Company</label>
             {profileLoading ? (
               <p className="login-notice">Loading your companies…</p>
@@ -184,11 +214,27 @@ export default function OAuthConsent() {
                 <article key={permission.id} className={permission.highRisk ? 'is-sensitive' : ''}>
                   <span aria-hidden="true">{permission.highRisk ? '!' : '✓'}</span>
                   <div><strong>{permission.title}</strong><p>{permission.description}</p></div>
+                  <small>Required</small>
                 </article>
               ))}
+              <h2>Optional access</h2>
+              {optionalPermissionDetails
+                .filter((permission) => permission.id !== 'actions:execute'
+                  || selectedMembership?.role === 'owner'
+                  || selectedMembership?.role === 'admin')
+                .map((permission) => (
+                  <label key={permission.id} className={`consent-permission-option${permission.highRisk ? ' is-sensitive' : ''}`}>
+                    <input
+                      type="checkbox"
+                      aria-label={permission.title}
+                      checked={optionalPermissions.includes(permission.id)}
+                      onChange={(event) => togglePermission(permission.id, event.target.checked)}
+                    />
+                    <div><strong>{permission.title}</strong><p>{permission.description}</p></div>
+                  </label>
+                ))}
             </div>
             {selectedMembership?.role === 'viewer' && <p className="login-error">Viewers cannot connect agents. Ask a company admin to change your role.</p>}
-            {roleBlocksRequestedActions && <p className="login-error">Only a company owner or admin can approve business-tool actions.</p>}
             {!newConnectionsEnabled && <p className="login-error">New agent connections are temporarily paused.</p>}
             {profileError && <p className="login-error">{profileError}</p>}
             {error && <p className="login-error" role="alert">{error}</p>}

@@ -1,6 +1,6 @@
 {
   "name": "@brianthebrain/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Install and diagnose Brian's hosted MCP connection for supported AI clients.",
   "type": "module",
   "bin": {

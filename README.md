@@ -20,7 +20,7 @@ OAuth-capable clients configure that URL without a static bearer. An unauthentic
 
 ## Public connection quick start
 
-The CLI package is implemented and pack-tested locally, but must be published before the `npx` form works from npm:
+CLI version `0.1.0` is published publicly on npm, so the `npx` form works without cloning this repository:
 
 ```bash
 npx @brianthebrain/cli signup
@@ -84,13 +84,17 @@ SUPABASE_URL
 SUPABASE_ANON_KEY
 BRIAN_APP_URL
 MCP_OAUTH_ENABLED
-MCP_OAUTH_APPROVALS_ENABLED
 LEGACY_AGENT_TOKENS_ENABLED
 MCP_RATE_LIMIT_ENABLED
 MCP_PREAUTH_RATE_LIMIT_REQUESTS
 MCP_AUTH_RATE_LIMIT_REQUESTS
 MCP_RATE_LIMIT_WINDOW_MS
 ```
+
+`MCP_DCR_ENABLED` and `MCP_OAUTH_APPROVALS_ENABLED` are non-secret,
+request-time controls in the owner-only `app_config` table (migration 016), not
+Edge environment variables. See [docs/mcp-oauth.md](docs/mcp-oauth.md) for the
+fail-closed rollout and kill-switch procedure.
 
 Provider connector variables are documented separately in [docs/connectors.md](docs/connectors.md).
 
@@ -133,4 +137,4 @@ npm run smoke:mcp-oauth
 
 ## Release status
 
-The application, migrations 010-014, CLI, privacy lifecycle, and automated local/isolation checks are implemented in this repository. Public signup and MCP OAuth are not safe to call generally available until those migrations are applied to staging/production, the runtime uses the non-owner `brian_app` role, Supabase OAuth/asymmetric signing/custom hook and CAPTCHA are configured, the branded domain is live, reviewed legal and operational controls are wired, a dated restore and security review pass, and launch clients complete real end-to-end staging compatibility runs. On 2026-07-13 the live migration list still ended at 009, Supabase OAuth discovery was disabled, and the branded API deployment returned 404. The repository records these gates rather than pretending local code changed external infrastructure.
+The application, migrations 010-016, CLI, privacy lifecycle, and automated local/isolation checks are implemented in this repository. Production currently has migrations through 015; migration 016 and the refreshed runtime artifacts remain a guarded rollout gate. Public signup and universal MCP OAuth are not safe to call generally available until the current migrations are applied, the runtime uses the non-owner `brian_app` role, Supabase OAuth/asymmetric signing/custom hook and CAPTCHA are configured, the branded domain is live, reviewed legal and operational controls are wired, a dated restore and security review pass, and launch clients complete real end-to-end compatibility runs. The repository records these gates rather than treating local code as proof of external infrastructure.
