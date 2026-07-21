@@ -1,0 +1,78 @@
+/* Typography for the light markdown Brian writes. The bubble itself is styled
+   by its container (.ivc-bubble in the interview thread); these rules only
+   shape what sits inside it. */
+
+.rtx > :first-child {
+  margin-top: 0;
+}
+
+.rtx > :last-child {
+  margin-bottom: 0;
+}
+
+.rtx p {
+  margin: 0.55em 0;
+}
+
+.rtx h3,
+.rtx h4,
+.rtx h5,
+.rtx h6 {
+  margin: 1.1em 0 0.4em;
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--fg);
+}
+
+.rtx h3 {
+  font-size: 1.02em;
+}
+
+.rtx h4 {
+  font-size: 0.95em;
+}
+
+.rtx h5,
+.rtx h6 {
+  font-size: 0.9em;
+  color: var(--fg-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.rtx ul,
+.rtx ol {
+  margin: 0.55em 0;
+  padding-left: 1.25em;
+}
+
+.rtx li {
+  margin: 0.25em 0;
+}
+
+.rtx li::marker {
+  color: var(--muted-2);
+}
+
+.rtx strong {
+  font-weight: 650;
+}
+
+.rtx em {
+  font-style: italic;
+}
+
+.rtx code {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.88em;
+  padding: 0.1em 0.32em;
+  border-radius: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+}
+
+.rtx a {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

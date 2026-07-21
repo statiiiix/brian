@@ -110,11 +110,16 @@
   }
 }
 
-.ivc-msg p {
+.ivc-msg .ivc-bubble {
   margin: 0;
   padding: 0.65rem 0.95rem;
   border-radius: 12px;
   font-size: 0.9rem;
+}
+
+/* Plain bubbles keep the line breaks they were typed with. Brian's messages
+   are markdown, so their spacing comes from the rendered blocks instead. */
+.ivc-msg p.ivc-bubble {
   white-space: pre-wrap;
 }
 
@@ -142,7 +147,7 @@
   align-self: flex-start;
 }
 
-.ivc-msg--brian p {
+.ivc-msg--brian .ivc-bubble {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-top-left-radius: 4px;
@@ -154,7 +159,7 @@
   align-items: flex-end;
 }
 
-.ivc-msg--expert p {
+.ivc-msg--expert .ivc-bubble {
   background: var(--accent-dim);
   border: 1px solid rgba(209, 82, 26, 0.22);
   border-top-right-radius: 4px;
@@ -163,11 +168,11 @@
 
 /* Optimistic bubble: shown the instant you hit send, dimmed until the server
    acknowledges it. */
-.ivc-msg.is-sending p {
+.ivc-msg.is-sending .ivc-bubble {
   opacity: 0.62;
 }
 
-.ivc-msg.is-failed p {
+.ivc-msg.is-failed .ivc-bubble {
   border-color: rgba(207, 63, 52, 0.4);
   border-style: dashed;
 }

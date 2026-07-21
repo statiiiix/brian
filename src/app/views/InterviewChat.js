@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import brianMark from '../../assets/brian-b-mark.svg';
 import { Icon, msym } from '../../components/Icon';
 import { api } from '../api';
 import { readCache, writeCache } from '../queryCache';
 import InterviewSources from '../components/InterviewSources';
+import RichText from '../components/RichText';
 import StatusBadge from '../components/StatusBadge';
 import { interviewBrief, interviewTitle } from '../interviewTopic';
 import './InterviewChat.css';
@@ -52,11 +53,25 @@ export default function InterviewChat() {
     setIv(writeCache(`/api/interviews/${id}`, interview));
   }
 
-  useEffect(() => {
+  const scrollToEnd = useCallback(() => {
     if (threadRef.current) {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
     }
-  }, [iv, busy, pendingAnswer]);
+  }, []);
+
+  useEffect(() => { scrollToEnd(); }, [iv, busy, pendingAnswer, scrollToEnd]);
+
+  // Only a message that arrives while you are watching is revealed as it is
+  // written; reopening a thread shows its history immediately.
+  const [revealIndex, setRevealIndex] = useState(-1);
+  const seenMessages = useRef(null);
+  useEffect(() => {
+    const count = iv?.messages.length ?? 0;
+    if (seenMessages.current !== null && count > seenMessages.current) {
+      setRevealIndex(iv.messages[count - 1].role === 'brian' ? count - 1 : -1);
+    }
+    seenMessages.current = count;
+  }, [iv]);
 
   // Grow the composer with its content instead of exposing a drag handle.
   useEffect(() => {
@@ -227,13 +242,22 @@ export default function InterviewChat() {
                     'You'
                   )}
                 </span>
-                <p>{m.content}</p>
+                {m.role === 'brian' ? (
+                  <RichText
+                    className="ivc-bubble"
+                    text={m.content}
+                    reveal={i === revealIndex}
+                    onReveal={scrollToEnd}
+                  />
+                ) : (
+                  <p className="ivc-bubble">{m.content}</p>
+                )}
               </div>
             ))}
             {pendingAnswer && (
               <div className={`ivc-msg ivc-msg--expert${busy ? ' is-sending' : ' is-failed'}`}>
                 <span className="ivc-msg-who">You</span>
-                <p>{pendingAnswer}</p>
+                <p className="ivc-bubble">{pendingAnswer}</p>
               </div>
             )}
             {busy && (
@@ -241,7 +265,7 @@ export default function InterviewChat() {
                 <span className="ivc-msg-who">
                   <img className="ivc-msg-avatar" src={brianMark} alt="Brian" />
                 </span>
-                <p className="ivc-typing" aria-label="Brian is thinking">
+                <p className="ivc-bubble ivc-typing" aria-label="Brian is thinking">
                   <span /><span /><span />
                 </p>
               </div>
@@ -347,7 +371,7 @@ export default function InterviewChat() {
                 {draft.name && <><dt>Name</dt><dd>{draft.name}</dd></>}
                 {draft.trigger && <><dt>Trigger</dt><dd>{draft.trigger}</dd></>}
                 {draft.principles?.length > 0 && <><dt>Principles</dt><dd><ul>{draft.principles.map((principle, i) => <li key={i}>{principle}</li>)}</ul></dd></>}
-                {draft.procedure && <><dt>Procedure</dt><dd className="ivc-pre">{draft.procedure}</dd></>}
+                {draft.procedure && <><dt>Procedure</dt><dd><RichText text={draft.procedure} /></dd></>}
                 {draft.hard_rules?.length > 0 && (
                   <>
                     <dt>Hard rules</dt>

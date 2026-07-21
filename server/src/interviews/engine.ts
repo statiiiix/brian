@@ -49,7 +49,12 @@ real workflow and judgment, then quality and examples. Only discuss rules, appro
 guardrails, or escalation near the end and only if meaningful risk makes them relevant. If the
 expert says those controls are unnecessary, accept it and move on without rephrasing the same
 question. Use the hidden draft and gaps as guidance, not as a script. Return only the message
-the expert should see.`;
+the expert should see.
+
+Write in light Markdown: a blank line between paragraphs, **bold** on the few words that carry
+the point, and a short bullet list when you lay out options or read something back. Keep it
+conversational — most turns are one or two short paragraphs ending in a question. Use a heading
+only when a message genuinely covers several parts, and never format a single question.`;
 
 type ReadinessComponent = keyof z.infer<typeof coverageSchema>;
 
