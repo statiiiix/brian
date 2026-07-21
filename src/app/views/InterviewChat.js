@@ -116,6 +116,18 @@ export default function InterviewChat() {
     }
   }
 
+  async function finish() {
+    setBusy(true);
+    setError('');
+    try {
+      applyInterview(await api(`/api/interviews/${id}/finish`, { method: 'POST' }));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function approve(activate) {
     setBusy(true);
     setError('');
@@ -173,6 +185,10 @@ export default function InterviewChat() {
   const pct = Math.round((covered / COVERAGE_FIELDS.length) * 100);
   const draft = iv.draft;
   const brief = interviewBrief(iv.topic);
+  // Every component resolved (defined or explicitly not applicable). Brian may
+  // still ask follow-ups, so this offers to finish rather than forcing it.
+  const allCovered = iv.status === 'active'
+    && COVERAGE_FIELDS.every(([key]) => componentCoverage[key]?.status !== 'missing');
 
   return (
     <div className="ivc">
@@ -313,9 +329,33 @@ export default function InterviewChat() {
                 </button>
               </div>
               <p className="ivc-composer-hint">
-                <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line
+                <span>
+                  <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line
+                </span>
+                <button
+                  type="button"
+                  className="ivc-finish-link"
+                  onClick={finish}
+                  disabled={busy}
+                >
+                  Finish &amp; build the skill from what Brian has
+                </button>
               </p>
             </form>
+          )}
+
+          {allCovered && !result && (
+            <div className="ivc-ready ivc-ready--finish" role="status">
+              <span>Everything is covered ({covered}/{COVERAGE_FIELDS.length}). Keep going to refine, or wrap up now.</span>
+              <button
+                type="button"
+                className="dash-btn dash-btn--primary"
+                onClick={finish}
+                disabled={busy}
+              >
+                Finish &amp; build the skill
+              </button>
+            </div>
           )}
 
           {iv.status === 'ready' && draft && !result && (

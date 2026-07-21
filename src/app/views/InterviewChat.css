@@ -281,15 +281,22 @@
 
 .ivc-composer-hint {
   margin: 0.5rem 0 0;
-  text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   font-size: 0.7rem;
   color: var(--muted-2);
-  /* Only relevant once the field has focus — quiet until then. */
+}
+
+/* Keyboard hint is only relevant once the field has focus — quiet until then.
+   The finish link stays available so it can always be reached. */
+.ivc-composer-hint > span {
   opacity: 0;
   transition: opacity 160ms var(--ease);
 }
 
-.ivc-composer:focus-within .ivc-composer-hint {
+.ivc-composer:focus-within .ivc-composer-hint > span {
   opacity: 1;
 }
 
@@ -297,6 +304,43 @@
   font: inherit;
   font-weight: 600;
   color: var(--muted);
+}
+
+.ivc-finish-link {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--muted-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition: color 160ms var(--ease);
+}
+
+.ivc-finish-link:hover:not(:disabled) {
+  color: var(--accent-text);
+}
+
+.ivc-finish-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Coverage is complete: invite the expert to wrap up without forcing it. */
+.ivc-ready--finish {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--green-dim);
+  color: var(--fg);
+}
+
+.ivc-ready--finish .dash-btn {
+  flex-shrink: 0;
 }
 
 .ivc-send {

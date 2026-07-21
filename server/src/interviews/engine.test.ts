@@ -8,7 +8,7 @@ vi.mock("../db/embed.js", () => ({
 import { runMigrations } from "../db/migrate.js";
 import { pool } from "../db/pool.js";
 import { createInterview, appendMessage, getInterview } from "./repo.js";
-import { runTurn, MAX_QUESTIONS } from "./engine.js";
+import { runTurn, finishTurn, MAX_QUESTIONS } from "./engine.js";
 import type { LlmClient } from "../llm/complete.js";
 import type { ResearchClient } from "./research.js";
 
@@ -261,13 +261,32 @@ d("interview engine", () => {
     await expect(runTurn(iv, fake(["bad", "still bad"]))).rejects.toThrow();
   });
 
-  it("forces a finish directive at the question cap and rejects further asking", async () => {
-    let iv = await createInterview({ topic: "refunds" });
+  it("completes the interview at the question cap instead of stranding it", async () => {
+    let iv = await createInterview({ topic: "refunds", owner: "Sam" });
     for (let i = 0; i < MAX_QUESTIONS; i++) {
       iv = await appendMessage(iv.id, { role: "brian", content: `q${i}` });
     }
-    const llm = fake([turn()]);
-    await expect(runTurn((await getInterview(iv.id))!, llm)).rejects.toThrow(/max questions/);
+    const llm = fake([turn({ status: "ready", draft: goodDraft })]);
+    const out = await runTurn((await getInterview(iv.id))!, llm);
+    expect(out.status).toBe("ready");
+    expect(out.draft?.name).toBe("Refund Handling");
     expect(promptsOf(llm)[0].user).toMatch(/finish now/i);
+  });
+
+  it("finishTurn lets the expert wrap up early with a complete draft", async () => {
+    const iv = await started("refunds", "Sam");
+    const llm = fake([turn({ status: "ready", draft: goodDraft })]);
+    const out = await finishTurn(iv, llm);
+    expect(out.status).toBe("ready");
+    expect(out.draft?.owner).toBe("Sam");
+    // finishTurn asks the parser to close out now, never the interviewer.
+    expect(promptsOf(llm)).toHaveLength(1);
+    expect(promptsOf(llm)[0].user).toMatch(/finish now/i);
+  });
+
+  it("finishTurn rejects a draft too thin to become a skill", async () => {
+    const iv = await started("refunds");
+    const llm = fake([turn({ status: "ready", draft: { ...goodDraft, name: "" } })]);
+    await expect(finishTurn(iv, llm)).rejects.toThrow();
   });
 });

@@ -359,6 +359,51 @@ async function speak(
   }
 }
 
+// Completes the interview from whatever the parser has: validates the draft,
+// stores the evidence, and marks the interview ready. parseNewSkill throws a
+// ValidationError when the draft is too thin to become a skill, which callers
+// surface instead of stranding the expert.
+async function persistReady(
+  iv: Interview, parsed: z.infer<typeof turnSchema>, evidence: InterviewEvidence[],
+  warnings: string[], p?: TenantTransactionSource,
+): Promise<Interview> {
+  const raw = (parsed.draft ?? {}) as Record<string, unknown>;
+  const completeDraft = parseNewSkill({ ...raw, owner: raw.owner ?? iv.owner ?? null });
+  const draft: SkillDraft = {
+    name: completeDraft.name,
+    trigger: completeDraft.trigger,
+    inputs: completeDraft.inputs,
+    principles: completeDraft.principles ?? [],
+    procedure: completeDraft.procedure,
+    hard_rules: completeDraft.hard_rules,
+    tools: completeDraft.tools,
+    guardrails: completeDraft.guardrails,
+    escalation_target: completeDraft.escalation_target,
+    quality_checks: completeDraft.quality_checks ?? [],
+    examples: completeDraft.examples,
+    sources: completeDraft.sources ?? [],
+    owner: completeDraft.owner,
+  };
+  return withTenantTransaction(async (client) => {
+    await replaceInterviewEvidence(iv.id, evidence, client);
+    return setTurnResult(iv.id, {
+      coverage: parsed.coverage, draft, ready: true,
+      assumptions: parsed.assumptions, warnings,
+    }, client);
+  }, p);
+}
+
+// The expert's own "we're done". The readiness gate stops the model from
+// finishing early; it must never stop the person being interviewed, so this
+// synthesizes a final draft from the conversation on demand.
+export async function finishTurn(
+  iv: Interview, llm: LlmClient = defaultLlm(), p?: TenantTransactionSource,
+  sources: InterviewSource[] = [],
+): Promise<Interview> {
+  const parsed = await completeTurn(llm, buildUser(iv, true, sources));
+  return persistReady(iv, parsed, parsed.evidence as InterviewEvidence[], parsed.warnings, p);
+}
+
 export async function runTurn(
   iv: Interview, llm: LlmClient = defaultLlm(), p?: TenantTransactionSource,
   sources: InterviewSource[] = [],
@@ -401,36 +446,11 @@ export async function runTurn(
     if (issues.length > 0) parsed = { ...parsed, status: "asking" };
   }
 
-  if (parsed.status === "ready") {
-    const raw = (draft ?? {}) as Record<string, unknown>;
-    const completeDraft = parseNewSkill({ ...raw, owner: raw.owner ?? iv.owner ?? null });
-    draft = {
-      name: completeDraft.name,
-      trigger: completeDraft.trigger,
-      inputs: completeDraft.inputs,
-      principles: completeDraft.principles ?? [],
-      procedure: completeDraft.procedure,
-      hard_rules: completeDraft.hard_rules,
-      tools: completeDraft.tools,
-      guardrails: completeDraft.guardrails,
-      escalation_target: completeDraft.escalation_target,
-      quality_checks: completeDraft.quality_checks ?? [],
-      examples: completeDraft.examples,
-      sources: completeDraft.sources ?? [],
-      owner: completeDraft.owner,
-    };
-    return withTenantTransaction(
-      async (client) => {
-        await replaceInterviewEvidence(iv.id, evidence, client);
-        return setTurnResult(iv.id, {
-          coverage: parsed.coverage, draft: draft!, ready: true,
-          assumptions: parsed.assumptions, warnings,
-        }, client);
-      },
-      p,
-    );
+  // forceFinish means the question cap was reached, so the interview completes
+  // on this turn either way: it must never strand the expert mid-conversation.
+  if (parsed.status === "ready" || forceFinish) {
+    return persistReady(iv, parsed, evidence, warnings, p);
   }
-  if (forceFinish) throw new Error("interview exceeded max questions");
   const gaps: ReadinessIssue[] = issues.length > 0 ? issues : COMPONENTS
     .filter((component) => parsed.coverage[component].status === "missing")
     .map((component) => ({ component, detail: `${component} is still missing` }));

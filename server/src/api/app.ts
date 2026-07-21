@@ -30,7 +30,7 @@ import {
   createInterview, getInterview, listInterviews, appendMessage as appendInterviewMessage,
   completeInterview, abandonInterview, resumeInterview, startInterview,
 } from "../interviews/repo.js";
-import { runTurn } from "../interviews/engine.js";
+import { runTurn, finishTurn } from "../interviews/engine.js";
 import { defaultResearchClient, type ResearchClient } from "../interviews/research.js";
 import type { SourceContext } from "../interviews/types.js";
 import {
@@ -1439,6 +1439,15 @@ export function buildApp(opts: AppOptions = {}): App {
     return c.json(await runTurn(
       withMsg, llm(), undefined, await listInterviewSources(iv.id), research(),
     ));
+  });
+
+  // Lets the expert end the interview themselves and get a draft to review,
+  // even when the readiness gate would keep asking.
+  app.post("/api/interviews/:id/finish", async (c) => {
+    const iv = await getInterview(c.req.param("id"));
+    if (!iv) return c.json({ error: "interview not found" }, 404);
+    if (iv.status !== "active") return c.json({ error: `interview is ${iv.status}` }, 400);
+    return c.json(await finishTurn(iv, llm(), undefined, await listInterviewSources(iv.id)));
   });
 
   app.post("/api/interviews/:id/approve", async (c) => {
