@@ -110,7 +110,10 @@ const principalStore: PrincipalStore = {
 
 const supabaseFetch = async (_input: string | URL | Request, init?: RequestInit) => {
   const bearer = new Headers(init?.headers).get("authorization")?.replace(/^Bearer /, "");
-  const userId = bearer === FOUNDING_TOKEN ? FOUNDING_USER : bearer === ACME_TOKEN ? ACME_USER : null;
+  const userId = bearer === FOUNDING_TOKEN ? FOUNDING_USER
+    : bearer === ACME_TOKEN ? ACME_USER
+    : bearer === VIEWER_TOKEN ? VIEWER_USER
+    : null;
   return userId
     ? new Response(JSON.stringify({ id: userId, email: `${userId}@example.test` }))
     : new Response("{}", { status: 401 });

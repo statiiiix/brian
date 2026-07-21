@@ -1702,8 +1702,14 @@ export function buildApp(opts: AppOptions = {}): App {
     const body = await jsonBody(c);
     try {
       return c.json(await sync(type, typeof body?.focus === "string" ? body.focus.trim() : undefined));
-    } catch {
-      return c.json({ error: "connector sync failed" }, 400);
+    } catch (e) {
+      // Surface the one caller-fixable cause; everything else stays generic so
+      // provider errors cannot leak through the API.
+      const message = e instanceof Error ? e.message : "";
+      return c.json(
+        { error: message === `connector ${type} is not configured` ? message : "connector sync failed" },
+        400,
+      );
     }
   });
 

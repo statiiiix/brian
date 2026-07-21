@@ -11,6 +11,7 @@ const TENANT_TABLES = [
   "executions", "users", "interviews", "connectors", "evidence", "api_tokens", "oauth_states",
   "tenant_memberships", "agent_connections", "tenant_invitations",
   "security_audit_events", "onboarding_state", "data_deletion_requests",
+  "interview_sources", "interview_evidence",
 ];
 
 d("migration 007: RLS backstop (brian_app role + tenant_isolation policies)", () => {

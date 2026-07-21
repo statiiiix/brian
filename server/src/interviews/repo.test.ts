@@ -41,7 +41,7 @@ d("interviews repo", () => {
     expect(got.messages[1].at).toBeTruthy();
   });
 
-  it("setTurnResult stores coverage, and draft flips status to ready", async () => {
+  it("setTurnResult stores a living draft while asking, and ready flips status", async () => {
     const iv = await createInterview({ topic: "refunds" });
     const asking = await setTurnResult(iv.id, {
       coverage: { ...EMPTY_COVERAGE, trigger: true },
@@ -49,11 +49,15 @@ d("interviews repo", () => {
     expect(asking.status).toBe("active");
     expect(asking.coverage.trigger).toBe(true);
 
-    const ready = await setTurnResult(iv.id, {
-      coverage: { trigger: true, inputs: true, procedure: true, hard_rules: true,
-        guardrails: true, escalation_target: true, examples: true },
-      draft,
-    });
+    const full = { trigger: true, inputs: true, procedure: true, hard_rules: true,
+      guardrails: true, escalation_target: true, examples: true };
+    // The engine persists a draft on every turn, so a draft alone must not
+    // complete the interview — only an explicit ready does.
+    const drafting = await setTurnResult(iv.id, { coverage: full, draft });
+    expect(drafting.status).toBe("active");
+    expect(drafting.draft?.name).toBe("Refund Handling");
+
+    const ready = await setTurnResult(iv.id, { coverage: full, draft, ready: true });
     expect(ready.status).toBe("ready");
     expect(ready.draft?.name).toBe("Refund Handling");
   });
