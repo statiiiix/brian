@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+
 export interface GmailConfig {
   clientId: string;
   clientSecret: string;

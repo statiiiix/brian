@@ -30,6 +30,13 @@ d("migration 006: connectors + evidence", () => {
     ).rejects.toThrow(); // (founding, '__t006a') already exists
   });
 
+  it("applies migration 017 in the isolated test schema with safe settings defaults", async () => {
+    const { rows } = await pool.query(
+      "insert into connectors (type) values ('__t006settings') returning settings",
+    );
+    expect(rows[0].settings).toEqual({});
+  });
+
   it("evidence dedupes on (tenant, connector, thread_id)", async () => {
     const c = (await pool.query("insert into connectors (type) values ('__t006b') returning id")).rows[0].id;
     await pool.query(

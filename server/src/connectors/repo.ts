@@ -3,7 +3,7 @@ import { toVectorLiteral } from "../db/vector.js";
 import type { ConnectorRow, EvidenceKind, EvidenceRow, SourceType } from "./types.js";
 import { decryptStoredCredentials, encryptStoredCredentials } from "./credentials.js";
 
-const C_COLS = `id, tenant_id, type, status, credentials, cursor, last_synced_at, last_error, created_at, updated_at`;
+const C_COLS = `id, tenant_id, type, status, credentials, settings, cursor, last_synced_at, last_error, created_at, updated_at`;
 const E_COLS = `id, tenant_id, connector_id, source_ref, kind, summary, raw_snippet, confidence,
   promoted_to_kind, promoted_to_id, created_at`;
 
@@ -27,6 +27,7 @@ export async function upsertConnector(
   patch: {
     status?: string;
     credentials?: unknown;
+    settings?: unknown;
     cursor?: unknown;
     last_error?: string | null;
     last_synced_at?: string | null;
@@ -37,21 +38,40 @@ export async function upsertConnector(
     ? JSON.stringify(await encryptStoredCredentials(patch.credentials))
     : null;
   const cursor = patch.cursor !== undefined ? JSON.stringify(patch.cursor) : null;
+  const settings = patch.settings !== undefined ? JSON.stringify(patch.settings) : null;
   const { rows } = await p.query(
-    `insert into connectors (tenant_id, type, status, credentials, cursor, last_error, last_synced_at)
-     values ($1,$2, coalesce($3,'disabled'), coalesce($4::jsonb,'{}'), coalesce($5::jsonb,'{}'), $6, $7)
+    `insert into connectors (tenant_id, type, status, credentials, settings, cursor, last_error, last_synced_at)
+     values ($1,$2, coalesce($3,'disabled'), coalesce($4::jsonb,'{}'), coalesce($5::jsonb,'{}'), coalesce($6::jsonb,'{}'), $7, $8)
      on conflict (tenant_id, type) do update set
        status         = coalesce($3, connectors.status),
        credentials    = coalesce($4::jsonb, connectors.credentials),
-       cursor         = coalesce($5::jsonb, connectors.cursor),
-       last_error     = $6,
-       last_synced_at = coalesce($7, connectors.last_synced_at),
+       settings       = coalesce($5::jsonb, connectors.settings),
+       cursor         = coalesce($6::jsonb, connectors.cursor),
+       last_error     = $7,
+       last_synced_at = coalesce($8, connectors.last_synced_at),
        updated_at     = now()
      returning ${C_COLS}`,
-    [tenantOrFounding(), type, patch.status ?? null, creds, cursor,
+    [tenantOrFounding(), type, patch.status ?? null, creds, settings, cursor,
      patch.last_error ?? null, patch.last_synced_at ?? null],
   );
   return rows[0] as ConnectorRow;
+}
+
+// A sync captures the row before its provider call. Persist its checkpoint only
+// if that same tenant-owned connector remains connected when the call finishes.
+export async function persistConnectorSync(
+  id: string,
+  type: SourceType,
+  patch: { cursor: unknown; last_synced_at: string; last_error: null },
+  p: Queryable = db(),
+): Promise<boolean> {
+  const { rowCount } = await p.query(
+    `update connectors
+        set cursor=$3::jsonb, last_synced_at=$4, last_error=$5, updated_at=now()
+      where tenant_id=$1 and id=$2 and type=$6 and status='connected'`,
+    [tenantOrFounding(), id, JSON.stringify(patch.cursor), patch.last_synced_at, patch.last_error, type],
+  );
+  return rowCount === 1;
 }
 
 // Insert an evidence row; returns null when the thread is already recorded

@@ -14,7 +14,8 @@ export class NotFoundError extends Error {
 }
 
 const SKILL_COLUMNS = `id, name, trigger, inputs, procedure, hard_rules, tools,
-  guardrails, escalation_target, examples, owner, status, version,
+  guardrails, escalation_target, examples, principles, quality_checks, sources,
+  owner, status, version,
   last_reviewed_at, created_at, updated_at`;
 
 function iso(v: Date | null): string | null {
@@ -33,6 +34,9 @@ function rowToSkill(r: any): Skill {
     guardrails: r.guardrails,
     escalation_target: r.escalation_target,
     examples: r.examples,
+    principles: r.principles ?? [],
+    quality_checks: r.quality_checks ?? [],
+    sources: r.sources ?? [],
     owner: r.owner,
     status: r.status,
     version: r.version,
@@ -42,8 +46,8 @@ function rowToSkill(r: any): Skill {
   };
 }
 
-function embedText(s: Pick<Skill, "name" | "trigger" | "procedure">): string {
-  return `${s.name}\n${s.trigger}\n${s.procedure}`;
+function embedText(s: Pick<Skill, "name" | "trigger" | "procedure" | "principles">): string {
+  return `${s.name}\n${s.trigger}\n${(s.principles ?? []).join("\n")}\n${s.procedure}`;
 }
 
 export async function createSkill(input: NewSkill, p: Queryable = db()): Promise<Skill> {
@@ -52,14 +56,17 @@ export async function createSkill(input: NewSkill, p: Queryable = db()): Promise
   const { rows } = await p.query(
     `insert into skills
       (name, trigger, inputs, procedure, hard_rules, tools, guardrails,
-       escalation_target, examples, owner, status, version, embedding, tenant_id)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'draft',1,$11::vector,$12)
+       escalation_target, examples, principles, quality_checks, sources, owner,
+       status, version, embedding, tenant_id)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft',1,$14::vector,$15)
      returning ${SKILL_COLUMNS}`,
     [
       input.name, input.trigger, JSON.stringify(input.inputs), input.procedure,
       JSON.stringify(input.hard_rules), JSON.stringify(input.tools),
       JSON.stringify(input.guardrails), input.escalation_target,
-      JSON.stringify(input.examples), input.owner, vec, tenant,
+      JSON.stringify(input.examples), JSON.stringify(input.principles ?? []),
+      JSON.stringify(input.quality_checks ?? []), JSON.stringify(input.sources ?? []),
+      input.owner, vec, tenant,
     ]
   );
   return rowToSkill(rows[0]);
@@ -123,22 +130,26 @@ export async function updateSkill(
 
     const next = { ...cur, ...patch } as Skill;
     const reembed =
-      patch.name !== undefined || patch.trigger !== undefined || patch.procedure !== undefined;
+      patch.name !== undefined || patch.trigger !== undefined || patch.procedure !== undefined
+      || patch.principles !== undefined;
     const vec = reembed ? toVectorLiteral(await embed(embedText(next))) : null;
 
     const { rows } = await client.query(
       `update skills set
          name=$2, trigger=$3, inputs=$4, procedure=$5, hard_rules=$6, tools=$7,
          guardrails=$8, escalation_target=$9, examples=$10, owner=$11,
+         principles=$12, quality_checks=$13, sources=$14,
          version=version+1, updated_at=now(),
-         embedding = coalesce($12::vector, embedding)
-       where id=$1 and tenant_id=$13
+         embedding = coalesce($15::vector, embedding)
+       where id=$1 and tenant_id=$16
        returning ${SKILL_COLUMNS}`,
       [
         id, next.name, next.trigger, JSON.stringify(next.inputs), next.procedure,
         JSON.stringify(next.hard_rules), JSON.stringify(next.tools),
         JSON.stringify(next.guardrails), next.escalation_target,
-        JSON.stringify(next.examples), next.owner, vec, tenant,
+        JSON.stringify(next.examples), next.owner,
+        JSON.stringify(next.principles ?? []), JSON.stringify(next.quality_checks ?? []),
+        JSON.stringify(next.sources ?? []), vec, tenant,
       ]
     );
     return rowToSkill(rows[0]);

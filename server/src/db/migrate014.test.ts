@@ -199,8 +199,8 @@ d("migration 014: privacy deletion lifecycle", () => {
 
   it("makes company scheduling owner-only, suspends access, erases connectors, and cancels without restoration", async () => {
     await pool.query(
-      `insert into connectors (tenant_id,type,status,credentials,cursor)
-       values ($1,'__m014','connected','{"refresh_token":"secret"}','{"cursor":"secret"}')`,
+      `insert into connectors (tenant_id,type,status,credentials,settings,cursor)
+       values ($1,'__m014','connected','{"refresh_token":"secret"}','{"selected_page_ids":["secret"]}','{"cursor":"secret"}')`,
       [TENANT_A],
     );
     await pool.query(
@@ -229,9 +229,13 @@ d("migration 014: privacy deletion lifecycle", () => {
     expect((await pool.query("select status from tenants where id=$1", [TENANT_A])).rows[0].status)
       .toBe("suspended");
     expect((await pool.query(
-      "select status,credentials,cursor from connectors where tenant_id=$1",
+      "select status,credentials,settings,cursor from connectors where tenant_id=$1",
       [TENANT_A],
-    )).rows[0]).toEqual({ status: "disabled", credentials: {}, cursor: {} });
+    )).rows[0]).toEqual({ status: "disabled", credentials: {}, settings: {}, cursor: {} });
+    await expect(pool.query(
+      "update connectors set settings=$2::jsonb where tenant_id=$1",
+      [TENANT_A, JSON.stringify({ selected_page_ids: ["blocked"] })],
+    )).rejects.toMatchObject({ constraint: "company_deletion_pending" });
     expect((await pool.query(
       "select revoked_at is not null as revoked from api_tokens where label='__m014-company'",
     )).rows[0].revoked).toBe(true);
@@ -252,12 +256,35 @@ d("migration 014: privacy deletion lifecycle", () => {
     expect((await pool.query("select status from tenants where id=$1", [TENANT_A])).rows[0].status)
       .toBe("active");
     expect((await pool.query(
-      "select status,credentials,cursor from connectors where tenant_id=$1",
+      "select status,credentials,settings,cursor from connectors where tenant_id=$1",
       [TENANT_A],
-    )).rows[0]).toEqual({ status: "disabled", credentials: {}, cursor: {} });
+    )).rows[0]).toEqual({ status: "disabled", credentials: {}, settings: {}, cursor: {} });
     expect((await pool.query(
       "select status from agent_connections where oauth_client_id='__m014-company-client'",
     )).rows[0].status).toBe("revoked");
+  });
+
+  it("erases settings when company deletion starts from an already-disabled connector", async () => {
+    await pool.query(
+      `insert into connectors (tenant_id,type,status,credentials,settings,cursor)
+       values ($1,'__m014-terminal','disabled','{}','{}','{}')`,
+      [TENANT_A],
+    );
+    // While active, a legacy terminal row can still contain stale selections.
+    await pool.query(
+      "update connectors set settings=$2::jsonb where tenant_id=$1 and type='__m014-terminal'",
+      [TENANT_A, JSON.stringify({ selected_page_ids: ["stale-page"] })],
+    );
+    expect((await pool.query(
+      "select settings from connectors where tenant_id=$1 and type='__m014-terminal'", [TENANT_A],
+    )).rows[0].settings).toEqual({ selected_page_ids: ["stale-page"] });
+
+    await asUser(OWNER, (client) => client.query(
+      "select * from request_data_deletion($1,$2,'company',30)", [OWNER, TENANT_A],
+    ));
+    expect((await pool.query(
+      "select status,credentials,settings,cursor from connectors where tenant_id=$1 and type='__m014-terminal'", [TENANT_A],
+    )).rows[0]).toEqual({ status: "disabled", credentials: {}, settings: {}, cursor: {} });
   });
 
   it("keeps the table private, uses fixed function paths, and forbids runtime status mutation", async () => {

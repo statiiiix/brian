@@ -1,23 +1,42 @@
 import { db, tenantOrFounding, type Queryable } from "../db/tenant.js";
 import { NotFoundError } from "../skills/repo.js";
 import type { NewSkill } from "../skills/types.js";
-import { EMPTY_COVERAGE, type Coverage, type Interview, type InterviewMessage } from "./types.js";
+import {
+  legacyCoverageFromAdaptive, normalizeCoverage, type CoverageInput, type Interview,
+  type InterviewMessage, type SkillDraft, type SourceContext,
+} from "./types.js";
 
-const COLS = `id, topic, owner, status, messages, coverage, draft,
+const COLS = `id, topic, owner, status, messages, coverage, draft, source_context, assumptions, warnings,
   resulting_skill_id, created_by, created_at, updated_at`;
 
 function hydrate(row: Record<string, unknown>): Interview {
   const iv = row as unknown as Interview;
-  return { ...iv, coverage: { ...EMPTY_COVERAGE, ...(iv.coverage ?? {}) } };
+  const componentCoverage = normalizeCoverage((row.coverage ?? {}) as CoverageInput);
+  return {
+    ...iv,
+    coverage: legacyCoverageFromAdaptive(componentCoverage),
+    component_coverage: componentCoverage,
+    assumptions: iv.assumptions ?? [],
+    warnings: iv.warnings ?? [],
+  };
 }
 
 export async function createInterview(
-  input: { topic: string; owner?: string | null; created_by?: string | null },
+  input: {
+    topic: string;
+    owner?: string | null;
+    created_by?: string | null;
+    source_context?: SourceContext | null;
+    status?: "preparing" | "active";
+  },
   p: Queryable = db()
 ): Promise<Interview> {
   const { rows } = await p.query(
-    `insert into interviews (topic, owner, created_by, tenant_id) values ($1,$2,$3,$4) returning ${COLS}`,
-    [input.topic, input.owner ?? null, input.created_by ?? null, tenantOrFounding()]
+    `insert into interviews (topic, owner, created_by, source_context, status, tenant_id)
+     values ($1,$2,$3,$4::jsonb,$5,$6) returning ${COLS}`,
+    [input.topic, input.owner ?? null, input.created_by ?? null,
+     input.source_context ? JSON.stringify(input.source_context) : null,
+     input.status ?? "active", tenantOrFounding()]
   );
   return hydrate(rows[0]);
 }
@@ -54,16 +73,34 @@ export async function appendMessage(
 }
 
 export async function setTurnResult(
-  id: string, result: { coverage: Coverage; draft?: NewSkill }, p: Queryable = db()
+  id: string,
+  result: {
+    coverage: CoverageInput;
+    draft?: SkillDraft | NewSkill;
+    ready?: boolean;
+    assumptions?: string[];
+    warnings?: string[];
+  },
+  p: Queryable = db()
 ): Promise<Interview> {
   await mustGet(id, p);
   const { rows } = await p.query(
     `update interviews set coverage = $2::jsonb,
        draft = coalesce($3::jsonb, draft),
-       status = case when $3::jsonb is not null then 'ready' else status end,
+       status = case when $4::boolean then 'ready' else status end,
+       assumptions = coalesce($5::jsonb, assumptions),
+       warnings = coalesce($6::jsonb, warnings),
        updated_at = now()
-     where id = $1 and tenant_id = $4 returning ${COLS}`,
-    [id, JSON.stringify(result.coverage), result.draft ? JSON.stringify(result.draft) : null, tenantOrFounding()]
+     where id = $1 and tenant_id = $7 returning ${COLS}`,
+    [
+      id,
+      JSON.stringify(result.coverage),
+      result.draft ? JSON.stringify(result.draft) : null,
+      result.ready === true,
+      result.assumptions ? JSON.stringify(result.assumptions) : null,
+      result.warnings ? JSON.stringify(result.warnings) : null,
+      tenantOrFounding(),
+    ]
   );
   return hydrate(rows[0]);
 }
@@ -93,5 +130,16 @@ export async function resumeInterview(id: string, p: Queryable = db()): Promise<
   const { rows } = await p.query(
     `update interviews set status = 'active', updated_at = now()
      where id = $1 and tenant_id = $2 returning ${COLS}`, [id, tenantOrFounding()]);
+  return hydrate(rows[0]);
+}
+
+export async function startInterview(id: string, p: Queryable = db()): Promise<Interview> {
+  await mustGet(id, p);
+  const { rows } = await p.query(
+    `update interviews set status = 'active', updated_at = now()
+     where id = $1 and tenant_id = $2 and status = 'preparing' returning ${COLS}`,
+    [id, tenantOrFounding()],
+  );
+  if (!rows[0]) throw new Error(`interview ${id} is not preparing`);
   return hydrate(rows[0]);
 }

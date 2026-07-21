@@ -28,14 +28,32 @@ import {
 } from "../config/operationalFlags.js";
 import {
   createInterview, getInterview, listInterviews, appendMessage as appendInterviewMessage,
-  completeInterview, abandonInterview, resumeInterview,
+  completeInterview, abandonInterview, resumeInterview, startInterview,
 } from "../interviews/repo.js";
 import { runTurn } from "../interviews/engine.js";
+import { defaultResearchClient, type ResearchClient } from "../interviews/research.js";
+import type { SourceContext } from "../interviews/types.js";
+import {
+  addConnectorSources, countInterviewUploads, createUploadSource, listInterviewSources,
+  markSourceFailed, markSourceReady, uploadSourceIdempotencyKey,
+} from "../interviews/sources.js";
+import { extractInterviewFile, type ExtractionInput } from "../interviews/extractors.js";
+import {
+  MAX_INTERVIEW_FILE_BYTES, MAX_INTERVIEW_UPLOADS,
+  UploadValidationError, validateInterviewUpload,
+} from "../interviews/uploads.js";
+import { defaultImageAnalyzer, type ImageAnalyzer } from "../llm/images.js";
+import {
+  fetchSelectionContext, SelectionContentError, supportsSelectionContent,
+  type SourceSelection,
+} from "../connectors/selectionContent.js";
 import { defaultLlm, type LlmClient } from "../llm/complete.js";
-import { listConnectors, upsertConnector, evidenceForDraft, unpromotedEvidence } from "../connectors/repo.js";
+import { getConnector, listConnectors, upsertConnector, evidenceForDraft, unpromotedEvidence } from "../connectors/repo.js";
 import { syncConnector, type SyncSummary } from "../connectors/sync.js";
-import { CONNECTOR_TYPES } from "../connectors/adapters/index.js";
+import { CONNECTOR_TYPES, isSyncableType } from "../connectors/adapters/index.js";
 import { AUTHORIZED_SOURCE_TYPES, type ConnectorType, type ConnectorRow, type SourceType } from "../connectors/types.js";
+import { parseNotionSettings, publicNotionSettings } from "../connectors/notionSettings.js";
+import { discoverNotionBoundaries, revokeNotionToken, type NotionBoundaryDiscovery } from "../connectors/adapters/sources/notion.js";
 import {
   consumeOAuthState, createOAuthState, exchangeGoogleCode,
   googleAuthorizationUrl, googleOAuthConfig,
@@ -44,7 +62,7 @@ import { exchangeSlackCode, slackAuthorizationUrl, slackOAuthConfig } from "../c
 import {
   buildOAuthAuthorizationUrl, callbackMatchesProvider, exchangeOAuthCode,
   getOAuthProviderSpec, isGenericOAuthProvider, oauthProviderAvailability as genericOAuthProviderAvailability,
-  oauthProviderConfig,
+  oauthProviderConfig, type OAuthProviderConfig,
 } from "../connectors/oauthProviders.js";
 import { createRouteAuth, type AuthEnv } from "../auth/middleware.js";
 import { MCP_OAUTH_SCOPES, MCP_RESOURCE, oauthChallenge } from "../auth/constants.js";
@@ -126,13 +144,52 @@ export interface AppOptions {
   signupPreflightRateLimits?: McpRateLimitOptions | false;
   httpLogSink?: HttpLogSink | false;
   llm?: LlmClient;
-  sync?: (type: ConnectorType, focus?: string) => Promise<SyncSummary>;
+  sync?: (type: SourceType, focus?: string) => Promise<SyncSummary>;
+  selectionContext?: (type: SourceType, selection?: SourceSelection) => Promise<SourceContext>;
+  imageAnalyzer?: ImageAnalyzer;
+  fileExtractor?: (input: ExtractionInput) => Promise<string>;
+  researchClient?: ResearchClient;
+  notionFetch?: typeof fetch;
+  notionDiscovery?: (credentials: Record<string, unknown>) => Promise<NotionBoundaryDiscovery>;
+  notionOAuthConfig?: () => Promise<Pick<OAuthProviderConfig, "clientId" | "clientSecret"> | null>;
+  notionRevoke?: (accessToken: string, config: Pick<OAuthProviderConfig, "clientId" | "clientSecret">) => Promise<void>;
 }
 
-// Never expose stored connector credentials over the API.
-function publicConnector(c: ConnectorRow): Omit<ConnectorRow, "credentials"> & { configured: boolean } {
-  const { credentials, ...rest } = c;
-  return { ...rest, configured: Object.keys(credentials ?? {}).length > 0 };
+export interface PublicConnector {
+  id: string;
+  type: SourceType;
+  status: string;
+  configured: boolean;
+  settings: ReturnType<typeof publicNotionSettings>;
+  selection_ready: boolean;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Never expose stored connector credentials, cursors, errors, or tenant IDs.
+export function publicConnector(c: ConnectorRow): PublicConnector {
+  const safeSettings = c.type === "notion" ? publicNotionSettings(c.settings)
+    : { selected_page_ids: [], selected_data_source_ids: [] };
+  const selectionReady = c.type !== "notion"
+    || safeSettings.selected_page_ids.length + safeSettings.selected_data_source_ids.length > 0;
+  return {
+    id: c.id,
+    type: c.type,
+    status: c.status,
+    configured: c.status === "connected" && Object.keys(c.credentials ?? {}).length > 0,
+    settings: safeSettings,
+    selection_ready: selectionReady,
+    last_synced_at: c.last_synced_at,
+    created_at: c.created_at,
+    updated_at: c.updated_at,
+  };
+}
+
+export function oauthReconnectPatch(provider: string, credentials: Record<string, unknown>) {
+  return provider === "notion"
+    ? { status: "connected", credentials, settings: {}, cursor: {} }
+    : { status: "connected", credentials };
 }
 
 async function oauthProviderAvailability() {
@@ -340,6 +397,12 @@ export function buildApp(opts: AppOptions = {}): App {
     maxKeys: signupRateLimitOptions.maxKeys
       ?? positiveIntegerEnv("SIGNUP_PREFLIGHT_RATE_LIMIT_MAX_KEYS", 10_000, 1_000_000),
   }) : null;
+  const notionDiscovery = opts.notionDiscovery
+    ?? ((credentials: Record<string, unknown>) => discoverNotionBoundaries(credentials, opts.notionFetch ?? fetch));
+  const notionOAuthConfig = opts.notionOAuthConfig ?? (() => oauthProviderConfig("notion"));
+  const notionRevoke = opts.notionRevoke
+    ?? ((accessToken: string, config: Pick<OAuthProviderConfig, "clientId" | "clientSecret">) =>
+      revokeNotionToken(accessToken, config, opts.notionFetch ?? fetch));
 
   app.use("*", async (c, next) => {
     // Never copy a caller-controlled correlation header into operational or
@@ -462,6 +525,9 @@ export function buildApp(opts: AppOptions = {}): App {
         code: "account_deletion_pending",
       }, 409);
     }
+    // The response stays generic, but an unhandled failure must leave a trace
+    // in the deployment's logs — a silent 500 is undebuggable in production.
+    console.error("unhandled api error", c.req.method, new URL(c.req.url).pathname, err);
     return c.json({ error: "internal error" }, 500);
   });
 
@@ -1190,15 +1256,66 @@ export function buildApp(opts: AppOptions = {}): App {
     c.json(await listContextVersions(c.req.param("id"))));
 
   const llm = () => opts.llm ?? defaultLlm();
-  const sync = opts.sync ?? ((type: ConnectorType, focus?: string) => syncConnector(type, { focus }));
+  const research = () => opts.researchClient ?? defaultResearchClient();
+  const sync = opts.sync ?? ((type: SourceType, focus?: string) => syncConnector(type, { focus }));
+  const selectionContext = opts.selectionContext
+    ?? ((type: SourceType, selection?: SourceSelection) =>
+      fetchSelectionContext(type, opts.notionFetch ?? fetch, selection));
+
+  function sourceSelection(value: unknown): SourceSelection | undefined {
+    if (value === undefined) return undefined;
+    if (!value || typeof value !== "object") throw new Error("invalid source selection");
+    const candidate = value as Partial<SourceSelection>;
+    const pages = candidate.selected_page_ids ?? [];
+    const dataSources = candidate.selected_data_source_ids ?? [];
+    if (!Array.isArray(pages) || !Array.isArray(dataSources)
+        || [...pages, ...dataSources].some((id) => typeof id !== "string" || !id.trim())
+        || pages.length + dataSources.length === 0
+        || pages.length + dataSources.length > 20) {
+      throw new Error("invalid source selection");
+    }
+    return {
+      selected_page_ids: [...new Set(pages.map((id) => id.trim()))],
+      selected_data_source_ids: [...new Set(dataSources.map((id) => id.trim()))],
+    };
+  }
 
   app.post("/api/interviews", async (c) => {
-    const { topic, owner } = ((await jsonBody(c)) ?? {}) as { topic?: string; owner?: string };
-    if (!topic?.trim()) return c.json({ error: "topic is required" }, 400);
+    const { topic, owner, source, defer_start: deferStart } = ((await jsonBody(c)) ?? {}) as {
+      topic?: string;
+      owner?: string;
+      source?: { connector?: string; selection?: unknown };
+      defer_start?: boolean;
+    };
+    // A grounded interview snapshots the connected source's selected content
+    // so the interviewer infers the draft first and asks only about gaps.
+    let sourceContext: SourceContext | null = null;
+    if (source !== undefined) {
+      const connector = source?.connector;
+      if (typeof connector !== "string" || !supportsSelectionContent(connector)) {
+        return c.json({ error: "unsupported interview source" }, 400);
+      }
+      try {
+        sourceContext = await selectionContext(connector, sourceSelection(source?.selection));
+      } catch (e) {
+        if (e instanceof Error && e.message === "invalid source selection") {
+          return c.json({ error: "invalid source selection" }, 400);
+        }
+        if (e instanceof SelectionContentError) return c.json({ error: e.code }, 409);
+        return c.json({ error: "source content unavailable" }, 502);
+      }
+    }
+    const derivedTopic = topic?.trim() || (sourceContext
+      ? `${sourceContext.source_type} skill: ${sourceContext.documents.map((d) => d.title).slice(0, 3).join(", ")}`.slice(0, 200)
+      : "");
+    if (!derivedTopic) return c.json({ error: "topic is required" }, 400);
     const iv = await createInterview({
-      topic: topic.trim(), owner: owner ?? null, created_by: c.get("user")?.id ?? null,
+      topic: derivedTopic, owner: owner ?? null, created_by: c.get("user")?.id ?? null,
+      source_context: sourceContext, status: deferStart === true ? "preparing" : "active",
     });
-    return c.json(await runTurn(iv, llm()), 201);
+    const sources = sourceContext ? await addConnectorSources(iv.id, sourceContext) : [];
+    if (deferStart === true) return c.json(iv, 201);
+    return c.json(await runTurn(iv, llm(), undefined, sources, research()), 201);
   });
 
   app.get("/api/interviews", async (c) => c.json(await listInterviews()));
@@ -1207,6 +1324,107 @@ export function buildApp(opts: AppOptions = {}): App {
     const iv = await getInterview(c.req.param("id"));
     if (!iv) return c.json({ error: "interview not found" }, 404);
     return c.json(iv);
+  });
+
+  app.get("/api/interviews/:id/sources", async (c) => {
+    const iv = await getInterview(c.req.param("id"));
+    if (!iv) return c.json({ error: "interview not found" }, 404);
+    return c.json(await listInterviewSources(iv.id));
+  });
+
+  app.post("/api/interviews/:id/sources/connector", async (c) => {
+    const iv = await getInterview(c.req.param("id"));
+    if (!iv) return c.json({ error: "interview not found" }, 404);
+    if (iv.status !== "preparing" && iv.status !== "active") {
+      return c.json({ error: `interview is ${iv.status}` }, 400);
+    }
+    const body = await jsonBody(c);
+    const connector = body?.connector;
+    if (typeof connector !== "string" || !supportsSelectionContent(connector)) {
+      return c.json({ error: "unsupported interview source" }, 400);
+    }
+    try {
+      return c.json(await addConnectorSources(
+        iv.id, await selectionContext(connector, sourceSelection(body?.selection)),
+      ));
+    } catch (e) {
+      if (e instanceof Error && e.message === "invalid source selection") {
+        return c.json({ error: "invalid source selection" }, 400);
+      }
+      if (e instanceof SelectionContentError) return c.json({ error: e.code }, 409);
+      return c.json({ error: "source content unavailable" }, 502);
+    }
+  });
+
+  app.post("/api/interviews/:id/sources/upload", async (c) => {
+    const iv = await getInterview(c.req.param("id"));
+    if (!iv) return c.json({ error: "interview not found" }, 404);
+    if (iv.status !== "preparing" && iv.status !== "active") {
+      return c.json({ error: `interview is ${iv.status}` }, 400);
+    }
+    const form = await c.req.formData().catch(() => null);
+    const file = form?.get("file");
+    if (!(file instanceof File)) return c.json({ error: "file is required" }, 400);
+    const currentCount = await countInterviewUploads(iv.id);
+    if (currentCount >= MAX_INTERVIEW_UPLOADS) {
+      return c.json({ error: "upload_limit_reached" }, 413);
+    }
+    if (file.size > MAX_INTERVIEW_FILE_BYTES) {
+      return c.json({ error: "file_too_large" }, 413);
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let format;
+    try {
+      format = validateInterviewUpload({
+        name: file.name, type: file.type, size: file.size, bytes,
+      }, currentCount);
+    } catch (error) {
+      if (error instanceof UploadValidationError) {
+        const status = ["file_too_large", "upload_limit_reached"].includes(error.code) ? 413 : 415;
+        return c.json({ error: error.code }, status);
+      }
+      throw error;
+    }
+    const canonicalMime = {
+      pdf: "application/pdf",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      png: "image/png",
+      jpeg: "image/jpeg",
+      webp: "image/webp",
+    }[format];
+    const mimeType = !file.type || file.type === "application/octet-stream"
+      ? canonicalMime : file.type;
+    let source = await createUploadSource(iv.id, {
+      title: file.name,
+      sourceType: mimeType,
+      idempotencyKey: uploadSourceIdempotencyKey(iv.id, file.name, bytes),
+    });
+    if (source.status === "ready") return c.json(source);
+    try {
+      const input: ExtractionInput = {
+        format, bytes, mimeType, filename: file.name,
+      };
+      const text = opts.fileExtractor
+        ? await opts.fileExtractor(input)
+        : await extractInterviewFile(input, {
+            imageAnalyzer: opts.imageAnalyzer ?? defaultImageAnalyzer(),
+          });
+      source = await markSourceReady(source.id, text);
+      return c.json(source);
+    } catch {
+      await markSourceFailed(source.id, "extraction_failed");
+      return c.json({ error: "extraction_failed", source_id: source.id }, 422);
+    }
+  });
+
+  app.post("/api/interviews/:id/start", async (c) => {
+    const iv = await getInterview(c.req.param("id"));
+    if (!iv) return c.json({ error: "interview not found" }, 404);
+    if (iv.status !== "preparing") return c.json({ error: `interview is ${iv.status}` }, 400);
+    const active = await startInterview(iv.id);
+    return c.json(await runTurn(
+      active, llm(), undefined, await listInterviewSources(iv.id), research(),
+    ));
   });
 
   app.post("/api/interviews/:id/messages", async (c) => {
@@ -1218,7 +1436,9 @@ export function buildApp(opts: AppOptions = {}): App {
     if (!iv) return c.json({ error: "interview not found" }, 404);
     if (iv.status !== "active") return c.json({ error: `interview is ${iv.status}` }, 400);
     const withMsg = await appendInterviewMessage(iv.id, { role: "expert", content: content.trim() });
-    return c.json(await runTurn(withMsg, llm()));
+    return c.json(await runTurn(
+      withMsg, llm(), undefined, await listInterviewSources(iv.id), research(),
+    ));
   });
 
   app.post("/api/interviews/:id/approve", async (c) => {
@@ -1254,6 +1474,30 @@ export function buildApp(opts: AppOptions = {}): App {
   // customer to authorize from one that still needs its deployment secrets.
   // This exposes no credential material.
   app.get("/api/connectors/providers", async (c) => c.json(await oauthProviderAvailability()));
+
+  app.get("/api/connectors/notion/boundaries", async (c) => {
+    const connector = await getConnector("notion");
+    if (!connector || connector.status !== "connected") return c.json({ error: "Notion is not connected" }, 400);
+    try {
+      return c.json(await notionDiscovery(connector.credentials));
+    } catch {
+      return c.json({ error: "Notion boundaries unavailable" }, 502);
+    }
+  });
+
+  app.put("/api/connectors/notion/settings", async (c) => {
+    const principal = humanPrincipal(c);
+    if (!principal || principal.role === "viewer") return c.json({ error: "forbidden" }, 403);
+    let settings;
+    try {
+      settings = parseNotionSettings(await jsonBody(c));
+    } catch {
+      return c.json({ error: "invalid Notion selection" }, 400);
+    }
+    const connector = await getConnector("notion");
+    if (!connector || connector.status !== "connected") return c.json({ error: "Notion is not connected" }, 400);
+    return c.json(publicConnector(await upsertConnector("notion", { settings, cursor: {} })));
+  });
 
   // One Google consent grants the narrow read-only Gmail + Drive scopes used
   // by Brian. The callback stores the same refresh token in two connector
@@ -1388,6 +1632,7 @@ export function buildApp(opts: AppOptions = {}): App {
     if (!state || !code) return rejectedOAuthRedirect(c, state, "missing_oauth_response");
 
     let returnOrigin: string | undefined;
+    let oauthPhase = "state";
     try {
       const consumed = await consumeOAuthState(state);
       if (!consumed || !isGenericOAuthProvider(consumed.provider)
@@ -1396,20 +1641,27 @@ export function buildApp(opts: AppOptions = {}): App {
       }
       const provider = consumed.provider;
       returnOrigin = consumed.metadata.return_origin;
+      oauthPhase = "config";
       const config = await oauthProviderConfig(provider);
       if (!config) return connectorRedirect(c, "error", `${provider}_oauth_not_configured`, returnOrigin);
+      oauthPhase = "exchange";
       const credentials = await exchangeOAuthCode(config, code, state, consumed.metadata);
-      return runTenant(consumed.tenantId, async () => {
-        await upsertConnector(provider, { status: "connected", credentials });
+      oauthPhase = "persist";
+      return await runTenant(consumed.tenantId, async () => {
+        await upsertConnector(provider, oauthReconnectPatch(provider, credentials));
         return connectorRedirect(c, "connected", provider, returnOrigin);
       });
     } catch (e) {
-      const message = e instanceof Error ? e.message : "oauth_failed";
+      console.error(`connector oauth callback failed (phase=${oauthPhase})`, e);
+      const message = e instanceof Error && /^oauth_exchange_failed_[a-z0-9_]{1,64}$/.test(e.message)
+        ? e.message : `oauth_failed_${oauthPhase}`;
       return connectorRedirect(c, "error", message, returnOrigin);
     }
   });
 
   app.post("/api/connectors/:type/connect", async (c) => {
+    const principal = humanPrincipal(c);
+    if (!principal || principal.role === "viewer") return c.json({ error: "forbidden" }, 403);
     const type = c.req.param("type") as ConnectorType;
     if (!CONNECTOR_TYPES.includes(type)) return c.json({ error: "unknown connector" }, 400);
     const credentials = (await jsonBody(c))?.credentials;
@@ -1420,21 +1672,38 @@ export function buildApp(opts: AppOptions = {}): App {
   });
 
   app.post("/api/connectors/:type/disable", async (c) => {
+    const principal = humanPrincipal(c);
+    if (!principal || principal.role === "viewer") return c.json({ error: "forbidden" }, 403);
     const type = c.req.param("type") as SourceType;
     const supported = CONNECTOR_TYPES.includes(type as ConnectorType)
       || (AUTHORIZED_SOURCE_TYPES as readonly string[]).includes(type);
     if (!supported) return c.json({ error: "unknown connector" }, 400);
-    return c.json(publicConnector(await upsertConnector(type, { status: "disabled" })));
+    if (type === "notion") {
+      const connector = await getConnector("notion");
+      const accessToken = connector?.credentials.access_token;
+      if (typeof accessToken === "string" && accessToken) {
+        const config = await notionOAuthConfig();
+        if (!config) return c.json({ error: "connector disconnect failed" }, 503);
+        try {
+          await notionRevoke(accessToken, config);
+        } catch {
+          return c.json({ error: "connector disconnect failed" }, 502);
+        }
+      }
+    }
+    return c.json(publicConnector(await upsertConnector(type, {
+      status: "disabled", credentials: {}, settings: {}, cursor: {}, last_error: null,
+    })));
   });
 
   app.post("/api/connectors/:type/sync", async (c) => {
-    const type = c.req.param("type") as ConnectorType;
-    if (!CONNECTOR_TYPES.includes(type)) return c.json({ error: "unknown connector" }, 400);
+    const type = c.req.param("type");
+    if (!isSyncableType(type)) return c.json({ error: "unknown connector" }, 400);
     const body = await jsonBody(c);
     try {
       return c.json(await sync(type, typeof body?.focus === "string" ? body.focus.trim() : undefined));
-    } catch (e) {
-      return c.json({ error: e instanceof Error ? e.message : "sync failed" }, 400);
+    } catch {
+      return c.json({ error: "connector sync failed" }, 400);
     }
   });
 

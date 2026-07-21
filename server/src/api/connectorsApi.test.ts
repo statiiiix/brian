@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { buildApp } from "./app.js";
+import { buildApp, oauthReconnectPatch, publicConnector } from "./app.js";
 import { testClient } from "../test/http.js";
 import { pool } from "../db/pool.js";
 import { runMigrations } from "../db/migrate.js";
@@ -19,19 +19,87 @@ const d = url ? describe : describe.skip;
 const ACME = "00000000-0000-0000-0000-0000000c0009";
 const FOUNDING_USER = "c0900000-0000-4000-8000-000000000001";
 const ACME_USER = "c0900000-0000-4000-8000-000000000002";
+const VIEWER_USER = "c0900000-0000-4000-8000-000000000003";
 const b64 = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
 const dashboardToken = (userId: string) => `${b64({ alg: "ES256" })}.${b64({
   iss: "https://connectors-test.supabase.co/auth/v1", sub: userId, aud: "authenticated",
 })}.sig`;
 const FOUNDING_TOKEN = dashboardToken(FOUNDING_USER);
 const ACME_TOKEN = dashboardToken(ACME_USER);
+const VIEWER_TOKEN = dashboardToken(VIEWER_USER);
 const H = (t: string) => ({ authorization: `Bearer ${t}` });
+
+describe("connector sync error redaction", () => {
+  it("does not expose internal provider or source content", async () => {
+    const app = testClient(buildApp({
+      sync: async () => { throw new Error("private provider diagnostic and source content"); },
+    }));
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/connectors/notion/sync",
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "connector sync failed" });
+    expect(response.body).not.toContain("private provider diagnostic");
+  });
+});
+
+describe("generic OAuth reconnect patch", () => {
+  it("clears stale Notion selection and cursors without changing other providers", () => {
+    const credentials = { access_token: "new-token" };
+    expect(oauthReconnectPatch("notion", credentials)).toEqual({
+      status: "connected", credentials, settings: {}, cursor: {},
+    });
+    expect(oauthReconnectPatch("linear", credentials)).toEqual({ status: "connected", credentials });
+  });
+});
+
+describe("public connector redaction", () => {
+  it("uses an explicit safe allowlist and excludes cursors and errors", () => {
+    const result = publicConnector({
+      id: "connector-1", tenant_id: "tenant-1", type: "notion", status: "connected",
+      credentials: { access_token: "secret" }, settings: { selected_page_ids: ["page-1"] },
+      cursor: { opaque: "cursor" }, last_error: "provider body", last_synced_at: "2026-01-01T00:00:00.000Z",
+      created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z",
+    });
+    expect(result).toEqual({
+      id: "connector-1", type: "notion", status: "connected", configured: true, selection_ready: true,
+      settings: { selected_page_ids: ["page-1"], selected_data_source_ids: [] },
+      last_synced_at: "2026-01-01T00:00:00.000Z", created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z",
+    });
+  });
+});
+
+describe("connector viewer mutation guards", () => {
+  const viewerStore: PrincipalStore = {
+    async resolveDashboard() { return { tenantId: FOUNDING_TENANT_ID, userId: VIEWER_USER, role: "viewer", membershipId: VIEWER_USER }; },
+    async listMemberships() { return []; }, async resolveMcp() { return null; }, async resolveLegacy() { return null; }, async touchConnection() {},
+  };
+  const viewerFetch = async () => new Response(JSON.stringify({ id: VIEWER_USER, email: "viewer@example.test" }));
+  const app = testClient(buildApp({
+    supabaseAuth: { url: "https://connectors-test.supabase.co", anonKey: "anon", fetchFn: viewerFetch as typeof fetch }, principalStore: viewerStore,
+  }));
+
+  it.each([
+    { method: "PUT", url: "/api/connectors/notion/settings", payload: { selected_page_ids: ["page-1"] } },
+    { method: "POST", url: "/api/connectors/notion/disable" },
+  ])("denies viewer $method $url before connector state is read or changed", async ({ method, url, payload }) => {
+    const response = await app.inject({ method, url, headers: H(VIEWER_TOKEN), payload });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: "forbidden" });
+  });
+
+  it("requires an authenticated human for Notion boundary discovery", async () => {
+    const response = await app.inject({ method: "GET", url: "/api/connectors/notion/boundaries" });
+    expect(response.statusCode).toBe(401);
+  });
+});
 
 const principalStore: PrincipalStore = {
   async resolveDashboard(userId) {
-    const tenantId = userId === FOUNDING_USER ? FOUNDING_TENANT_ID : userId === ACME_USER ? ACME : null;
+    const tenantId = userId === FOUNDING_USER ? FOUNDING_TENANT_ID : userId === ACME_USER ? ACME : userId === VIEWER_USER ? FOUNDING_TENANT_ID : null;
     return tenantId ? {
-      tenantId, userId, role: "admin", membershipId: userId,
+      tenantId, userId, role: userId === VIEWER_USER ? "viewer" : "admin", membershipId: userId,
     } : null;
   },
   async listMemberships() { return []; },
@@ -103,6 +171,7 @@ d("connectors API", () => {
 
     const dis = await app.inject({ method: "POST", url: "/api/connectors/gmail/disable", headers: H(FOUNDING_TOKEN) });
     expect(dis.json().status).toBe("disabled");
+    expect(dis.json().configured).toBe(false);
   });
 
   it("sync returns the summary; unknown connector 400s", async () => {
@@ -173,6 +242,69 @@ d("connectors API", () => {
     expect(after?.credentials).toEqual(before?.credentials);
     expect(after?.cursor).toEqual(before?.cursor);
     await actionApp.close();
+  });
+
+  it("discovers and saves only the current tenant's Notion selection boundary", async () => {
+    await runTenant(FOUNDING_TENANT_ID, () => upsertConnector("notion", {
+      status: "connected", credentials: { access_token: "notion-secret" },
+      settings: { selected_page_ids: ["old-page"] }, cursor: { old: "cursor" },
+    }));
+    const discovery = vi.fn(async (credentials: Record<string, unknown>) => {
+      expect(credentials).toEqual({ access_token: "notion-secret" });
+      return { boundaries: [{ id: "page-1", kind: "page" as const, title: "Page", permalink: "https://notion.so/page-1" }], truncated: false };
+    });
+    const notionApp = testClient(buildApp({
+      supabaseAuth: { url: "https://connectors-test.supabase.co", anonKey: "anon", fetchFn: supabaseFetch as typeof fetch },
+      principalStore, notionDiscovery: discovery,
+    }));
+    const boundaries = await notionApp.inject({ method: "GET", url: "/api/connectors/notion/boundaries", headers: H(FOUNDING_TOKEN) });
+    expect(boundaries.statusCode).toBe(200);
+    expect(JSON.stringify(boundaries.json())).not.toContain("notion-secret");
+    const crossTenant = await notionApp.inject({ method: "GET", url: "/api/connectors/notion/boundaries", headers: H(ACME_TOKEN) });
+    expect(crossTenant.statusCode).toBe(400);
+
+    const saved = await notionApp.inject({
+      method: "PUT", url: "/api/connectors/notion/settings", headers: H(FOUNDING_TOKEN),
+      payload: { selected_page_ids: [" page-1 ", "page-1"], selected_data_source_ids: ["source-1"] },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toMatchObject({ settings: { selected_page_ids: ["page-1"], selected_data_source_ids: ["source-1"] } });
+    const stored = await runTenant(FOUNDING_TENANT_ID, () => getConnector("notion"));
+    expect(stored?.cursor).toEqual({});
+    expect(stored?.credentials).toEqual({ access_token: "notion-secret" });
+
+    const malformed = await notionApp.inject({ method: "PUT", url: "/api/connectors/notion/settings", headers: H(FOUNDING_TOKEN), payload: { selected_page_ids: [] } });
+    expect(malformed.statusCode).toBe(400);
+    const viewer = await notionApp.inject({ method: "PUT", url: "/api/connectors/notion/settings", headers: H(VIEWER_TOKEN), payload: { selected_page_ids: ["page-2"] } });
+    expect(viewer.statusCode).toBe(403);
+    await notionApp.close();
+  });
+
+  it("fails closed on Notion revocation, then clears secret state after success", async () => {
+    await runTenant(FOUNDING_TENANT_ID, () => upsertConnector("notion", {
+      status: "connected", credentials: { access_token: "notion-secret" },
+      settings: { selected_page_ids: ["page-1"] }, cursor: { opaque: "cursor" },
+    }));
+    const failedApp = testClient(buildApp({
+      supabaseAuth: { url: "https://connectors-test.supabase.co", anonKey: "anon", fetchFn: supabaseFetch as typeof fetch },
+      principalStore, notionOAuthConfig: async () => ({ clientId: "id", clientSecret: "secret" }),
+      notionRevoke: async () => { throw new Error("private provider body"); },
+    }));
+    const failed = await failedApp.inject({ method: "POST", url: "/api/connectors/notion/disable", headers: H(FOUNDING_TOKEN) });
+    expect(failed.statusCode).toBe(502);
+    expect(failed.body).not.toContain("private provider body");
+    expect((await runTenant(FOUNDING_TENANT_ID, () => getConnector("notion")))?.status).toBe("connected");
+    await failedApp.close();
+
+    const successfulApp = testClient(buildApp({
+      supabaseAuth: { url: "https://connectors-test.supabase.co", anonKey: "anon", fetchFn: supabaseFetch as typeof fetch },
+      principalStore, notionOAuthConfig: async () => ({ clientId: "id", clientSecret: "secret" }), notionRevoke: async () => {},
+    }));
+    const disabled = await successfulApp.inject({ method: "POST", url: "/api/connectors/notion/disable", headers: H(FOUNDING_TOKEN) });
+    expect(disabled.statusCode).toBe(200);
+    const stored = await runTenant(FOUNDING_TENANT_ID, () => getConnector("notion"));
+    expect(stored).toMatchObject({ status: "disabled", credentials: {}, settings: {}, cursor: {} });
+    await successfulApp.close();
   });
 
   it("exposes connector provenance for a drafted skill", async () => {

@@ -6,6 +6,12 @@ export interface SkillExample {
   correct_action: string;
 }
 
+export interface SkillSourceRef {
+  title: string;
+  url: string | null;
+  origin: "company" | "expert" | "web";
+}
+
 export interface Skill {
   id: string;
   name: string;
@@ -18,6 +24,9 @@ export interface Skill {
   escalation_target: string | null;
   examples: SkillExample[];
   owner: string | null;
+  principles?: string[];
+  quality_checks?: string[];
+  sources?: SkillSourceRef[];
   status: SkillStatus;
   version: number;
   last_reviewed_at: string | null;
@@ -36,6 +45,9 @@ export interface NewSkill {
   escalation_target: string | null;
   examples: SkillExample[];
   owner: string | null;
+  principles?: string[];
+  quality_checks?: string[];
+  sources?: SkillSourceRef[];
 }
 
 export interface SkillVersion {

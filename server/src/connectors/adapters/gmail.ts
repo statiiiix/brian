@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import type { Connector, RawThread } from "../types.js";
 import { getAccessToken, type FetchFn, type GmailConfig } from "../../gmail/client.js";
 

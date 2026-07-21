@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import pg from "pg";
 import {
@@ -69,6 +70,23 @@ describe("runMigrations connection discipline", () => {
 
     await expect(runMigrations(fakePool)).rejects.toThrow(/advisory lock was not held/i);
     expect(release).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("migration 019: interview attribution follows the identity table", () => {
+  const sql = readFileSync(
+    new URL("./migrations/019_interview_created_by_identity.sql", import.meta.url), "utf8");
+
+  it("repoints created_by at auth.users and keeps interviews when attribution is lost", () => {
+    // The legacy 004 constraint pointed at the local users table, so every
+    // interview created by a real dashboard identity failed its foreign key.
+    expect(sql).toContain("auth_users := 'auth.users'");
+    expect(sql).toContain("brian_auth_users_test");
+    expect(sql).toContain("interviews_created_by_user_fk");
+    expect(sql).toContain("on delete set null");
+    expect(sql).toContain("set created_by = null");
+    // Dropped by shape, not by name, so a replay converges.
+    expect(sql).toContain("con.conkey[1] = created_by_attnum");
   });
 });
 

@@ -44,7 +44,7 @@ const mockLlm: LlmClient = {
 
 async function clean() {
   await pool.query("delete from evidence where source_ref->>'thread_id' in ('__syncg1','__syncg2','__syncj1')");
-  await pool.query("delete from connectors where type='gmail' and tenant_id=$1", [FOUNDING_TENANT_ID]);
+  await pool.query("delete from connectors where type in ('gmail','notion') and tenant_id=$1", [FOUNDING_TENANT_ID]);
 }
 
 d("connectors sync orchestrator", () => {
@@ -69,5 +69,32 @@ d("connectors sync orchestrator", () => {
 
     const s2 = await runTenant(FOUNDING_TENANT_ID, () => syncConnector("gmail", { llm: mockLlm, connector: conn }));
     expect(s2.evidence).toBe(0);  // same threads → deduped
+  });
+
+  it("keeps a disconnected connector's cleared cursor when an in-flight fetch finishes", async () => {
+    await runTenant(FOUNDING_TENANT_ID, () => upsertConnector("notion", {
+      status: "connected", credentials: { access_token: "__sync-race" }, cursor: { old: "cursor" }, settings: {},
+    }));
+    let fetched!: () => void;
+    let release!: () => void;
+    const fetchStarted = new Promise<void>((resolve) => { fetched = resolve; });
+    const fetchRelease = new Promise<void>((resolve) => { release = resolve; });
+    const connector: Connector = {
+      type: "notion",
+      fetch: async () => {
+        fetched();
+        await fetchRelease;
+        return { items: [], nextCursor: { resurrected: "cursor" } };
+      },
+    };
+    const sync = runTenant(FOUNDING_TENANT_ID, () => syncConnector("notion", { llm: mockLlm, connector }));
+    await fetchStarted;
+    await runTenant(FOUNDING_TENANT_ID, () => upsertConnector("notion", {
+      status: "disabled", credentials: {}, settings: {}, cursor: {},
+    }));
+    release();
+    await expect(sync).resolves.toMatchObject({ fetched: 0 });
+    const row = await runTenant(FOUNDING_TENANT_ID, () => getConnector("notion"));
+    expect(row).toMatchObject({ status: "disabled", cursor: {} });
   });
 });

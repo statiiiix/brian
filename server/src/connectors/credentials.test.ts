@@ -10,9 +10,8 @@ describe("connector credentials", () => {
     expect(decryptCredentials(encrypted, env)).toEqual({ refresh_token: "secret", team: "acme" });
   });
 
-  it("keeps local development credentials compatible without a key", () => {
-    const plain = { bot_token: "local-token" };
-    expect(encryptCredentials(plain, {})).toEqual(plain);
-    expect(decryptCredentials(plain, {})).toEqual(plain);
+  it("refuses to persist credentials without an encryption key", () => {
+    expect(() => encryptCredentials({ bot_token: "placeholder" }, {}))
+      .toThrow("CONNECTOR_ENCRYPTION_KEY is required to store connector credentials");
   });
 });

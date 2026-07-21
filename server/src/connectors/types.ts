@@ -22,7 +22,7 @@ export type SourceType = ConnectorType | AuthorizedSourceType;
 
 // Pure-fetch adapter: incremental from the stored cursor.
 export interface Connector {
-  type: ConnectorType;
+  type: SourceType;
   fetch(creds: unknown, cursor: unknown): Promise<{ items: RawThread[]; nextCursor: unknown }>;
 }
 
@@ -41,6 +41,7 @@ export interface ConnectorRow {
   type: SourceType;
   status: string;
   credentials: Record<string, unknown>;
+  settings: Record<string, unknown>;
   cursor: Record<string, unknown>;
   last_synced_at: string | null;
   last_error: string | null;

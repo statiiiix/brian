@@ -14,7 +14,7 @@ const OTHER = "00000000-0000-0000-0000-0000000c0006";
 async function clean() {
   await pool.query("delete from evidence where summary like '__r006%'");
   await pool.query(
-    "delete from connectors where type in ('gmail','slack') and tenant_id in ($1,$2)",
+    "delete from connectors where type in ('gmail','slack','notion') and tenant_id in ($1,$2)",
     [FOUNDING_TENANT_ID, OTHER]);
   await pool.query("delete from tenants where id=$1", [OTHER]);
 }
@@ -40,6 +40,21 @@ d("connectors repo", () => {
       c = await getConnector("gmail");
       expect(c?.credentials).toEqual({ refresh_token: "r" });
       expect(c?.cursor).toEqual({ historyId: "42" });
+    });
+  });
+
+  it("stores tenant-scoped selections outside encrypted credentials", async () => {
+    await runTenant(FOUNDING_TENANT_ID, async () => {
+      await upsertConnector("notion", {
+        status: "connected", credentials: { access_token: "__r006-secret" },
+        settings: { selected_page_ids: ["page-1"] }, cursor: { opaque: "cursor" },
+      });
+      const connector = await getConnector("notion");
+      expect(connector?.credentials).toEqual({ access_token: "__r006-secret" });
+      expect(connector?.settings).toEqual({ selected_page_ids: ["page-1"] });
+      const raw = await pool.query("select credentials,settings from connectors where tenant_id=$1 and type='notion'", [FOUNDING_TENANT_ID]);
+      expect(JSON.stringify(raw.rows[0].credentials)).not.toContain("__r006-secret");
+      expect(raw.rows[0].settings).toEqual({ selected_page_ids: ["page-1"] });
     });
   });
 

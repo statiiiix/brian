@@ -20,6 +20,8 @@ const deps = [
   "@modelcontextprotocol/sdk",
   "pg",
   "openai",
+  "mammoth",
+  "pdf-parse",
   "bcryptjs",
   "jsonwebtoken",
   "jose",

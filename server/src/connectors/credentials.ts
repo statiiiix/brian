@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { secret } from "../config/secrets.js";
 
@@ -20,7 +21,7 @@ function keyFromEnv(env: NodeJS.ProcessEnv = process.env): Buffer | null {
 
 export function encryptCredentials(value: unknown, env: NodeJS.ProcessEnv = process.env): unknown {
   const key = keyFromEnv(env);
-  if (!key) return value;
+  if (!key) throw new Error("CONNECTOR_ENCRYPTION_KEY is required to store connector credentials");
   const iv = randomBytes(12);
   const cipher = createCipheriv(ALGORITHM, key, iv);
   const data = Buffer.concat([cipher.update(JSON.stringify(value), "utf8"), cipher.final()]);

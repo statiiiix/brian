@@ -15,6 +15,12 @@ const exampleSchema = z.object({
   correct_action: z.string().min(1),
 });
 
+const sourceSchema = z.object({
+  title: z.string().min(1),
+  url: z.string().url().nullable(),
+  origin: z.enum(["company", "expert", "web"]),
+});
+
 export const newSkillSchema = z.object({
   name: z.string().min(1),
   trigger: z.string().min(1),
@@ -26,6 +32,9 @@ export const newSkillSchema = z.object({
   escalation_target: z.string().nullable().default(null),
   examples: z.array(exampleSchema).default([]),
   owner: z.string().nullable().default(null),
+  principles: z.array(z.string().min(1)).default([]),
+  quality_checks: z.array(z.string().min(1)).default([]),
+  sources: z.array(sourceSchema).default([]),
 });
 
 export const updateSkillSchema = newSkillSchema.partial();

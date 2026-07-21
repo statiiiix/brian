@@ -29,6 +29,7 @@ interface OAuthProviderSpec {
   omitRedirectInToken?: boolean;
   pkce?: boolean;
   requiresWorkspace?: boolean;
+  supportsReadOnly?: boolean;
 }
 
 const MICROSOFT_AUTHORIZE = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
@@ -93,7 +94,7 @@ const SPECS: Record<GenericOAuthProviderId, OAuthProviderSpec> = {
   zendesk: {
     id: "zendesk", label: "Zendesk", credentialPrefix: "ZENDESK", callbackSlug: "zendesk",
     authorizationUrl: "https://{workspace}.zendesk.com/oauth/authorizations/new",
-    tokenUrl: "https://{workspace}.zendesk.com/oauth/tokens", scopes: ["tickets:read"],
+    tokenUrl: "https://{workspace}.zendesk.com/oauth/tokens", scopes: ["tickets:read", "users:read"],
     requiresWorkspace: true,
   },
   intercom: {
@@ -111,13 +112,13 @@ const SPECS: Record<GenericOAuthProviderId, OAuthProviderSpec> = {
   salesforce: {
     id: "salesforce", label: "Salesforce", credentialPrefix: "SALESFORCE", callbackSlug: "salesforce",
     authorizationUrl: "https://login.salesforce.com/services/oauth2/authorize",
-    tokenUrl: "https://login.salesforce.com/services/oauth2/token", scopes: ["api", "refresh_token"],
+    tokenUrl: "https://login.salesforce.com/services/oauth2/token", scopes: [], supportsReadOnly: false,
   },
   gong: {
     id: "gong", label: "Gong", credentialPrefix: "GONG", callbackSlug: "gong",
     authorizationUrl: "https://app.gong.io/oauth2/authorize",
     tokenUrl: "https://app.gong.io/oauth2/generate-customer-token",
-    scopes: ["api:calls:read:basic"], tokenStyle: "basic-query",
+    scopes: ["api:calls:read:basic", "api:calls:read:transcript"], tokenStyle: "basic-query",
   },
   microsoft_teams: {
     id: "microsoft_teams", label: "Microsoft Teams", credentialPrefix: "MICROSOFT", callbackSlug: "microsoft",
@@ -176,6 +177,7 @@ export async function oauthProviderConfig(
   read: SecretReader = secret,
 ): Promise<OAuthProviderConfig | null> {
   const spec = SPECS[provider];
+  if (spec.supportsReadOnly === false) return null;
   const providerPrefix = provider.toUpperCase();
   const [clientId, clientSecret, explicitRedirect, baseUrl, scopeOverride] = await Promise.all([
     firstSecret([`${providerPrefix}_CLIENT_ID`, `${spec.credentialPrefix}_CLIENT_ID`], read),
@@ -192,16 +194,20 @@ export async function oauthProviderConfig(
   const scopes = scopeOverride
     ? scopeOverride.split(separator === "," ? /\s*,\s*/ : /\s+/).filter(Boolean)
     : spec.scopes;
+  const readOnlyAllowlist = new Set(spec.scopes);
+  if (scopes.some((scope) => !readOnlyAllowlist.has(scope))) return null;
   return { spec, clientId, clientSecret, redirectUri, scopes };
 }
 
 export async function oauthProviderAvailability(read: SecretReader = secret) {
   const entries = await Promise.all(GENERIC_OAUTH_PROVIDER_IDS.map(async (provider) => {
     const spec = SPECS[provider];
+    const supported = spec.supportsReadOnly !== false;
     return [provider, {
       label: spec.label,
-      supported: true,
-      configured: Boolean(await oauthProviderConfig(provider, read)),
+      supported,
+      configured: supported && Boolean(await oauthProviderConfig(provider, read)),
+      verified: false,
       requires_workspace: Boolean(spec.requiresWorkspace),
       callback_slug: spec.callbackSlug,
     }] as const;
@@ -266,17 +272,17 @@ function tokenParams(
   return params;
 }
 
-export async function exchangeOAuthCode(
+async function sendTokenRequest(
   config: OAuthProviderConfig,
-  code: string,
-  state: string,
-  context: OAuthProviderContext = {},
-  fetchFn: typeof fetch = fetch,
+  params: Record<string, string>,
+  context: OAuthProviderContext,
+  fetchFn: typeof fetch,
+  action: string,
 ): Promise<OAuthTokenCredentials> {
   const { spec } = config;
   const style = spec.tokenStyle ?? "form";
-  const params = tokenParams(config, code, state);
   const headers: Record<string, string> = { accept: "application/json" };
+  if (spec.id === "notion") headers["Notion-Version"] = "2026-03-11";
   let url = endpoint(spec.tokenUrl, context);
   let body: string | undefined;
 
@@ -301,8 +307,10 @@ export async function exchangeOAuthCode(
     ? data.access_token
     : typeof data.token === "string" ? data.token : null;
   if (!response.ok || !accessToken) {
-    const message = data.error_description ?? data.message ?? data.error ?? response.status;
-    throw new Error(`${spec.label} OAuth exchange failed: ${String(message)}`);
+    const providerCode = spec.id === "notion" && typeof data.code === "string"
+      && /^[a-z0-9_]{1,64}$/.test(data.code) ? `_${data.code}`
+      : spec.id === "notion" ? `_http_${response.status}` : "";
+    throw new Error(`oauth_${action}_failed${providerCode}`);
   }
   return {
     ...data,
@@ -311,6 +319,31 @@ export async function exchangeOAuthCode(
     obtained_at: new Date().toISOString(),
     ...(context.workspace ? { workspace: normalizeZendeskWorkspace(context.workspace) } : {}),
   } as OAuthTokenCredentials;
+}
+
+export async function exchangeOAuthCode(
+  config: OAuthProviderConfig,
+  code: string,
+  state: string,
+  context: OAuthProviderContext = {},
+  fetchFn: typeof fetch = fetch,
+): Promise<OAuthTokenCredentials> {
+  return sendTokenRequest(config, tokenParams(config, code, state), context, fetchFn, "exchange");
+}
+
+export async function refreshOAuthToken(
+  config: OAuthProviderConfig,
+  refreshToken: string,
+  context: OAuthProviderContext = {},
+  fetchFn: typeof fetch = fetch,
+): Promise<OAuthTokenCredentials> {
+  const params: Record<string, string> = {
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+  };
+  return sendTokenRequest(config, params, context, fetchFn, "refresh");
 }
 
 export function callbackMatchesProvider(callbackSlug: string, provider: GenericOAuthProviderId): boolean {
