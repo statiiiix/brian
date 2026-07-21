@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
+import brianWordmark from '../../assets/brian-wordmark.webp';
 import { BRIAN_MCP_URL } from '../../lib/supabase';
 import { useAuth } from '../auth';
 import { api } from '../api';
+import { readCache, writeCache } from '../queryCache';
 import './Onboarding.css';
 
 const STEPS = [
@@ -32,7 +34,7 @@ function normalizeOnboarding(payload) {
 
 export default function Onboarding() {
   const { profile } = useAuth();
-  const [state, setState] = useState(null);
+  const [state, setState] = useState(() => readCache('/api/onboarding') ?? null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copyNotice, setCopyNotice] = useState('');
@@ -41,7 +43,7 @@ export default function Onboarding() {
     setError('');
     try {
       const payload = await api('/api/onboarding');
-      const normalized = normalizeOnboarding(payload);
+      const normalized = writeCache('/api/onboarding', normalizeOnboarding(payload));
       setState(normalized);
       return normalized;
     } catch (loadError) {
@@ -75,7 +77,10 @@ export default function Onboarding() {
         ...patch,
         currentStep: nextStep,
       });
-      setState({ ...saved, firstMcpCallAt: saved.firstMcpCallAt || state.firstMcpCallAt });
+      setState(writeCache('/api/onboarding', {
+        ...saved,
+        firstMcpCallAt: saved.firstMcpCallAt || state.firstMcpCallAt,
+      }));
     } catch (saveError) {
       setError(saveError.message || 'Unable to save onboarding progress.');
     } finally {
@@ -112,7 +117,7 @@ export default function Onboarding() {
   return (
     <div className="dash onboarding-shell">
       <header className="onboarding-header">
-        <a href="/" className="onboarding-brand">Brian</a>
+        <a href="/" className="onboarding-brand"><img className="onboarding-brand-wordmark" src={brianWordmark} alt="Brian" /></a>
         <Link to="/app" className="dash-btn dash-btn--ghost">Go to dashboard</Link>
       </header>
       <main className="onboarding-main">

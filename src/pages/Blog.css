@@ -1,0 +1,141 @@
+/* ---------------------------------------------------------------------------
+   Blog index — warm editorial, matches the landing look.
+   Unique namespace: blgx- (do not reuse classes from other pages/sections).
+--------------------------------------------------------------------------- */
+
+.blgx {
+  position: relative;
+  min-height: 100dvh;
+  background: var(--bg, #f7f3ea);
+  color: var(--fg, #201b15);
+  font-family: var(--font, 'Space Grotesk', sans-serif);
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.blgx-main {
+  max-width: var(--container, 72rem);
+  margin: 0 auto;
+  padding: 0 1.5rem 5rem;
+}
+
+.blgx-hero {
+  padding: 9.5rem 0 3.5rem;
+  max-width: 46rem;
+}
+
+.blgx-kicker {
+  margin: 0 0 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-text, #ad3f10);
+}
+
+.blgx-title {
+  margin: 0;
+  font-family: var(--font-display, 'Bitcount Single', sans-serif);
+  font-size: clamp(2.2rem, 5.5vw, 3.4rem);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+}
+
+.blgx-sub {
+  margin: 1.25rem 0 0;
+  font-size: 1.06rem;
+  line-height: 1.7;
+  color: var(--muted, #787064);
+  max-width: 40rem;
+}
+
+.blgx-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+}
+
+.blgx-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1.75rem;
+  background: var(--bg-raised, #fffdf8);
+  border: 1px solid var(--border, rgba(32, 27, 21, 0.1));
+  border-radius: 18px;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(74, 50, 22, 0.06));
+  transition: transform 220ms var(--ease, ease), box-shadow 220ms var(--ease, ease),
+    border-color 220ms ease;
+}
+
+.blgx-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent-line, rgba(209, 82, 26, 0.28));
+  box-shadow: var(--shadow-md, 0 16px 40px -20px rgba(74, 50, 22, 0.22));
+}
+
+.blgx-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.blgx-card-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-text, #ad3f10);
+  background: var(--accent-soft, rgba(209, 82, 26, 0.1));
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+}
+
+.blgx-card-read {
+  font-size: 0.8rem;
+  color: var(--muted-2, #a79d8e);
+}
+
+.blgx-card-title {
+  margin: 0;
+  font-size: 1.22rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.014em;
+}
+
+.blgx-card:hover .blgx-card-title {
+  color: var(--accent-text, #ad3f10);
+}
+
+.blgx-card-desc {
+  margin: 0;
+  font-size: 0.93rem;
+  line-height: 1.65;
+  color: var(--muted, #787064);
+}
+
+.blgx-card-more {
+  margin-top: auto;
+  padding-top: 0.4rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--accent-text, #ad3f10);
+}
+
+@media (max-width: 760px) {
+  .blgx-hero {
+    padding: 8rem 0 2.5rem;
+  }
+
+  .blgx-grid {
+    grid-template-columns: 1fr;
+  }
+}

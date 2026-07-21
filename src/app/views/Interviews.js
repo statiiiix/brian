@@ -1,33 +1,52 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { msym } from '../../components/Icon';
-import { api } from '../api';
+import { api, apiForm } from '../api';
+import { useCachedQuery } from '../useCachedQuery';
+import InterviewSources from '../components/InterviewSources';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
 import TableSkeleton from '../components/TableSkeleton';
+import { interviewTitle } from '../interviewTopic';
 import './Interviews.css';
 
 export default function Interviews() {
   const navigate = useNavigate();
-  const [interviews, setInterviews] = useState(null);
+  const {
+    data: interviews,
+    setData: setInterviews,
+    error,
+    setError,
+  } = useCachedQuery('/api/interviews');
   const [topic, setTopic] = useState('');
   const [owner, setOwner] = useState('');
-  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    api('/api/interviews').then(setInterviews).catch((e) => setError(e.message));
-  }, []);
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [notionSelection, setNotionSelection] = useState(null);
 
   async function start(e) {
     e.preventDefault();
     setBusy(true);
     setError('');
     try {
+      const hasSources = pendingFiles.length > 0 || notionSelection;
       const iv = await api('/api/interviews', {
         method: 'POST',
-        body: { topic, ...(owner ? { owner } : {}) },
+        body: {
+          topic,
+          ...(owner ? { owner } : {}),
+          ...(hasSources ? { defer_start: true } : {}),
+          ...(notionSelection ? { source: { connector: 'notion', selection: notionSelection } } : {}),
+        },
       });
+      if (hasSources) {
+        for (const file of pendingFiles) {
+          const form = new FormData();
+          form.set('file', file);
+          await apiForm(`/api/interviews/${iv.id}/sources/upload`, form);
+        }
+        await api(`/api/interviews/${iv.id}/start`, { method: 'POST' });
+      }
       navigate(`/app/interviews/${iv.id}`);
     } catch (err) {
       setError(err.message);
@@ -39,7 +58,7 @@ export default function Interviews() {
     setError('');
     try {
       const updated = await api(`/api/interviews/${id}/resume`, { method: 'POST' });
-      setInterviews((list) => list.map((iv) => (iv.id === id ? updated : iv)));
+      setInterviews((list) => (list || []).map((iv) => (iv.id === id ? updated : iv)));
     } catch (err) {
       setError(err.message);
     }
@@ -50,6 +69,7 @@ export default function Interviews() {
       <header className="dash-head">
         <div>
           <h1 className="dash-title">Interviews</h1>
+          <p className="dash-subtitle">Five minutes of questions turns tribal knowledge into a reviewable, runnable skill.</p>
         </div>
       </header>
 
@@ -76,6 +96,15 @@ export default function Interviews() {
               onChange={(e) => setOwner(e.target.value)}
             />
           </div>
+        </div>
+        <div className="interviews-source-row">
+          <InterviewSources
+            pendingFiles={pendingFiles}
+            onPendingFilesChange={setPendingFiles}
+            notionSelection={notionSelection}
+            onNotionSelectionChange={setNotionSelection}
+            disabled={busy}
+          />
         </div>
         <button type="submit" className="dash-btn dash-btn--primary" disabled={busy || !topic.trim()}>
           {busy ? 'Starting…' : 'Start interview'}
@@ -106,7 +135,7 @@ export default function Interviews() {
             <tbody>
               {interviews.map((iv) => (
                 <tr key={iv.id}>
-                  <td><Link to={`/app/interviews/${iv.id}`}>{iv.topic}</Link></td>
+                  <td><Link to={`/app/interviews/${iv.id}`}>{interviewTitle(iv.topic)}</Link></td>
                   <td>{iv.owner || '—'}</td>
                   <td>
                     <StatusBadge status={iv.status} />

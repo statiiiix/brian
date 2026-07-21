@@ -1,47 +1,59 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Icon, msym } from '../../components/Icon';
 import { api } from '../api';
+import { useCachedQuery } from '../useCachedQuery';
 import StatusBadge from '../components/StatusBadge';
 import './SkillDetail.css';
 
 const lines = (arr) => (arr || []).join('\n');
 const unlines = (s) => s.split('\n').map((l) => l.trim()).filter(Boolean);
 
+function toForm(s) {
+  return {
+    name: s.name,
+    trigger: s.trigger,
+    procedure: s.procedure,
+    inputs: lines(s.inputs),
+    principles: lines(s.principles),
+    quality_checks: lines(s.quality_checks),
+    hard_rules: lines(s.hard_rules),
+    tools: lines(s.tools),
+    guardrails: lines(s.guardrails),
+    escalation_target: s.escalation_target || '',
+    owner: s.owner || '',
+    examples: s.examples || [],
+  };
+}
+
 export default function SkillDetail() {
   const { id } = useParams();
-  const [skill, setSkill] = useState(null);
-  const [versions, setVersions] = useState([]);
-  const [evidence, setEvidence] = useState([]);
+  const { data: skill, error, setError, refresh: refreshSkill } = useCachedQuery(`/api/skills/${id}`);
+  const { data: versionList, refresh: refreshVersions } = useCachedQuery(`/api/skills/${id}/versions`);
+  const { data: evidenceList } = useCachedQuery(
+    `/api/skills/${id}/evidence`,
+    () => api(`/api/skills/${id}/evidence`).catch(() => [])
+  );
+  const versions = versionList || [];
+  const evidence = evidenceList || [];
   const [form, setForm] = useState(null);
-  const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const s = await api(`/api/skills/${id}`);
-      setSkill(s);
-      setForm({
-        name: s.name,
-        trigger: s.trigger,
-        procedure: s.procedure,
-        inputs: lines(s.inputs),
-        hard_rules: lines(s.hard_rules),
-        tools: lines(s.tools),
-        guardrails: lines(s.guardrails),
-        escalation_target: s.escalation_target || '',
-        owner: s.owner || '',
-        examples: s.examples || [],
-      });
-      setVersions(await api(`/api/skills/${id}/versions`));
-      setEvidence(await api(`/api/skills/${id}/evidence`).catch(() => []));
-    } catch (e) {
-      setError(e.message);
-    }
-  }, [id]);
+  // Seed the editable form once per skill. Background revalidation must not
+  // wipe out edits in progress, so only a fresh id (or an explicit reload
+  // after saving) rebuilds it.
+  const formSkillId = useRef(null);
+  useEffect(() => {
+    if (!skill || formSkillId.current === skill.id) return;
+    formSkillId.current = skill.id;
+    setForm(toForm(skill));
+  }, [skill]);
 
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(async () => {
+    const [fresh] = await Promise.all([refreshSkill(), refreshVersions()]);
+    if (fresh) setForm(toForm(fresh));
+  }, [refreshSkill, refreshVersions]);
 
   function set(key, value) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -66,6 +78,8 @@ export default function SkillDetail() {
           trigger: form.trigger,
           procedure: form.procedure,
           inputs: unlines(form.inputs),
+          principles: unlines(form.principles),
+          quality_checks: unlines(form.quality_checks),
           hard_rules: unlines(form.hard_rules),
           tools: unlines(form.tools),
           guardrails: unlines(form.guardrails),
@@ -160,6 +174,10 @@ export default function SkillDetail() {
             <textarea id="sd-procedure" className="dash-textarea" rows={8} value={form.procedure} onChange={(e) => set('procedure', e.target.value)} />
           </div>
           <div className="dash-field">
+            <label htmlFor="sd-principles">Principles and methodology (one per line)</label>
+            <textarea id="sd-principles" className="dash-textarea" rows={4} value={form.principles} onChange={(e) => set('principles', e.target.value)} />
+          </div>
+          <div className="dash-field">
             <label htmlFor="sd-inputs">Inputs (one per line)</label>
             <textarea id="sd-inputs" className="dash-textarea" rows={3} value={form.inputs} onChange={(e) => set('inputs', e.target.value)} />
           </div>
@@ -174,6 +192,10 @@ export default function SkillDetail() {
           <div className="dash-field">
             <label htmlFor="sd-tools">Tools (one per line)</label>
             <textarea id="sd-tools" className="dash-textarea" rows={2} value={form.tools} onChange={(e) => set('tools', e.target.value)} />
+          </div>
+          <div className="dash-field">
+            <label htmlFor="sd-quality">Quality checks (one per line)</label>
+            <textarea id="sd-quality" className="dash-textarea" rows={3} value={form.quality_checks} onChange={(e) => set('quality_checks', e.target.value)} />
           </div>
           <div className="skill-detail-row">
             <div className="dash-field">
@@ -224,6 +246,23 @@ export default function SkillDetail() {
         </section>
 
         <aside>
+          {skill.sources?.length > 0 && (
+            <section className="dash-card skill-detail-provenance">
+              <h2 className="dash-h2">Skill sources</h2>
+              <ul className="skill-detail-prov-list">
+                {skill.sources.map((source, index) => (
+                  <li key={`${source.url || source.title}-${index}`}>
+                    {source.url ? (
+                      <a className="skill-detail-prov-link" href={source.url} target="_blank" rel="noreferrer">
+                        {source.title}
+                      </a>
+                    ) : source.title}
+                    <span className="dash-mono"> {source.origin}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {evidence.length > 0 && (
             <section className="dash-card skill-detail-provenance">
               <h2 className="dash-h2">Sourced from connectors</h2>

@@ -1,41 +1,76 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import brianMark from '../../assets/brian-b-mark.svg';
 import { Icon, msym } from '../../components/Icon';
 import { api } from '../api';
+import { readCache, writeCache } from '../queryCache';
+import InterviewSources from '../components/InterviewSources';
 import StatusBadge from '../components/StatusBadge';
+import { interviewBrief, interviewTitle } from '../interviewTopic';
 import './InterviewChat.css';
 
 const COVERAGE_FIELDS = [
   ['trigger', 'Trigger'],
   ['inputs', 'Inputs'],
+  ['principles', 'Principles'],
   ['procedure', 'Procedure'],
+  ['tools', 'Tools'],
   ['hard_rules', 'Hard rules'],
   ['guardrails', 'Guardrails'],
   ['escalation_target', 'Escalation'],
+  ['quality_checks', 'Quality checks'],
   ['examples', 'Examples'],
 ];
 
 export default function InterviewChat() {
   const { id } = useParams();
-  const [iv, setIv] = useState(null);
+  const [iv, setIv] = useState(() => readCache(`/api/interviews/${id}`) ?? null);
   const [answer, setAnswer] = useState('');
   const [pendingAnswer, setPendingAnswer] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
+  const [sources, setSources] = useState(() => readCache(`/api/interviews/${id}/sources`) ?? []);
   const threadRef = useRef(null);
+  const answerRef = useRef(null);
 
   useEffect(() => {
-    api(`/api/interviews/${id}`).then(setIv).catch((e) => setError(e.message));
+    setIv(readCache(`/api/interviews/${id}`) ?? null);
+    setSources(readCache(`/api/interviews/${id}/sources`) ?? []);
+    Promise.all([
+      api(`/api/interviews/${id}`),
+      api(`/api/interviews/${id}/sources`).catch(() => []),
+    ]).then(([interview, interviewSources]) => {
+      setIv(writeCache(`/api/interviews/${id}`, interview));
+      setSources(writeCache(`/api/interviews/${id}/sources`, interviewSources));
+    }).catch((e) => setError(e.message));
   }, [id]);
+
+  // Mutations invalidate the cached interview; write the response back so
+  // returning to this thread does not start from an empty screen.
+  function applyInterview(interview) {
+    setIv(writeCache(`/api/interviews/${id}`, interview));
+  }
 
   useEffect(() => {
     if (threadRef.current) {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
     }
-  }, [iv, busy]);
+  }, [iv, busy, pendingAnswer]);
+
+  // Grow the composer with its content instead of exposing a drag handle.
+  useEffect(() => {
+    const el = answerRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [answer]);
 
   async function sendContent(content) {
+    // Paint the answer into the thread before the round trip — otherwise Brian
+    // appears to start typing before you can see what you sent.
+    setPendingAnswer(content);
+    setAnswer('');
     setBusy(true);
     setError('');
     try {
@@ -43,11 +78,10 @@ export default function InterviewChat() {
         method: 'POST',
         body: { content },
       });
-      setIv(updated);
+      applyInterview(updated);
       setPendingAnswer(null);
-      setAnswer('');
     } catch (e) {
-      setPendingAnswer(content);
+      // Keep the optimistic bubble so the answer is not lost; Retry re-sends it.
       setError(e.message);
     } finally {
       setBusy(false);
@@ -75,7 +109,7 @@ export default function InterviewChat() {
         method: 'POST',
         body: { activate },
       });
-      setIv(res.interview);
+      applyInterview(res.interview);
       setResult({ skill: res.skill, activated: activate });
     } catch (e) {
       setError(e.message);
@@ -87,7 +121,7 @@ export default function InterviewChat() {
   async function abandon() {
     if (!window.confirm('Abandon this interview? The conversation is kept but Brian stops asking.')) return;
     try {
-      setIv(await api(`/api/interviews/${id}/abandon`, { method: 'POST' }));
+      applyInterview(await api(`/api/interviews/${id}/abandon`, { method: 'POST' }));
     } catch (e) {
       setError(e.message);
     }
@@ -96,7 +130,7 @@ export default function InterviewChat() {
   async function resume() {
     setError('');
     try {
-      setIv(await api(`/api/interviews/${id}/resume`, { method: 'POST' }));
+      applyInterview(await api(`/api/interviews/${id}/resume`, { method: 'POST' }));
     } catch (e) {
       setError(e.message);
     }
@@ -115,9 +149,15 @@ export default function InterviewChat() {
     );
   }
 
-  const covered = COVERAGE_FIELDS.filter(([k]) => iv.coverage[k]).length;
+  const componentCoverage = iv.component_coverage || Object.fromEntries(
+    COVERAGE_FIELDS.map(([key]) => [key, {
+      status: iv.coverage[key] ? 'defined' : 'missing', summary: null, reason: null,
+    }]),
+  );
+  const covered = COVERAGE_FIELDS.filter(([key]) => componentCoverage[key]?.status !== 'missing').length;
   const pct = Math.round((covered / COVERAGE_FIELDS.length) * 100);
   const draft = iv.draft;
+  const brief = interviewBrief(iv.topic);
 
   return (
     <div className="ivc">
@@ -129,11 +169,28 @@ export default function InterviewChat() {
               Interviews
             </Link>
           </p>
-          <h1 className="dash-title">{iv.topic}</h1>
+          <h1 className="dash-title ivc-title">{interviewTitle(iv.topic)}</h1>
           <p className="dash-subtitle ivc-meta">
             <StatusBadge status={iv.status} />
             {iv.owner && <span>expert: {iv.owner}</span>}
+            {iv.source_context?.documents?.length > 0 && (
+              <span className="ivc-source">
+                grounded in {iv.source_context.source_type}:{' '}
+                {iv.source_context.documents.map((doc, index) => (
+                  <span key={doc.url || index}>
+                    {index > 0 && ', '}
+                    {doc.url ? <a href={doc.url} target="_blank" rel="noreferrer">{doc.title}</a> : doc.title}
+                  </span>
+                ))}
+              </span>
+            )}
           </p>
+          {brief.length > 0 && (
+            <details className="ivc-brief">
+              <summary>Interview brief</summary>
+              {brief.map((line, i) => <p key={i}>{line}</p>)}
+            </details>
+          )}
         </div>
         {iv.status === 'active' && (
           <button type="button" className="dash-btn dash-btn--ghost" onClick={abandon}>
@@ -147,29 +204,42 @@ export default function InterviewChat() {
         )}
       </header>
 
+      {(iv.status === 'active' || sources.length > 0) && (
+        <div className="ivc-source-control">
+          <InterviewSources
+            interviewId={iv.status === 'active' ? id : null}
+            sources={sources}
+            onSourcesChange={setSources}
+            disabled={busy || iv.status !== 'active'}
+          />
+        </div>
+      )}
+
       <div className="ivc-grid">
         <section className="ivc-chat dash-card">
           <div className="ivc-thread" ref={threadRef}>
             {iv.messages.map((m, i) => (
               <div key={i} className={`ivc-msg ivc-msg--${m.role}`}>
                 <span className="ivc-msg-who">
-                  {m.role === 'brian' && (
-                    <span className="ivc-msg-avatar" aria-hidden="true">
-                      <Icon path={msym.bolt} size={9} />
-                    </span>
+                  {m.role === 'brian' ? (
+                    <img className="ivc-msg-avatar" src={brianMark} alt="Brian" />
+                  ) : (
+                    'You'
                   )}
-                  {m.role === 'brian' ? 'Brian' : 'You'}
                 </span>
                 <p>{m.content}</p>
               </div>
             ))}
+            {pendingAnswer && (
+              <div className={`ivc-msg ivc-msg--expert${busy ? ' is-sending' : ' is-failed'}`}>
+                <span className="ivc-msg-who">You</span>
+                <p>{pendingAnswer}</p>
+              </div>
+            )}
             {busy && (
-              <div className="ivc-msg ivc-msg--brian">
+              <div className="ivc-msg ivc-msg--brian ivc-msg--thinking">
                 <span className="ivc-msg-who">
-                  <span className="ivc-msg-avatar" aria-hidden="true">
-                    <Icon path={msym.bolt} size={9} />
-                  </span>
-                  Brian
+                  <img className="ivc-msg-avatar" src={brianMark} alt="Brian" />
                 </span>
                 <p className="ivc-typing" aria-label="Brian is thinking">
                   <span /><span /><span />
@@ -195,26 +265,32 @@ export default function InterviewChat() {
           )}
 
           {iv.status === 'active' && (
-            <form className="ivc-input" onSubmit={send}>
+            <form className="ivc-composer" onSubmit={send}>
               <label htmlFor="ivc-answer" className="sr-only">Your answer</label>
-              <textarea
-                id="ivc-answer"
-                className="dash-textarea"
-                rows={2}
-                placeholder="Answer in plain language — Brian asks the follow-ups."
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                onKeyDown={onKeyDown}
-                disabled={busy}
-              />
-              <button
-                type="submit"
-                className="dash-btn dash-btn--primary ivc-send"
-                disabled={busy || !answer.trim()}
-                aria-label="Send answer"
-              >
-                <Icon path={msym.send} size={16} />
-              </button>
+              <div className="ivc-composer-field">
+                <textarea
+                  id="ivc-answer"
+                  ref={answerRef}
+                  className="ivc-answer"
+                  rows={1}
+                  placeholder="Answer in plain language — Brian asks the follow-ups."
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  onKeyDown={onKeyDown}
+                  disabled={busy}
+                />
+                <button
+                  type="submit"
+                  className="dash-btn dash-btn--primary ivc-send"
+                  disabled={busy || !answer.trim()}
+                  aria-label="Send answer"
+                >
+                  <Icon path={msym.send} size={15} />
+                </button>
+              </div>
+              <p className="ivc-composer-hint">
+                <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line
+              </p>
             </form>
           )}
 
@@ -252,27 +328,26 @@ export default function InterviewChat() {
             </div>
             <ul className="ivc-coverage">
               {COVERAGE_FIELDS.map(([key, label]) => (
-                <li key={key} className={iv.coverage[key] ? 'is-covered' : ''}>
+                <li key={key} className={componentCoverage[key]?.status === 'not_applicable' ? 'is-na' : (componentCoverage[key]?.status === 'defined' ? 'is-covered' : '')}>
                   <span className="ivc-check" aria-hidden="true">
-                    {iv.coverage[key] && <Icon path={msym.check} size={11} />}
+                    {componentCoverage[key]?.status === 'defined' && <Icon path={msym.check} size={11} />}
+                    {componentCoverage[key]?.status === 'not_applicable' && '–'}
                   </span>
                   {label}
-                  <span className="sr-only">{iv.coverage[key] ? ' covered' : ' not yet covered'}</span>
+                  <span className="sr-only"> {componentCoverage[key]?.status || 'missing'}</span>
                 </li>
               ))}
             </ul>
           </section>
 
-          {draft && (iv.status === 'ready' || iv.status === 'completed') && (
+          {draft && (
             <section className="dash-card ivc-draft">
-              <h2 className="dash-h2">Drafted skill</h2>
+              <h2 className="dash-h2">{iv.status === 'active' ? 'Living draft' : 'Drafted skill'}</h2>
               <dl>
-                <dt>Name</dt>
-                <dd>{draft.name}</dd>
-                <dt>Trigger</dt>
-                <dd>{draft.trigger}</dd>
-                <dt>Procedure</dt>
-                <dd className="ivc-pre">{draft.procedure}</dd>
+                {draft.name && <><dt>Name</dt><dd>{draft.name}</dd></>}
+                {draft.trigger && <><dt>Trigger</dt><dd>{draft.trigger}</dd></>}
+                {draft.principles?.length > 0 && <><dt>Principles</dt><dd><ul>{draft.principles.map((principle, i) => <li key={i}>{principle}</li>)}</ul></dd></>}
+                {draft.procedure && <><dt>Procedure</dt><dd className="ivc-pre">{draft.procedure}</dd></>}
                 {draft.hard_rules?.length > 0 && (
                   <>
                     <dt>Hard rules</dt>
@@ -291,6 +366,7 @@ export default function InterviewChat() {
                     <dd>{draft.escalation_target}</dd>
                   </>
                 )}
+                {draft.quality_checks?.length > 0 && <><dt>Quality checks</dt><dd><ul>{draft.quality_checks.map((check, i) => <li key={i}>{check}</li>)}</ul></dd></>}
               </dl>
               {iv.status === 'ready' && !result && (
                 <div className="ivc-draft-actions">
@@ -302,6 +378,17 @@ export default function InterviewChat() {
                   </button>
                 </div>
               )}
+            </section>
+          )}
+
+          {(iv.assumptions?.length > 0 || iv.warnings?.length > 0 || draft?.sources?.length > 0) && (
+            <section className="dash-card ivc-evidence">
+              <details>
+                <summary>Evidence and open questions</summary>
+                {draft?.sources?.length > 0 && <><h3>Sources</h3><ul>{draft.sources.map((source, i) => <li key={`${source.url || source.title}-${i}`}>{source.url ? <a href={source.url} target="_blank" rel="noreferrer">{source.title}</a> : source.title} <small>{source.origin}</small></li>)}</ul></>}
+                {iv.assumptions?.length > 0 && <><h3>Assumptions</h3><ul>{iv.assumptions.map((item, i) => <li key={i}>{item}</li>)}</ul></>}
+                {iv.warnings?.length > 0 && <><h3>Warnings</h3><ul>{iv.warnings.map((item, i) => <li key={i}>{item}</li>)}</ul></>}
+              </details>
             </section>
           )}
         </aside>

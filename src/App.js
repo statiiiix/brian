@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import HomePage from './HomePage';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import AuthCallback from './pages/AuthCallback';
+import Blog from './pages/Blog';
+import BlogPost from './pages/BlogPost';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import OAuthConsent from './pages/OAuthConsent';
@@ -37,6 +40,13 @@ export function RequireAuth({ children }) {
   return children;
 }
 
+export function HomeRoute() {
+  const { session, loading } = useAuth();
+  if (loading) return <div className="login"><p className="login-notice" role="status">Restoring your secure session…</p></div>;
+  if (session) return <Navigate to="/app" replace />;
+  return <HomePage />;
+}
+
 function RouteMeta() {
   const { pathname } = useLocation();
 
@@ -53,7 +63,10 @@ function RouteMeta() {
       '/app/settings/agents': 'Agents & connections | Brian',
       '/app/settings/privacy': 'Privacy & deletion | Brian',
     };
-    document.title = titles[pathname] || (pathname.startsWith('/app') ? 'Brian App' : 'Brian');
+    const isBlog = pathname === '/blog' || pathname.startsWith('/blog/');
+    if (!isBlog) {
+      document.title = titles[pathname] || (pathname.startsWith('/app') ? 'Brian App' : 'Brian');
+    }
 
     let robots = document.querySelector('meta[name="robots"]');
     if (!robots) {
@@ -61,7 +74,8 @@ function RouteMeta() {
       robots.setAttribute('name', 'robots');
       document.head.appendChild(robots);
     }
-    robots.setAttribute('content', pathname === '/' ? 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1' : 'noindex,nofollow');
+    const indexable = pathname === '/' || isBlog;
+    robots.setAttribute('content', indexable ? 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1' : 'noindex,nofollow');
   }, [pathname]);
 
   return null;
@@ -73,7 +87,9 @@ export default function App() {
       <AuthProvider>
         <RouteMeta />
         <Routes>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/" element={<HomeRoute />} />
+          <Route path="/blog" element={<Blog />} />
+          <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -97,6 +113,7 @@ export default function App() {
             <Route path="settings/privacy" element={<PrivacySettings />} />
           </Route>
         </Routes>
+        <Analytics />
       </AuthProvider>
     </BrowserRouter>
   );

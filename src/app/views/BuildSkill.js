@@ -33,8 +33,10 @@ export default function BuildSkill() {
     if (!goal.trim()) return;
     setBusy(true);
     setError('');
+    // First line is the human-readable title; the rest is the brief that steers
+    // the interview engine. See src/app/interviewTopic.js.
     const topic = [
-      `Build a governed Brian skill for: ${goal.trim()}`,
+      goal.trim(),
       `Risk profile: ${selected.title}.`,
       `Interview emphasis: ${GUARDRAIL_PROMPTS[mode]}`,
       context.trim() ? `Existing notes or source context: ${context.trim()}` : '',
@@ -55,6 +57,7 @@ export default function BuildSkill() {
       <header className="dash-head build-skill-head">
         <div>
           <h1 className="dash-title">Build a skill</h1>
+          <p className="dash-subtitle">Tell Brian what's at stake — it interviews the owner and drafts the governed procedure.</p>
         </div>
       </header>
 
@@ -68,9 +71,9 @@ export default function BuildSkill() {
               <h2>What could go wrong if an agent guessed?</h2>
               <div className="build-mode-grid">
                 {MODES.map((item) => (
-                  <button type="button" key={item.id} className={`build-mode ${mode === item.id ? 'is-selected' : ''}`} onClick={() => setMode(item.id)}>
+                  <button type="button" key={item.id} className={`build-mode ${mode === item.id ? 'is-selected' : ''}`} onClick={() => setMode(item.id)} aria-pressed={mode === item.id}>
                     <span className="build-mode-icon"><Icon path={item.icon} size={18} /></span>
-                    <span><strong>{item.title}</strong></span>
+                    <span><strong>{item.title}</strong><small>{item.description}</small></span>
                   </button>
                 ))}
               </div>
@@ -114,6 +117,7 @@ export default function BuildSkill() {
             <div><Icon path={msym.check} size={15} /> Stop conditions and escalation target</div>
             <div><Icon path={msym.check} size={15} /> Worked examples and version history</div>
           </div>
+          <p className="build-preview-note"><strong>Nothing goes live on its own.</strong> Every drafted skill waits in the review queue until a human approves it.</p>
         </aside>
       </form>
     </div>

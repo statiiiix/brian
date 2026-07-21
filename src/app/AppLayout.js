@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Icon, msym } from '../components/Icon';
 import brianWordmark from '../assets/brian-wordmark.webp';
-import { api } from './api';
 import { useAuth } from './auth';
+import { REVIEW_QUEUE_KEY, fetchReviewQueue } from './reviewQueue';
+import { useCachedQuery } from './useCachedQuery';
 import './AppLayout.css';
 
 const NAV_GROUPS = [
@@ -37,15 +38,19 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, profile, profileError, signOut } = useAuth();
-  const [reviewCount, setReviewCount] = useState(0);
+  const { data: reviewItems, revalidate: revalidateReview } = useCachedQuery(
+    REVIEW_QUEUE_KEY,
+    fetchReviewQueue
+  );
+  const reviewCount = reviewItems?.length || 0;
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [layoutError, setLayoutError] = useState('');
 
+  // The layout never unmounts, so nudge the shared query on navigation. It
+  // only reaches the network when the cached copy has gone stale.
   useEffect(() => {
-    Promise.all([api('/api/skills?status=draft'), api('/api/skills?status=needs_review')])
-      .then(([drafts, flagged]) => setReviewCount(drafts.length + flagged.length))
-      .catch(() => {});
-  }, [location.pathname]);
+    revalidateReview();
+  }, [location.pathname, revalidateReview]);
 
   async function logout() {
     setLogoutBusy(true);
@@ -72,7 +77,7 @@ export default function AppLayout() {
   return (
     <div className="dash">
       <aside className="dash-sidebar">
-        <a href="/" className="dash-logo"><img className="dash-logo-wordmark" src={brianWordmark} alt="Brian" /></a>
+        <span className="dash-logo"><img className="dash-logo-wordmark" src={brianWordmark} alt="Brian" /></span>
         <nav className="dash-nav" aria-label="Dashboard">
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="dash-nav-group">

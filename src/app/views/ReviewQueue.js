@@ -1,34 +1,23 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { msym } from '../../components/Icon';
 import { api } from '../api';
+import { REVIEW_QUEUE_KEY, fetchReviewQueue } from '../reviewQueue';
+import { useCachedQuery } from '../useCachedQuery';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
 import TableSkeleton from '../components/TableSkeleton';
 import './ReviewQueue.css';
 
 export default function ReviewQueue() {
-  const [items, setItems] = useState(null);
+  const {
+    data: items,
+    setData: setItems,
+    error,
+    setError,
+  } = useCachedQuery(REVIEW_QUEUE_KEY, fetchReviewQueue);
   const [open, setOpen] = useState(null);
-  const [error, setError] = useState('');
   const [busyId, setBusyId] = useState(null);
-
-  const load = useCallback(async () => {
-    try {
-      const [drafts, needsReview] = await Promise.all([
-        api('/api/skills?status=draft'),
-        api('/api/skills?status=needs_review'),
-      ]);
-      const merged = [...drafts, ...needsReview].sort(
-        (a, b) => new Date(b.updated_at) - new Date(a.updated_at)
-      );
-      setItems(merged);
-    } catch (e) {
-      setError(e.message);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
 
   async function act(id, action) {
     if (action === 'retire' && !window.confirm('Reject this skill? It will be retired and agents will never run it.')) {
@@ -38,7 +27,7 @@ export default function ReviewQueue() {
     setError('');
     try {
       await api(`/api/skills/${id}/${action}`, { method: 'POST' });
-      setItems((list) => list.filter((s) => s.id !== id));
+      setItems((list) => (list || []).filter((s) => s.id !== id));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -51,6 +40,7 @@ export default function ReviewQueue() {
       <header className="dash-head">
         <div>
           <h1 className="dash-title">Review queue</h1>
+          <p className="dash-subtitle">Nothing enters the active brain until a human signs off on it here.</p>
         </div>
         {items !== null && items.length > 0 && (
           <span className="review-count dash-mono">
@@ -115,6 +105,12 @@ export default function ReviewQueue() {
               <dd>{s.trigger}</dd>
               <dt>Procedure</dt>
               <dd className="review-item-pre">{s.procedure}</dd>
+              {s.principles?.length > 0 && (
+                <>
+                  <dt>Principles</dt>
+                  <dd><ul>{s.principles.map((principle, i) => <li key={i}>{principle}</li>)}</ul></dd>
+                </>
+              )}
               {s.hard_rules?.length > 0 && (
                 <>
                   <dt>Hard rules</dt>
@@ -137,6 +133,24 @@ export default function ReviewQueue() {
                 <>
                   <dt>Escalates to</dt>
                   <dd>{s.escalation_target}</dd>
+                </>
+              )}
+              {s.quality_checks?.length > 0 && (
+                <>
+                  <dt>Quality checks</dt>
+                  <dd><ul>{s.quality_checks.map((check, i) => <li key={i}>{check}</li>)}</ul></dd>
+                </>
+              )}
+              {s.sources?.length > 0 && (
+                <>
+                  <dt>Sources</dt>
+                  <dd>
+                    <ul>{s.sources.map((source, i) => (
+                      <li key={`${source.url || source.title}-${i}`}>
+                        {source.url ? <a href={source.url} target="_blank" rel="noreferrer">{source.title}</a> : source.title}
+                      </li>
+                    ))}</ul>
+                  </dd>
                 </>
               )}
             </dl>

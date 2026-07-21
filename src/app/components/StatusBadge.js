@@ -11,6 +11,7 @@ const LABELS = {
   failed: 'Failed',
   connected: 'Connected',
   ready: 'Ready to connect',
+  unverified: 'Configured · unverified',
   needs_setup: 'Setup required',
 };
 

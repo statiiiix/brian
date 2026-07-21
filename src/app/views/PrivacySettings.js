@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Icon } from '../../components/Icon';
 import { api } from '../api';
+import { readCache, writeCache } from '../queryCache';
 import { useAuth } from '../auth';
 import './PrivacySettings.css';
 
+const PRIVACY_KEY = '/api/privacy/deletion-requests';
 const ACCOUNT_CONFIRMATION = 'DELETE MY ACCOUNT';
 
 function revocationNotice(scope) {
@@ -57,7 +59,7 @@ function activeRequest(requests, scope) {
 
 export default function PrivacySettings() {
   const { profile } = useAuth();
-  const [requests, setRequests] = useState(null);
+  const [requests, setRequests] = useState(() => readCache(PRIVACY_KEY) ?? null);
   const [confirmScope, setConfirmScope] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState('');
@@ -77,12 +79,11 @@ export default function PrivacySettings() {
   const companyName = currentTenant?.name || '';
 
   const load = useCallback(async () => {
-    setRequests(null);
     setError('');
     setLoadFailed(false);
     try {
       const payload = await api('/api/privacy/deletion-requests');
-      setRequests(Array.isArray(payload?.requests) ? payload.requests : []);
+      setRequests(writeCache(PRIVACY_KEY, Array.isArray(payload?.requests) ? payload.requests : []));
     } catch (loadError) {
       setError(loadError.message || 'Unable to load deletion requests.');
       setRequests([]);

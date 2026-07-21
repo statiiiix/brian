@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import { supabase } from './lib/supabase';
 
@@ -13,6 +13,10 @@ jest.mock('./lib/supabase', () => ({
       signOut: jest.fn().mockResolvedValue({ error: null }),
     },
   },
+}));
+
+jest.mock('./app/api', () => ({
+  api: jest.fn((path) => Promise.resolve(path === '/api/me' ? {} : [])),
 }));
 
 beforeAll(() => {
@@ -44,6 +48,18 @@ test('renders the hero headline at /', async () => {
   expect(
     screen.getByRole('heading', { level: 1, name: /company.*judgment/i })
   ).toBeInTheDocument();
+});
+
+test('redirects an authenticated visitor from / to /app', async () => {
+  supabase.auth.getSession.mockResolvedValue({
+    data: { session: { user: { email: 'founder@example.com' } } },
+    error: null,
+  });
+  window.history.pushState({}, '', '/');
+
+  render(<App />);
+
+  await waitFor(() => expect(window.location.pathname).toBe('/app'));
 });
 
 test('renders all main landing sections', async () => {

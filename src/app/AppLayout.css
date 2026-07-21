@@ -2,6 +2,8 @@
    Dashboard shell + shared primitives
    Tokens mirror the landing page brand: warm editorial light —
    off-white paper, burnt-orange accents, Bitcount + Space Grotesk.
+   The shell reads like a broadsheet: rule lines over boxes, generous air,
+   one saturated accent doing all the pointing.
 --------------------------------------------------------------------------- */
 
 .dash {
@@ -39,6 +41,7 @@
   --shadow-glow: 0 0 0 1px rgba(209, 82, 26, 0.25), 0 4px 20px -6px rgba(209, 82, 26, 0.3);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
+  position: relative;
   min-height: 100dvh;
   background: var(--bg);
   color: var(--fg);
@@ -46,6 +49,28 @@
   font-size: 14.5px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Quiet warm light source + paper grain, same atmosphere as the landing hero. */
+.dash::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(70rem 44rem at 62% -14rem, rgba(245, 166, 35, 0.1), transparent 62%),
+    radial-gradient(46rem 46rem at 108% 4%, rgba(209, 82, 26, 0.045), transparent 55%);
+}
+
+.dash::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.3;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.13 0 0 0 0 0.1 0 0 0 0 0.08 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 .dash :focus-visible {
@@ -74,9 +99,9 @@
   display: flex;
   flex-direction: column;
   width: var(--sidebar-w);
-  padding: 1.25rem 0.85rem 1.5rem;
+  padding: 1.25rem 0.85rem 1.25rem;
   border-right: 1px solid var(--border);
-  background: linear-gradient(180deg, #f3eee2 0%, var(--bg) 45%);
+  background: linear-gradient(180deg, #f2ecdf 0%, var(--bg) 52%);
   overflow: hidden;
 }
 
@@ -117,6 +142,40 @@
   gap: 1.15rem;
   flex: 1;
   min-height: 0;
+  /* Scroll within the sidebar when the window is short — never paint over the footer. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 0.5rem;
+}
+
+/* Short windows: tighten the nav so it always fits without scrolling. */
+@media (min-width: 861px) and (max-height: 720px) {
+  .dash-sidebar {
+    padding-top: 0.9rem;
+  }
+
+  .dash-logo {
+    padding-bottom: 0.7rem;
+  }
+
+  .dash-nav {
+    gap: 0.7rem;
+  }
+
+  .dash-nav-item {
+    min-height: 33px;
+    padding-top: 0.32rem;
+    padding-bottom: 0.32rem;
+  }
+
+  .dash-nav-label {
+    padding-bottom: 0.25rem;
+  }
+
+  .dash-sidebar-foot {
+    padding-top: 0.6rem;
+    margin-top: 0.4rem;
+  }
 }
 
 .dash-nav-group {
@@ -126,10 +185,10 @@
 }
 
 .dash-nav-label {
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.11em;
   color: var(--muted-2);
   padding: 0 0.65rem 0.4rem;
   user-select: none;
@@ -155,7 +214,7 @@
 .dash-nav-icon {
   display: inline-flex;
   color: var(--muted-2);
-  transition: color 150ms var(--ease);
+  transition: color 150ms var(--ease), transform 200ms var(--ease);
 }
 
 .dash-nav-item:hover {
@@ -165,11 +224,13 @@
 
 .dash-nav-item:hover .dash-nav-icon {
   color: var(--muted);
+  transform: translateY(-1px);
 }
 
 .dash-nav-item.is-active {
-  color: var(--fg);
-  background: linear-gradient(90deg, rgba(209, 82, 26, 0.1), rgba(209, 82, 26, 0.03));
+  color: var(--accent-text);
+  background: none;
+  font-weight: 600;
 }
 
 .dash-nav-item.is-active::before {
@@ -178,8 +239,8 @@
   left: 0;
   top: 8px;
   bottom: 8px;
-  width: 2px;
-  border-radius: 2px;
+  width: 3px;
+  border-radius: 3px;
   background: var(--accent);
 }
 
@@ -202,17 +263,22 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+  box-shadow: 0 4px 10px -4px rgba(209, 82, 26, 0.6);
 }
 
 /* Footer — user card + logout, lifted off the bottom edge */
 
 .dash-sidebar-foot {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  padding: 0.9rem 0.25rem 0.75rem;
+  padding: 0.9rem 0.25rem 0.5rem;
   margin-top: 0.75rem;
   border-top: 1px solid var(--border);
+  background: var(--bg);
 }
 
 .dash-user {
@@ -231,7 +297,7 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--bg-elevated);
+  background: linear-gradient(160deg, #fdf8ee, var(--bg-elevated));
   border: 1px solid var(--border-strong);
   color: var(--fg-secondary);
   font-size: 0.78rem;
@@ -294,6 +360,8 @@
 /* --- Main column ----------------------------------------------------------- */
 
 .dash-main {
+  position: relative;
+  z-index: 1;
   margin-left: var(--sidebar-w);
   min-width: 0;
   padding: 2.25rem 2.5rem 5rem;
@@ -332,6 +400,7 @@
   font-weight: 620;
   letter-spacing: -0.035em;
   line-height: 1.05;
+  text-wrap: balance;
 }
 
 .dash-subtitle {
@@ -352,11 +421,12 @@
   gap: 0.35rem;
   color: var(--muted);
   text-decoration: none;
-  transition: color 150ms var(--ease);
+  transition: color 150ms var(--ease), transform 150ms var(--ease);
 }
 
 .dash-back a:hover {
   color: var(--fg);
+  transform: translateX(-2px);
 }
 
 /* --- Buttons ----------------------------------------------------------------- */
@@ -378,7 +448,7 @@
   text-decoration: none;
   white-space: nowrap;
   transition: background 150ms var(--ease), color 150ms var(--ease),
-    border-color 150ms var(--ease), box-shadow 200ms var(--ease), transform 100ms var(--ease);
+    border-color 150ms var(--ease), box-shadow 200ms var(--ease), transform 150ms var(--ease);
 }
 
 .dash-btn:active:not(:disabled) {
@@ -399,6 +469,7 @@
 
 .dash-btn--primary:hover:not(:disabled) {
   background: linear-gradient(180deg, #e56d2a, var(--accent-hover));
+  transform: translateY(-1px);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset,
     0 12px 26px -12px rgba(209, 82, 26, 0.7);
 }
@@ -454,12 +525,12 @@
 
 .dash-table th {
   text-align: left;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   color: var(--muted-2);
-  padding: 0.75rem 1.1rem;
+  padding: 0.7rem 1.1rem;
   border-bottom: 1px solid var(--border);
   background: var(--bg-sunken, #f1ebdf);
   white-space: nowrap;
@@ -528,7 +599,7 @@
   padding: 0.55rem 0.75rem;
   width: 100%;
   box-sizing: border-box;
-  transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease);
+  transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease), background 150ms var(--ease);
 }
 
 .dash-input::placeholder,
@@ -542,10 +613,16 @@
   line-height: 1.55;
 }
 
+.dash-input:hover:not(:focus),
+.dash-textarea:hover:not(:focus) {
+  border-color: var(--muted-2);
+}
+
 .dash-input:focus,
 .dash-textarea:focus {
   outline: none;
   border-color: var(--accent);
+  background: #fffefb;
   box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
@@ -555,6 +632,7 @@
   margin: 0 0 1rem;
   padding: 0.65rem 0.95rem;
   border: 1px solid rgba(207, 63, 52, 0.3);
+  border-left: 3px solid var(--red);
   border-radius: var(--radius-sm);
   background: var(--red-dim);
   color: var(--red);
@@ -565,10 +643,23 @@
   margin: 0 0 1rem;
   padding: 0.65rem 0.95rem;
   border: 1px solid rgba(28, 148, 96, 0.3);
+  border-left: 3px solid var(--green);
   border-radius: var(--radius-sm);
   background: var(--green-dim);
   color: var(--green);
   font-size: 0.85rem;
+  animation: dash-notice-in 250ms var(--ease) both;
+}
+
+@keyframes dash-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Empty state */
@@ -582,7 +673,8 @@
   padding: 3.5rem 1.5rem;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-lg);
-  background: transparent;
+  background:
+    radial-gradient(24rem 12rem at 50% 0%, rgba(245, 166, 35, 0.06), transparent 70%);
 }
 
 .dash-empty-icon {
@@ -592,10 +684,11 @@
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: var(--bg-elevated);
+  background: var(--bg-raised);
   border: 1px solid var(--border);
-  color: var(--muted);
+  color: var(--accent-text);
   margin-bottom: 0.6rem;
+  box-shadow: var(--shadow-sm);
 }
 
 .dash-empty-title {
@@ -734,7 +827,7 @@
     background: rgba(247, 243, 234, 0.85);
     backdrop-filter: blur(14px) saturate(1.3);
     -webkit-backdrop-filter: blur(14px) saturate(1.3);
-    padding: 0.55rem 1rem;
+    padding: 0.5rem 0.75rem;
     overflow-x: auto;
   }
 
@@ -749,6 +842,16 @@
     align-items: center;
     gap: 0.25rem;
     flex: 1;
+    overflow-y: visible;
+    overflow-x: auto;
+    padding-bottom: 0;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 14px), transparent);
+    mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 14px), transparent);
+  }
+
+  .dash-nav::-webkit-scrollbar {
+    display: none;
   }
 
   .dash-nav-group {
@@ -762,7 +865,8 @@
 
   .dash-nav-item {
     white-space: nowrap;
-    min-height: 40px;
+    min-height: 44px;
+    padding: 0.5rem 0.7rem;
   }
 
   .dash-nav-item.is-active::before {
@@ -771,7 +875,7 @@
     right: 10px;
     bottom: 2px;
     width: auto;
-    height: 2px;
+    height: 3px;
   }
 
   .dash-sidebar-foot {
@@ -780,6 +884,7 @@
     margin: 0;
     flex-direction: row;
     align-items: center;
+    background: none;
   }
 
   .dash-user {
@@ -787,12 +892,37 @@
   }
 
   .dash-logout {
-    min-height: 40px;
+    min-height: 44px;
   }
 
   .dash-main {
     margin-left: 0;
-    padding: 1.5rem 1rem 3.5rem;
+    padding: 1.25rem 1rem 3.5rem;
+  }
+
+  /* Touch targets ≥44px and 16px inputs (prevents iOS focus zoom). */
+  .dash-btn {
+    min-height: 44px;
+  }
+
+  .dash-chip {
+    min-height: 38px;
+    padding: 0.4rem 0.9rem;
+  }
+
+  .dash-input,
+  .dash-textarea {
+    font-size: 16px;
+    padding: 0.65rem 0.8rem;
+  }
+
+  .dash-table th,
+  .dash-table td {
+    padding: 0.75rem 0.85rem;
+  }
+
+  .dash-head {
+    margin-bottom: 1.35rem;
   }
 }
 

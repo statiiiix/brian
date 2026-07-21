@@ -20,3 +20,22 @@
   color: var(--accent-text);
   background: rgba(209, 82, 26, 0.12);
 }
+
+.skills-name-cell {
+  max-width: 26rem;
+}
+
+.skills-name-cell a {
+  display: block;
+}
+
+.skills-trigger-hint {
+  display: block;
+  margin-top: 0.12rem;
+  color: var(--muted-2);
+  font-size: 0.76rem;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

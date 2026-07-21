@@ -4,9 +4,10 @@ import { Icon } from '../components/Icon';
 import './PillNav.css';
 
 const navItems = [
-  { label: 'Why Brian', href: '#agent-guardrails', icon: 'verified_user' },
-  { label: 'Pricing', href: '#pricing', icon: 'sell' },
-  { label: 'FAQ', href: '#faq', icon: 'help' },
+  { label: 'Why Brian', href: '/#agent-guardrails', icon: 'verified_user' },
+  { label: 'Pricing', href: '/#pricing', icon: 'sell' },
+  { label: 'Blog', href: '/blog', icon: 'article' },
+  { label: 'FAQ', href: '/#faq', icon: 'help' },
 ];
 
 export default function PillNav() {
@@ -43,7 +44,7 @@ export default function PillNav() {
       <div className="pnav-pill">
         <div className="pnav-bar">
           <span className="pnav-balance" aria-hidden="true" />
-          <a href="#top" className="pnav-logo" onClick={closeMenu}>
+          <a href="/" className="pnav-logo" onClick={closeMenu}>
             <img className="pnav-logo-wordmark" src={brianWordmark} alt="Brian" />
           </a>
           <button
@@ -74,7 +75,7 @@ export default function PillNav() {
             </div>
 
             <div className="pnav-menu-actions">
-              <a href="#cta" className="pnav-cta" onClick={closeMenu} tabIndex={open ? 0 : -1}>
+              <a href="/#cta" className="pnav-cta" onClick={closeMenu} tabIndex={open ? 0 : -1}>
                 <span>Join waitlist</span>
                 <Icon path="arrow_forward" size={20} />
               </a>

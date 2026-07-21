@@ -7,14 +7,33 @@
 }
 
 .review-item {
+  position: relative;
   margin-bottom: 0.85rem;
   padding-bottom: 1.2rem;
+  padding-left: 1rem;
   border-bottom: 1px solid var(--border);
   transition: border-color 150ms var(--ease);
 }
 
+.review-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 1.35rem;
+  bottom: 1.4rem;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  transition: background 150ms var(--ease), box-shadow 150ms var(--ease);
+}
+
 .review-item:hover {
   border-color: var(--border-strong);
+}
+
+.review-item:hover::before {
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(209, 82, 26, 0.4);
 }
 
 .review-item-head {

@@ -17,7 +17,6 @@ export default function SkillCreationFilm() {
         { title: 'Review before it runs', body: 'A person approves the procedure, guardrails, ownership, and source trail.' },
       ]}
       orange
-      showControl={false}
     />
   );
 }

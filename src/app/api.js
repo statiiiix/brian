@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { safeReturnTo, withReturnTo } from '../lib/returnTo';
+import { invalidateCache, resourceKey } from './queryCache';
 
 let refreshPromise = null;
 
@@ -60,5 +61,35 @@ export async function api(path, {
   if (!res.ok) {
     throw new ApiError(data?.error || `request failed (${res.status})`, res.status, data || {});
   }
+  if (method !== 'GET') invalidateCache(resourceKey(path));
+  return data;
+}
+
+export async function apiForm(path, formData, {
+  method = 'POST',
+  headers,
+  signal,
+  redirectOnUnauthorized = true,
+} = {}) {
+  const accessToken = await currentAccessToken();
+  const res = await fetch(path, {
+    method,
+    signal,
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...headers,
+    },
+    body: formData,
+  });
+  const data = res.status === 204 ? null : await res.json().catch(() => ({}));
+  if (res.status === 401 && redirectOnUnauthorized) {
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+    const here = safeReturnTo(`${window.location.pathname}${window.location.search}`);
+    window.location.assign(withReturnTo('/login', here));
+  }
+  if (!res.ok) {
+    throw new ApiError(data?.error || `request failed (${res.status})`, res.status, data || {});
+  }
+  invalidateCache(resourceKey(path));
   return data;
 }

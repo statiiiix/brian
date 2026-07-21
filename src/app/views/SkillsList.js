@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { msym } from '../../components/Icon';
-import { api } from '../api';
+import { useCachedQuery } from '../useCachedQuery';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
 import TableSkeleton from '../components/TableSkeleton';
@@ -16,13 +16,8 @@ function fmtDate(iso) {
 }
 
 export default function SkillsList() {
-  const [skills, setSkills] = useState(null);
+  const { data: skills, error } = useCachedQuery('/api/skills');
   const [filter, setFilter] = useState('all');
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    api('/api/skills').then(setSkills).catch((e) => setError(e.message));
-  }, []);
 
   const counts = useMemo(() => {
     const c = { all: skills?.length || 0 };
@@ -40,6 +35,7 @@ export default function SkillsList() {
       <header className="dash-head">
         <div>
           <h1 className="dash-title">Skills</h1>
+          <p className="dash-subtitle">The governed procedures your agents retrieve before they act.</p>
         </div>
         <Link to="/app/build" className="dash-btn dash-btn--primary">
           Build a skill
@@ -98,7 +94,10 @@ export default function SkillsList() {
             <tbody>
               {visible.map((s) => (
                 <tr key={s.id}>
-                  <td><Link to={`/app/skills/${s.id}`}>{s.name}</Link></td>
+                  <td className="skills-name-cell">
+                    <Link to={`/app/skills/${s.id}`}>{s.name}</Link>
+                    {s.trigger && <span className="skills-trigger-hint">{s.trigger}</span>}
+                  </td>
                   <td>{s.owner || '—'}</td>
                   <td><StatusBadge status={s.status} /></td>
                   <td className="dash-mono">v{s.version}</td>

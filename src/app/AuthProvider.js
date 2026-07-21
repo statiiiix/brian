@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { api } from './api';
+import { clearCache } from './queryCache';
 
 const AuthContext = createContext(null);
 
@@ -25,6 +26,7 @@ export function AuthProvider({ children }) {
       setSession(nextSession);
       setLoading(false);
       if (!nextSession) {
+        clearCache();
         setProfile(null);
         setProfileError('');
       }
@@ -63,6 +65,7 @@ export function AuthProvider({ children }) {
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    clearCache();
     setSession(null);
     setProfile(null);
   }, []);

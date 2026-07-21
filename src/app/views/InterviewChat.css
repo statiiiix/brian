@@ -1,7 +1,63 @@
+/* A goal sentence is not a display headline — hold it to a readable measure and
+   a size that doesn't dominate the page. */
+.ivc-title {
+  font-size: clamp(1.5rem, 2.2vw, 1.85rem);
+  max-width: 34ch;
+  line-height: 1.15;
+}
+
+.ivc-brief {
+  margin-top: 0.65rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  max-width: 58ch;
+}
+
+.ivc-brief summary {
+  cursor: pointer;
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  list-style: none;
+  width: fit-content;
+}
+
+.ivc-brief summary::-webkit-details-marker {
+  display: none;
+}
+
+.ivc-brief summary::after {
+  content: ' +';
+}
+
+.ivc-brief[open] summary::after {
+  content: ' −';
+}
+
+.ivc-brief summary:hover {
+  color: var(--accent-text);
+}
+
+.ivc-brief p {
+  margin: 0.4rem 0 0;
+}
+
 .ivc-meta {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.ivc-source {
+  opacity: 0.85;
+}
+
+.ivc-source a {
+  color: inherit;
+  text-decoration: underline;
 }
 
 .ivc-grid {
@@ -9,6 +65,10 @@
   grid-template-columns: minmax(0, 1fr) 19rem;
   gap: 1.25rem;
   align-items: start;
+}
+
+.ivc-source-control {
+  margin: -0.55rem 0 1rem;
 }
 
 /* --- Chat column ---------------------------------------------------------- */
@@ -70,16 +130,12 @@
   padding: 0 0.25rem;
 }
 
+/* The icon is the only label for Brian's messages now, so it needs to read
+   clearly on its own rather than sit beside a text name. */
 .ivc-msg-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 5px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  flex-shrink: 0;
+  display: block;
+  width: 22px;
+  height: 22px;
 }
 
 .ivc-msg--brian {
@@ -105,7 +161,23 @@
   color: var(--fg);
 }
 
-/* Typing indicator — 3-dot pulse */
+/* Optimistic bubble: shown the instant you hit send, dimmed until the server
+   acknowledges it. */
+.ivc-msg.is-sending p {
+  opacity: 0.62;
+}
+
+.ivc-msg.is-failed p {
+  border-color: rgba(207, 63, 52, 0.4);
+  border-style: dashed;
+}
+
+/* Typing indicator — 3-dot pulse. Held back briefly so your own message lands
+   first rather than racing Brian's response. */
+
+.ivc-msg--thinking {
+  animation-delay: 160ms;
+}
 
 .ivc-typing {
   display: inline-flex;
@@ -141,25 +213,97 @@
   }
 }
 
-/* Composer */
+/* Composer — a single floating field, no enclosing bar and no seam against the
+   thread above it. */
 
-.ivc-input {
-  display: flex;
-  gap: 0.6rem;
-  align-items: flex-end;
-  padding: 0.9rem 1.1rem;
-  border-top: 1px solid var(--border);
-  background: var(--bg-sunken, #f1ebdf);
+/* Shares the thread's gutter so the field lines up with the bubbles above it. */
+.ivc-composer {
+  padding: 0.5rem 1.4rem 0.25rem;
 }
 
-.ivc-input .dash-textarea {
-  min-height: 2.7rem;
+.ivc-composer-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding: 0.4rem 0.4rem 0.4rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--bg-raised);
+  box-shadow: 0 1px 2px rgba(74, 50, 22, 0.05), 0 14px 32px -22px rgba(74, 50, 22, 0.45);
+  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+
+.ivc-composer-field:hover {
+  border-color: var(--border-strong);
+}
+
+.ivc-composer-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring), 0 14px 32px -22px rgba(74, 50, 22, 0.45);
+}
+
+.ivc-answer {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  /* Height is driven by content in JS — no drag handle, no fixed box. */
+  resize: none;
+  overflow-y: auto;
+  max-height: 11rem;
+  padding: 0.5rem 0;
+}
+
+.ivc-answer::placeholder {
+  color: var(--muted-2);
+}
+
+/* The ring lives on the wrapper, so suppress the shell's own focus outline. */
+.dash .ivc-answer:focus,
+.dash .ivc-answer:focus-visible {
+  outline: none;
+}
+
+.ivc-answer:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.ivc-composer-hint {
+  margin: 0.5rem 0 0;
+  text-align: right;
+  font-size: 0.7rem;
+  color: var(--muted-2);
+  /* Only relevant once the field has focus — quiet until then. */
+  opacity: 0;
+  transition: opacity 160ms var(--ease);
+}
+
+.ivc-composer:focus-within .ivc-composer-hint {
+  opacity: 1;
+}
+
+.ivc-composer-hint kbd {
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .ivc-send {
-  width: 42px;
-  min-width: 42px;
-  padding: 0.5rem;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .ivc-retry {
@@ -167,7 +311,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin: 0.75rem 1.1rem;
+  margin: 0.25rem 1.4rem 0;
 }
 
 .ivc-ready,
@@ -257,6 +401,14 @@
   color: var(--fg);
 }
 
+.ivc-coverage li.is-na {
+  color: var(--muted-2);
+}
+
+.ivc-coverage li.is-na .ivc-check {
+  border-style: dashed;
+}
+
 .ivc-check {
   display: inline-flex;
   align-items: center;
@@ -317,6 +469,12 @@
   flex-wrap: wrap;
 }
 
+.ivc-evidence summary { cursor: pointer; font-size: .82rem; font-weight: 600; }
+.ivc-evidence h3 { margin: .85rem 0 .3rem; color: var(--muted-2); font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; }
+.ivc-evidence ul { margin: 0; padding-left: 1.05rem; color: var(--fg-secondary); font-size: .8rem; }
+.ivc-evidence a { color: var(--accent-text); }
+.ivc-evidence small { color: var(--muted); }
+
 /* --- Responsive ---------------------------------------------------------------- */
 
 @media (max-width: 1024px) {
@@ -326,5 +484,40 @@
 
   .ivc-rail {
     position: static;
+  }
+}
+
+@media (max-width: 720px) {
+  .ivc-thread {
+    padding: 1rem;
+  }
+
+  .ivc-composer {
+    padding: 0.5rem 1rem 0.25rem;
+  }
+
+  .ivc-msg {
+    max-width: 92%;
+  }
+
+  /* 16px keeps iOS from zooming the viewport on focus. */
+  .ivc-answer {
+    font-size: 16px;
+  }
+
+  .ivc-send {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ivc-msg {
+    animation: none;
+  }
+
+  .ivc-typing span {
+    animation-duration: 2.4s;
   }
 }

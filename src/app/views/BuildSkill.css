@@ -7,8 +7,8 @@
 .build-step-number { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: 0.65rem; background: var(--accent-dim); color: var(--accent-text); font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600; }
 .build-step-content h2, .build-skill-preview h2 { margin: 0 0 1rem; font-family: var(--font-display); font-size: 1.35rem; font-weight: 550; letter-spacing: -0.02em; line-height: 1.2; }
 .build-mode-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
-.build-mode { display: flex; gap: 0.7rem; align-items: center; padding: 0.75rem; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--bg-sunken); color: var(--fg-secondary); text-align: left; font: inherit; cursor: pointer; transition: border-color 150ms var(--ease), background 150ms var(--ease), box-shadow 150ms var(--ease); }
-.build-mode:hover { border-color: var(--border-strong); background: var(--bg-hover); }
+.build-mode { display: flex; gap: 0.7rem; align-items: flex-start; padding: 0.8rem; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--bg-sunken); color: var(--fg-secondary); text-align: left; font: inherit; cursor: pointer; transition: border-color 150ms var(--ease), background 150ms var(--ease), box-shadow 150ms var(--ease), transform 150ms var(--ease); }
+.build-mode:hover { border-color: var(--border-strong); background: var(--bg-hover); transform: translateY(-1px); }
 .build-mode.is-selected { border-color: rgba(209, 82, 26, 0.55); background: var(--accent-dim); box-shadow: 0 0 0 2px rgba(209, 82, 26, 0.08); }
 .build-mode-icon { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; flex: 0 0 auto; border-radius: 0.55rem; background: var(--bg-raised); color: var(--accent-text); }
 .build-mode strong, .build-mode small { display: block; }

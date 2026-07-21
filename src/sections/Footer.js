@@ -5,14 +5,15 @@ const columns = [
   {
     title: 'Product',
     links: [
-      { label: 'Why Brian', href: '#agent-guardrails' },
-      { label: 'Pricing', href: '#pricing' },
+      { label: 'Why Brian', href: '/#agent-guardrails' },
+      { label: 'Pricing', href: '/#pricing' },
+      { label: 'Blog', href: '/blog' },
     ],
   },
   {
     title: 'Company',
     links: [
-      { label: 'FAQ', href: '#faq' },
+      { label: 'FAQ', href: '/#faq' },
       { label: 'Create account', href: '/signup' },
       { label: 'Log in', href: '/login' },
       { label: 'Contact', href: 'mailto:a7madinquiries@gmail.com' },

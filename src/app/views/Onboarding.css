@@ -12,11 +12,16 @@
 }
 
 .onboarding-brand {
+  display: inline-flex;
+  align-items: center;
   color: var(--fg);
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 650;
   text-decoration: none;
+}
+
+.onboarding-brand-wordmark {
+  display: block;
+  width: 104px;
+  height: auto;
 }
 
 .onboarding-main {

@@ -22,6 +22,10 @@
   margin-bottom: 1px;
 }
 
+.interviews-source-row {
+  flex-basis: 100%;
+}
+
 @media (max-width: 720px) {
   .interviews-new-fields {
     grid-template-columns: 1fr;

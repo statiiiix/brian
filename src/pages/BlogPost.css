@@ -1,0 +1,298 @@
+/* ---------------------------------------------------------------------------
+   Blog article — warm editorial reading page.
+   Unique namespace: bpost- (do not reuse classes from other pages/sections).
+--------------------------------------------------------------------------- */
+
+.bpost {
+  position: relative;
+  min-height: 100dvh;
+  background: var(--bg, #f7f3ea);
+  color: var(--fg, #201b15);
+  font-family: var(--font, 'Space Grotesk', sans-serif);
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.bpost-main {
+  max-width: var(--container, 72rem);
+  margin: 0 auto;
+  padding: 0 1.5rem 5rem;
+}
+
+.bpost-article {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding-top: 9rem;
+}
+
+.bpost-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.84rem;
+  color: var(--muted-2, #a79d8e);
+}
+
+.bpost-crumbs a {
+  color: var(--muted, #787064);
+  text-decoration: none;
+}
+
+.bpost-crumbs a:hover {
+  color: var(--accent-text, #ad3f10);
+}
+
+.bpost-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 1.6rem;
+  font-size: 0.84rem;
+  color: var(--muted, #787064);
+}
+
+.bpost-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-text, #ad3f10);
+  background: var(--accent-soft, rgba(209, 82, 26, 0.1));
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+}
+
+.bpost-title {
+  margin: 1.1rem 0 0;
+  font-size: clamp(1.9rem, 4.6vw, 2.7rem);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.bpost-lede {
+  margin: 1.2rem 0 0;
+  font-size: 1.08rem;
+  line-height: 1.7;
+  color: var(--fg-secondary, #4a443b);
+}
+
+.bpost-body {
+  margin-top: 2.6rem;
+  padding-top: 2.4rem;
+  border-top: 1px solid var(--border, rgba(32, 27, 21, 0.1));
+}
+
+.bpost-p {
+  margin: 0 0 1.35rem;
+  font-size: 1.02rem;
+  line-height: 1.78;
+  color: var(--fg-secondary, #4a443b);
+}
+
+.bpost-body a,
+.bpost-faq-answer a {
+  color: var(--accent-text, #ad3f10);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-line, rgba(209, 82, 26, 0.28));
+  text-underline-offset: 3px;
+}
+
+.bpost-body a:hover,
+.bpost-faq-answer a:hover {
+  text-decoration-color: var(--accent, #d1521a);
+}
+
+.bpost-h2 {
+  margin: 2.6rem 0 1rem;
+  font-size: 1.45rem;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.016em;
+  color: var(--fg, #201b15);
+}
+
+.bpost-h3 {
+  margin: 1.9rem 0 0.7rem;
+  font-size: 1.1rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--fg, #201b15);
+}
+
+.bpost-list {
+  margin: 0 0 1.35rem;
+  padding-left: 1.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.bpost-list li {
+  font-size: 1.0rem;
+  line-height: 1.72;
+  color: var(--fg-secondary, #4a443b);
+}
+
+.bpost-list li::marker {
+  color: var(--accent, #d1521a);
+}
+
+.bpost-callout {
+  margin: 0 0 1.35rem;
+  padding: 1.15rem 1.35rem;
+  background: var(--accent-soft, rgba(209, 82, 26, 0.1));
+  border-left: 3px solid var(--accent, #d1521a);
+  border-radius: 0 12px 12px 0;
+  font-size: 0.98rem;
+  line-height: 1.7;
+  color: var(--fg, #201b15);
+}
+
+.bpost-body code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.9em;
+  background: var(--bg-sunken, #f1ebdf);
+  border: 1px solid var(--border, rgba(32, 27, 21, 0.1));
+  border-radius: 6px;
+  padding: 0.1em 0.35em;
+}
+
+.bpost-faq {
+  margin-top: 1rem;
+}
+
+.bpost-faq-item {
+  border-bottom: 1px solid var(--border, rgba(32, 27, 21, 0.1));
+}
+
+.bpost-faq-item:first-of-type {
+  border-top: 1px solid var(--border, rgba(32, 27, 21, 0.1));
+}
+
+.bpost-faq-item summary {
+  padding: 1.05rem 0.2rem;
+  font-size: 1rem;
+  font-weight: 550;
+  cursor: pointer;
+  list-style: none;
+  transition: color 150ms ease;
+}
+
+.bpost-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.bpost-faq-item summary:hover {
+  color: var(--accent-text, #ad3f10);
+}
+
+.bpost-faq-answer {
+  padding: 0 0.2rem 1.2rem;
+  font-size: 0.96rem;
+  line-height: 1.72;
+  color: var(--muted, #787064);
+}
+
+.bpost-cta {
+  margin-top: 3.2rem;
+  padding: 2rem 2.1rem;
+  background: var(--bg-raised, #fffdf8);
+  border: 1px solid var(--accent-line, rgba(209, 82, 26, 0.28));
+  border-radius: 18px;
+  box-shadow: var(--shadow-md, 0 16px 40px -20px rgba(74, 50, 22, 0.22));
+}
+
+.bpost-cta h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 650;
+  letter-spacing: -0.014em;
+}
+
+.bpost-cta p {
+  margin: 0.7rem 0 1.3rem;
+  font-size: 0.97rem;
+  line-height: 1.7;
+  color: var(--muted, #787064);
+}
+
+.bpost-cta-btn {
+  display: inline-block;
+  padding: 0.7rem 1.4rem;
+  background: var(--accent, #d1521a);
+  color: var(--accent-ink, #fff8f2);
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+  border-radius: 999px;
+  transition: background-color 160ms ease, transform 160ms var(--ease, ease);
+}
+
+.bpost-cta-btn:hover {
+  background: var(--accent-hover, #b8420f);
+  transform: translateY(-1px);
+}
+
+.bpost-related {
+  margin-top: 3.2rem;
+}
+
+.bpost-related h2 {
+  margin: 0 0 1.1rem;
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+}
+
+.bpost-related-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.bpost-related-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1.2rem 1.3rem;
+  background: var(--bg-raised, #fffdf8);
+  border: 1px solid var(--border, rgba(32, 27, 21, 0.1));
+  border-radius: 14px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 180ms ease, transform 180ms var(--ease, ease);
+}
+
+.bpost-related-card:hover {
+  border-color: var(--accent-line, rgba(209, 82, 26, 0.28));
+  transform: translateY(-2px);
+}
+
+.bpost-related-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-text, #ad3f10);
+}
+
+.bpost-related-title {
+  font-size: 0.95rem;
+  font-weight: 550;
+  line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  .bpost-article {
+    padding-top: 8rem;
+  }
+
+  .bpost-related-grid {
+    grid-template-columns: 1fr;
+  }
+}

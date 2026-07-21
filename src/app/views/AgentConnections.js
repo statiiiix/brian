@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Icon } from '../../components/Icon';
 import { BRIAN_MCP_URL, supabase } from '../../lib/supabase';
 import { useAuth } from '../auth';
 import { api } from '../api';
+import { useCachedQuery } from '../useCachedQuery';
 import { AGENT_PERMISSION_DEFINITIONS } from '../permissions';
 import './AgentConnections.css';
 
@@ -22,25 +23,19 @@ function formatTimestamp(value, empty = 'Never') {
 
 export default function AgentConnections() {
   const { profile } = useAuth();
-  const [connections, setConnections] = useState(null);
-  const [error, setError] = useState('');
+  const {
+    data: connections,
+    error,
+    setError,
+    refresh: load,
+  } = useCachedQuery('/api/agent-connections', async () => {
+    const payload = await api('/api/agent-connections');
+    return Array.isArray(payload) ? payload : payload.connections || [];
+  });
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState('');
   const [editingId, setEditingId] = useState('');
   const [draftName, setDraftName] = useState('');
-
-  const load = useCallback(async () => {
-    setError('');
-    try {
-      const payload = await api('/api/agent-connections');
-      setConnections(Array.isArray(payload) ? payload : payload.connections || []);
-    } catch (loadError) {
-      setError(loadError.message || 'Unable to load agent connections.');
-      setConnections([]);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
 
   const currentTenant = profile?.currentTenant || profile?.current_tenant;
   const currentMembership = useMemo(() => {

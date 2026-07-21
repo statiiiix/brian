@@ -1,3 +1,33 @@
+/* Runs — the governed execution ledger. */
+
+.executions-chip {
+  text-transform: capitalize;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.executions-chip-count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-2);
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+  line-height: 1.4;
+}
+
+.executions-chip.is-active .executions-chip-count {
+  color: var(--accent-text);
+  background: rgba(209, 82, 26, 0.12);
+}
+
+.executions-unmatched {
+  color: var(--muted);
+  font-style: italic;
+}
+
 .executions-override {
   display: inline-flex;
   align-items: center;

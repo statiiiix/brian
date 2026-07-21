@@ -39,6 +39,7 @@ export default function Capture() {
       <header className="dash-head">
         <div>
           <h1 className="dash-title">Capture</h1>
+          <p className="dash-subtitle">Paste notes, a decision, or a thread — Brian files the durable rules and drops the noise.</p>
         </div>
       </header>
 
@@ -56,6 +57,7 @@ export default function Capture() {
           />
         </div>
         <div className="capture-submit">
+          <span className="capture-hint">Filed skills wait in review — nothing goes live on its own.</span>
           <button type="submit" className="dash-btn dash-btn--primary" disabled={busy || !text.trim()}>
             {busy ? 'Capturing…' : 'Capture'}
           </button>

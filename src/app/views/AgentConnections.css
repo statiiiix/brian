@@ -68,7 +68,17 @@
   color: var(--fg-secondary);
   font: inherit;
   font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.45rem 0.85rem;
   cursor: pointer;
+  transition: color 150ms var(--ease), border-color 150ms var(--ease), background 150ms var(--ease);
+}
+
+.agents-copy-row button:hover,
+.agent-rename button:hover {
+  border-color: var(--muted);
+  color: var(--fg);
+  background: var(--bg-hover);
 }
 
 .agents-warning {
