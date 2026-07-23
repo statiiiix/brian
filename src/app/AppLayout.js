@@ -5,6 +5,7 @@ import brianWordmark from '../assets/brian-wordmark.webp';
 import { useAuth } from './auth';
 import { REVIEW_QUEUE_KEY, fetchReviewQueue } from './reviewQueue';
 import { useCachedQuery } from './useCachedQuery';
+import { useDarkMode } from './useDarkMode';
 import './AppLayout.css';
 
 const NAV_GROUPS = [
@@ -38,6 +39,7 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, profile, profileError, signOut } = useAuth();
+  const { theme, toggleTheme } = useDarkMode();
   const { data: reviewItems, revalidate: revalidateReview } = useCachedQuery(
     REVIEW_QUEUE_KEY,
     fetchReviewQueue
@@ -45,6 +47,7 @@ export default function AppLayout() {
   const reviewCount = reviewItems?.length || 0;
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [layoutError, setLayoutError] = useState('');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // The layout never unmounts, so nudge the shared query on navigation. It
   // only reaches the network when the cached copy has gone stale.
@@ -75,8 +78,22 @@ export default function AppLayout() {
   const initial = (email || '?').charAt(0).toUpperCase();
 
   return (
-    <div className="dash">
-      <aside className="dash-sidebar">
+    <div className={`dash ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
+      <button
+        type="button"
+        className="dash-sidebar-toggle"
+        onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+        aria-expanded={!sidebarCollapsed}
+        aria-controls="dashboard-sidebar"
+        aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+        title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+      >
+        <svg viewBox="0 -960 960 960" width="24" height="24" aria-hidden="true">
+          <path d="M660-320v-320L500-480l160 160ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm120-80v-560H200v560h120Zm80 0h360v-560H400v560Zm-80 0H200h120Z" />
+        </svg>
+        <span className="sr-only">{sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}</span>
+      </button>
+      <aside id="dashboard-sidebar" className="dash-sidebar">
         <span className="dash-logo"><img className="dash-logo-wordmark" src={brianWordmark} alt="Brian" /></span>
         <nav className="dash-nav" aria-label="Dashboard">
           {NAV_GROUPS.map((group) => (
@@ -100,6 +117,16 @@ export default function AppLayout() {
               <span className="dash-user-note">{currentTenant?.name || 'Loading company…'}{membership?.role ? ` · ${membership.role}` : ''}</span>
             </span>
           </div>
+          <button
+            type="button"
+            className="dash-theme-toggle"
+            onClick={toggleTheme}
+            aria-pressed={theme === 'dark'}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            <Icon path={theme === 'dark' ? msym.sun : msym.moon} size={16} />
+            <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+          </button>
           <button type="button" className="dash-logout" onClick={logout} disabled={logoutBusy}><Icon path={msym.logout} size={15} />{logoutBusy ? 'Logging out…' : 'Log out'}</button>
         </div>
       </aside>

@@ -1,28 +1,52 @@
 .build-skill-head { align-items: flex-start; margin-bottom: 1.35rem; }
 .build-skill-head .dash-title { max-width: 42rem; }
 .build-skill-kicker, .build-step-kicker { margin: 0 0 0.45rem; color: var(--accent-text); font-family: var(--font-mono); font-size: 0.68rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
-.build-skill-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(17rem, 0.65fr); gap: 2rem; align-items: start; }
+/* The form carries the work; the output panel is a reminder, so it sits
+   further right and stays narrow instead of claiming a third of the page. */
+.build-skill-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(11.5rem, 0.3fr); gap: 3rem; align-items: start; }
 .build-skill-form { display: grid; gap: 0.85rem; }
 .build-step { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr); gap: 0.75rem; padding-block: 1.25rem; border-top: 1px solid var(--border); }
 .build-step-number { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: 0.65rem; background: var(--accent-dim); color: var(--accent-text); font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600; }
-.build-step-content h2, .build-skill-preview h2 { margin: 0 0 1rem; font-family: var(--font-display); font-size: 1.35rem; font-weight: 550; letter-spacing: -0.02em; line-height: 1.2; }
-.build-mode-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
-.build-mode { display: flex; gap: 0.7rem; align-items: flex-start; padding: 0.8rem; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--bg-sunken); color: var(--fg-secondary); text-align: left; font: inherit; cursor: pointer; transition: border-color 150ms var(--ease), background 150ms var(--ease), box-shadow 150ms var(--ease), transform 150ms var(--ease); }
-.build-mode:hover { border-color: var(--border-strong); background: var(--bg-hover); transform: translateY(-1px); }
-.build-mode.is-selected { border-color: rgba(209, 82, 26, 0.55); background: var(--accent-dim); box-shadow: 0 0 0 2px rgba(209, 82, 26, 0.08); }
-.build-mode-icon { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; flex: 0 0 auto; border-radius: 0.55rem; background: var(--bg-raised); color: var(--accent-text); }
-.build-mode strong, .build-mode small { display: block; }
-.build-mode strong { color: var(--fg); font-size: 0.83rem; line-height: 1.3; }
-.build-mode small { margin-top: 0.25rem; color: var(--muted); font-size: 0.75rem; line-height: 1.4; }
-.build-two-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.85rem; }
-.build-two-fields .dash-field { margin-bottom: 0; }
+.build-step-content h2 { margin: 0 0 1rem; font-family: var(--font-display); font-size: 1.35rem; font-weight: 550; letter-spacing: -0.02em; line-height: 1.2; }
+.build-step-lede { margin: -0.65rem 0 1rem; color: var(--muted); font-size: 0.8rem; line-height: 1.5; }
+.build-field-hint { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.75rem; line-height: 1.45; }
+.build-expert-other { margin-top: 0.5rem; }
+
+.build-source-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+.build-source { display: flex; gap: 0.7rem; align-items: center; padding: 0.7rem 0.8rem; border: 1px solid transparent; border-radius: var(--radius-md); background: var(--bg-sunken); color: var(--fg-secondary); text-align: left; font: inherit; cursor: pointer; transition: border-color 150ms var(--ease), background 150ms var(--ease), transform 150ms var(--ease); }
+.build-source:hover { border-color: var(--border-strong); background: var(--bg-hover); transform: translateY(-1px); }
+.build-source.is-selected { border-color: rgba(209, 82, 26, 0.55); background: var(--accent-dim); }
+.build-source > span:nth-child(2) { flex: 1 1 auto; min-width: 0; }
+.build-source .material-symbols-rounded { color: var(--accent-text); }
+.build-source-logo { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; flex: 0 0 auto; border-radius: 0.55rem; background: var(--bg-raised); }
+.build-source strong, .build-source small { display: block; }
+.build-source strong { color: var(--fg); font-size: 0.83rem; line-height: 1.3; }
+.build-source small { margin-top: 0.15rem; color: var(--muted); font-size: 0.73rem; line-height: 1.4; }
+.build-source-empty { margin: 0; color: var(--muted); font-size: 0.8rem; line-height: 1.5; }
+
+.build-notion { margin-top: 0.9rem; padding: 0.85rem; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.build-notion > p { margin: 0 0 0.6rem; color: var(--fg-secondary); font-size: 0.8rem; }
+.build-notion-options { display: grid; gap: 0.4rem; max-height: 12rem; overflow-y: auto; }
+.build-notion-options label { display: flex; gap: 0.5rem; align-items: center; color: var(--fg-secondary); font-size: 0.8rem; }
+
+.build-uploads { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-top: 1rem; }
+.build-uploads small { color: var(--muted); font-size: 0.73rem; }
+.build-upload-list { flex: 1 0 100%; display: grid; gap: 0.35rem; margin: 0.2rem 0 0; padding: 0; list-style: none; }
+.build-upload-list li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); background: var(--bg-sunken); color: var(--fg-secondary); font-size: 0.78rem; }
+.build-upload-list button { border: 0; background: none; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; }
+.build-upload-list button:hover { color: var(--fg); }
+
 .build-submit { justify-self: start; margin-top: 0.1rem; }
-.build-skill-preview { position: sticky; top: 1.25rem; padding-left: 1.5rem; border-left: 1px solid var(--border); }
-.build-preview-icon { display: inline-flex; align-items: center; justify-content: center; width: 2.8rem; height: 2.8rem; margin-bottom: 1.15rem; border: 1px solid rgba(209, 82, 26, 0.25); border-radius: 0.8rem; background: var(--accent-dim); color: var(--accent-text); }
-.build-preview-list { display: grid; gap: 0.7rem; color: var(--fg-secondary); font-size: 0.83rem; }
-.build-preview-list > div { display: flex; align-items: flex-start; gap: 0.5rem; }
-.build-preview-list .material-symbols-rounded { color: var(--green); }
-.build-preview-note { display: grid; gap: 0.25rem; margin-top: 1.35rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
+
+.build-skill-preview { position: sticky; top: 1.25rem; padding-left: 1.75rem; border-left: 1px solid var(--border); }
+.build-skill-preview h2 { margin: 0 0 0.75rem; font-family: var(--font-display); font-size: 0.95rem; font-weight: 550; letter-spacing: -0.01em; line-height: 1.25; }
+.build-preview-icon { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; margin-bottom: 0.85rem; border: 1px solid rgba(209, 82, 26, 0.25); border-radius: 0.6rem; background: var(--accent-dim); color: var(--accent-text); }
+.build-preview-list { display: grid; gap: 0.45rem; color: var(--fg-secondary); font-size: 0.75rem; line-height: 1.4; }
+.build-preview-list > div { display: flex; align-items: flex-start; gap: 0.4rem; }
+.build-preview-list .material-symbols-rounded { flex: 0 0 auto; color: var(--green); }
+.build-preview-note { display: grid; gap: 0.25rem; margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.7rem; line-height: 1.5; }
 .build-preview-note strong { color: var(--fg-secondary); }
-@media (max-width: 900px) { .build-skill-layout { grid-template-columns: 1fr; } .build-skill-preview { position: static; } }
-@media (max-width: 620px) { .build-mode-grid, .build-two-fields { grid-template-columns: 1fr; } .build-submit { width: 100%; } }
+
+@media (max-width: 1080px) { .build-skill-layout { gap: 2rem; } }
+@media (max-width: 900px) { .build-skill-layout { grid-template-columns: 1fr; } .build-skill-preview { position: static; padding-left: 0; border-left: 0; } }
+@media (max-width: 620px) { .build-source-grid { grid-template-columns: 1fr; } .build-submit { width: 100%; } }

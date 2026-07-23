@@ -170,14 +170,7 @@ export default function Overview() {
         icon: icons.database,
       };
     }
-    return {
-      eyebrow: 'Pressure-test the brain',
-      title: 'Try a task where the agent must know when to stop.',
-      body: 'Use a high-stakes approval or incident scenario and verify that the agent retrieves the right skill, follows the boundary, and logs the outcome.',
-      to: '/app/build',
-      label: 'Create another skill',
-      icon: icons.escalate,
-    };
+    return null;
   }, [data, stats]);
 
   const statTiles = [
@@ -219,17 +212,19 @@ export default function Overview() {
             ))}
           </div>
 
-          <div className="overview-main">
-            <section className="dash-card overview-next">
-              <div className="overview-next-icon"><Icon path={nextAction.icon} size={22} /></div>
-              <div className="overview-next-copy">
-                <p className="overview-eyebrow">{nextAction.eyebrow}</p>
-                <h2>{nextAction.title}</h2>
-                <p className="overview-next-body">{nextAction.body}</p>
-                <Link to={nextAction.to} className="dash-btn dash-btn--primary">{nextAction.label}</Link>
-              </div>
-            </section>
-          </div>
+          {nextAction && (
+            <div className="overview-main">
+              <section className="dash-card overview-next">
+                <div className="overview-next-icon"><Icon path={nextAction.icon} size={22} /></div>
+                <div className="overview-next-copy">
+                  <p className="overview-eyebrow">{nextAction.eyebrow}</p>
+                  <h2>{nextAction.title}</h2>
+                  <p className="overview-next-body">{nextAction.body}</p>
+                  <Link to={nextAction.to} className="dash-btn dash-btn--primary">{nextAction.label}</Link>
+                </div>
+              </section>
+            </div>
+          )}
 
           <section className="overview-section">
             <div className="overview-section-head">

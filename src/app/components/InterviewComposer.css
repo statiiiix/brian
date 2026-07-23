@@ -1,0 +1,441 @@
+/* The interview composer: a single floating field that also carries the source
+   controls. Modelled on sokoon's TextSession input — a rounded card that can
+   stack content (here, attached-source chips) above the typing row — but skinned
+   entirely in Brian's tokens. */
+
+.ivc-composer2 {
+  padding: 0.5rem 1.4rem 0.25rem;
+}
+
+/* --- Attached-source chips (stacked above the field) ---------------------- */
+
+.ivc-chips {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.ivc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 15rem;
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  font-size: 0.76rem;
+  color: var(--fg-secondary);
+  animation: ivc-chip-in 160ms var(--ease) both;
+}
+
+@keyframes ivc-chip-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+.ivc-chip-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.ivc-chip-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ivc-chip-status {
+  flex: 0 0 auto;
+  color: var(--muted-2);
+  font-size: 0.68rem;
+}
+
+.ivc-chip-status.is-failed {
+  color: var(--danger, #cf3f34);
+}
+
+.ivc-chip.is-reading {
+  border-style: dashed;
+}
+
+.ivc-chip.is-failed {
+  border-color: rgba(207, 63, 52, 0.4);
+}
+
+/* Read-only variant shown once the interview is no longer active. */
+.ivc-chips--readonly {
+  margin: 0 0 1rem;
+}
+
+/* --- The floating field --------------------------------------------------- */
+
+.ivc-field2 {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--bg-raised);
+  box-shadow: 0 1px 2px rgba(74, 50, 22, 0.05), 0 14px 32px -22px rgba(74, 50, 22, 0.45);
+  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+
+.ivc-field2:hover {
+  border-color: var(--border-strong);
+}
+
+.ivc-field2:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring), 0 14px 32px -22px rgba(74, 50, 22, 0.45);
+}
+
+.ivc-field2-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  flex: 0 0 auto;
+  padding-bottom: 0.15rem;
+}
+
+.ivc-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 150ms var(--ease);
+}
+
+/* Simple hover: the glyph alone turns the orange accent — no background fill. */
+.ivc-tool:hover:not(:disabled),
+.ivc-tool.is-open {
+  color: var(--accent-text);
+}
+
+.ivc-tool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ivc-textarea2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  resize: none;
+  overflow-y: auto;
+  max-height: 11rem;
+  padding: 0.5rem 0.15rem;
+}
+
+.ivc-textarea2::placeholder {
+  color: var(--muted-2);
+}
+
+.dash .ivc-textarea2:focus,
+.dash .ivc-textarea2:focus-visible {
+  outline: none;
+}
+
+.ivc-textarea2:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.ivc-send2 {
+  flex: 0 0 auto;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: background 150ms var(--ease), transform 150ms var(--ease), opacity 150ms var(--ease);
+}
+
+.ivc-send2:hover:not(:disabled) {
+  background: var(--accent-strong, #b8461a);
+  transform: translateY(-1px);
+}
+
+.ivc-send2:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* --- Source picker popover (opens upward, anchored to the tools) ---------- */
+
+.ivc-picker {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.6rem);
+  z-index: 20;
+  width: min(24rem, calc(100vw - 3rem));
+  padding: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  box-shadow: 0 18px 48px -12px rgba(28, 20, 10, 0.4);
+  animation: ivc-picker-in 140ms var(--ease) both;
+}
+
+@keyframes ivc-picker-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.ivc-picker-head {
+  padding: 0.3rem 0.5rem 0.55rem;
+  color: var(--muted-2);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ivc-picker-empty {
+  margin: 0;
+  padding: 0.35rem 0.5rem 0.5rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.ivc-picker-empty a {
+  color: var(--accent-text);
+}
+
+.ivc-picker-list {
+  display: grid;
+  gap: 0.15rem;
+  max-height: 17rem;
+  overflow-y: auto;
+}
+
+.ivc-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem 0.55rem;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--fg-secondary);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: background 130ms var(--ease);
+}
+
+.ivc-picker-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.ivc-picker-item:disabled {
+  cursor: default;
+}
+
+.ivc-picker-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  flex: 0 0 auto;
+  border-radius: 0.5rem;
+  background: var(--bg-raised);
+}
+
+.ivc-picker-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ivc-picker-label strong {
+  display: block;
+  color: var(--fg);
+  font-size: 0.83rem;
+  font-weight: 550;
+  line-height: 1.3;
+}
+
+.ivc-picker-label small {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.ivc-picker-more {
+  flex: 0 0 auto;
+  color: var(--muted-2);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.ivc-picker-item:hover:not(:disabled) .ivc-picker-more {
+  color: var(--accent-text);
+}
+
+.ivc-picker-added {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--green, #1c9460);
+}
+
+.ivc-picker-error {
+  margin: 0.45rem 0.5rem 0.15rem;
+  color: var(--danger, #cf3f34);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.ivc-picker-error--loose {
+  margin: 0.55rem 0.2rem 0;
+}
+
+/* --- Notion page picker (drill-in) ---------------------------------------- */
+
+.ivc-notion-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0 0 0.35rem;
+  padding: 0.2rem 0.35rem;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ivc-notion-back:hover {
+  color: var(--accent-text);
+}
+
+.ivc-notion-list {
+  display: grid;
+  gap: 0.2rem;
+  max-height: 13rem;
+  overflow-y: auto;
+  margin-bottom: 0.6rem;
+}
+
+.ivc-notion-option {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
+  color: var(--fg-secondary);
+  font-size: 0.83rem;
+  cursor: pointer;
+}
+
+.ivc-notion-option:hover {
+  background: var(--bg-hover);
+}
+
+.ivc-notion-add {
+  width: 100%;
+  justify-content: center;
+}
+
+/* --- Keyboard/finish hint ------------------------------------------------- */
+
+.ivc-composer2-hint {
+  margin: 0.5rem 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.7rem;
+  color: var(--muted-2);
+}
+
+.ivc-composer2-hint > span {
+  opacity: 0;
+  transition: opacity 160ms var(--ease);
+}
+
+.ivc-composer2:focus-within .ivc-composer2-hint > span {
+  opacity: 1;
+}
+
+.ivc-composer2-hint kbd {
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.ivc-finish-link {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--muted-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition: color 160ms var(--ease);
+}
+
+.ivc-finish-link:hover:not(:disabled) {
+  color: var(--accent-text);
+}
+
+.ivc-finish-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .ivc-composer2 {
+    padding: 0.5rem 1rem 0.25rem;
+  }
+
+  /* 16px keeps iOS from zooming the viewport on focus. */
+  .ivc-textarea2 {
+    font-size: 16px;
+  }
+
+  .ivc-send2 {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ivc-chip,
+  .ivc-picker {
+    animation: none;
+  }
+}

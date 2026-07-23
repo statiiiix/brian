@@ -11,6 +11,24 @@ import { buildApp } from "../api/app.js";
 import { ensureLegacyToken } from "../auth/apiTokens.js";
 import { secret } from "../config/secrets.js";
 import { FOUNDING_TENANT_ID } from "../db/tenant.js";
+import { connectionSource, resolveConnectionString } from "../db/pool.js";
+
+// Boot-time DB-config visibility. A cold-started isolate that lacks any
+// connection string will fail EVERY db-backed request with "DATABASE_URL is not
+// set" — and because MCP tool errors are returned as HTTP 200 JSON-RPC bodies,
+// that failure is otherwise invisible in the edge access logs. Log it loudly at
+// startup so a mis-provisioned isolate is diagnosable at a glance. Non-fatal:
+// unauthenticated metadata routes (/__build, oauth discovery) still work.
+if (!resolveConnectionString()) {
+  console.error(
+    "[boot] DB CONFIG ERROR: no connection string in this isolate's environment " +
+      "(DATABASE_URL / TEST_DATABASE_URL / SUPABASE_DB_URL all empty). Every database-backed " +
+      "request will fail with 'DATABASE_URL is not set'. Set an explicit DATABASE_URL secret " +
+      "(the brian_app pooler URL) to fix this permanently.",
+  );
+} else {
+  console.info(`[boot] db connection source: ${connectionSource()}`);
+}
 
 declare const Deno: {
   serve: (handler: (req: Request) => Response | Promise<Response>) => void;

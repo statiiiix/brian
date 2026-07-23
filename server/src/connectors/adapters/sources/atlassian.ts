@@ -98,7 +98,7 @@ export function jiraConnector(creds: Record<string, unknown>, fetchFn: FetchLike
       const jql = encodeURIComponent(`updated >= "${since}" order by updated desc`);
       const res = await apiJson(
         fetchFn,
-        `${api}/rest/api/3/search?jql=${jql}&maxResults=${MAX_ITEMS_PER_SYNC}&fields=summary,description,updated,creator,comment`,
+        `${api}/rest/api/3/search/jql?jql=${jql}&maxResults=${MAX_ITEMS_PER_SYNC}&fields=summary,description,updated,creator,comment`,
         { token },
       );
       const items = ((res.issues ?? []) as JiraIssue[]).map((issue) => jiraIssueToRaw(issue, api));

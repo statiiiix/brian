@@ -349,13 +349,23 @@ export async function updateCurrentTenant(name: string, p: Queryable = db()) {
   return rows[0];
 }
 
+// Membership rows plus the display identity the picker needs. The email and
+// name live in the auth users table, which the app role cannot read; the
+// SECURITY DEFINER function in 022 joins them for the caller's own tenant and
+// nothing else. Falling back to the bare membership rows keeps the directory
+// working on a database that has not replayed 022 yet.
 export async function listMembers(p: Queryable = db()) {
-  const { rows } = await p.query(
-    `select id, user_id, role, status, is_default, created_at, updated_at
-       from tenant_memberships where tenant_id=$1 order by created_at`,
-    [tenantOrFounding()],
-  );
-  return rows;
+  try {
+    const { rows } = await p.query("select * from list_tenant_members()");
+    return rows;
+  } catch {
+    const { rows } = await p.query(
+      `select id, user_id, role, status, is_default, created_at, updated_at
+         from tenant_memberships where tenant_id=$1 order by created_at`,
+      [tenantOrFounding()],
+    );
+    return rows;
+  }
 }
 
 export async function setMembershipStatus(

@@ -48,7 +48,7 @@ const SPECS: Record<GenericOAuthProviderId, OAuthProviderSpec> = {
     id: "confluence", label: "Confluence", credentialPrefix: "ATLASSIAN", callbackSlug: "atlassian",
     authorizationUrl: "https://auth.atlassian.com/authorize",
     tokenUrl: "https://auth.atlassian.com/oauth/token",
-    scopes: ["read:confluence-content.all", "read:confluence-space.summary", "read:me", "offline_access"],
+    scopes: ["read:confluence-content.all", "read:confluence-space.summary", "search:confluence", "read:me", "offline_access"],
     authorizationParams: ATLASSIAN_PARAMS, tokenStyle: "json",
   },
   sharepoint: {

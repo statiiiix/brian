@@ -4,13 +4,16 @@
 // provider-agnostic. Sync/evidence remains the durable ingestion path — this
 // is a point-in-time read used to seed a skill interview.
 import type { SourceContext, SourceDocument } from "../interviews/types.js";
+import { buildConnector, isSyncableType } from "./adapters/index.js";
 import { readNotionSelectionDocuments } from "./adapters/sources/notion.js";
 import { getConnector } from "./repo.js";
 import { ensureFreshCredentials } from "./tokenRefresh.js";
-import type { SourceType } from "./types.js";
+import type { RawThread, SourceType } from "./types.js";
 
 // Keep the total pack well inside one model context alongside the transcript.
 const MAX_TOTAL_CHARS = 60_000;
+// How many recent items a source without its own picker contributes.
+const MAX_ADAPTER_DOCUMENTS = 12;
 
 type SelectionFetcher = (
   creds: Record<string, unknown>,
@@ -26,8 +29,29 @@ const FETCHERS: Partial<Record<SourceType, SelectionFetcher>> = {
   notion: (creds, fetchFn) => readNotionSelectionDocuments(creds, fetchFn),
 };
 
+function threadDocument(thread: RawThread): SourceDocument {
+  return {
+    title: thread.title ?? thread.thread_id,
+    url: thread.permalink ?? "",
+    text: thread.messages.map((m) => `${m.from}: ${m.text}`).join("\n\n").trim(),
+  };
+}
+
+// Sources with a selection UI read exactly what the expert picked. Everything
+// else grounds on its sync adapter's recent window, so any connected source can
+// seed an interview instead of only the two that have a bespoke picker.
+function fetcherFor(type: SourceType): SelectionFetcher | undefined {
+  const bespoke = FETCHERS[type];
+  if (bespoke) return bespoke;
+  if (!isSyncableType(type)) return undefined;
+  return async (creds) => {
+    const { items } = await buildConnector(type, creds).fetch(creds, {});
+    return items.slice(0, MAX_ADAPTER_DOCUMENTS).map(threadDocument).filter((doc) => doc.text);
+  };
+}
+
 export function supportsSelectionContent(type: string): type is SourceType {
-  return type in FETCHERS;
+  return type in FETCHERS || isSyncableType(type);
 }
 
 export class SelectionContentError extends Error {
@@ -58,7 +82,7 @@ export async function fetchSelectionContext(
   fetchFn: typeof fetch = fetch,
   selection?: SourceSelection,
 ): Promise<SourceContext> {
-  const fetcher = FETCHERS[type];
+  const fetcher = fetcherFor(type);
   if (!fetcher) throw new SelectionContentError("source_not_connected");
   const row = await getConnector(type);
   if (!row || row.status !== "connected") throw new SelectionContentError("source_not_connected");

@@ -1712,6 +1712,7 @@ export function buildApp(opts: AppOptions = {}): App {
     try {
       return c.json(await sync(type, typeof body?.focus === "string" ? body.focus.trim() : undefined));
     } catch (e) {
+      console.error(`connector sync failed (type=${type})`, e);
       // Surface the one caller-fixable cause; everything else stays generic so
       // provider errors cannot leak through the API.
       const message = e instanceof Error ? e.message : "";

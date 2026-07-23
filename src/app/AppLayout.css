@@ -49,6 +49,100 @@
   font-size: 14.5px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s var(--ease), color 0.3s var(--ease);
+}
+
+/* ---------------------------------------------------------------------------
+   Dark theme — near-black surfaces borrowed from the "sokoon" project, but
+   keeping Brian's own burnt-orange accent (#d1521a, same as light) so the brand
+   colour is consistent across modes. Same outline-style primary button and
+   Sun/Moon toggle (see .dash-theme-toggle + useDarkMode). Activated by
+   data-theme="dark" on <html>, so marketing and auth pages stay light.
+--------------------------------------------------------------------------- */
+
+[data-theme='dark'] .dash {
+  --bg: #1a1a1a;
+  --bg-raised: #242424;
+  --bg-sunken: #151515;
+  --bg-elevated: #2c2c2c;
+  --bg-hover: #2a2a2a;
+  --fg: #e9e9e9;
+  --fg-secondary: #cfccc7;
+  --muted: #aaaaaa;
+  --muted-2: #7c7770;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --accent: #d1521a;
+  --accent-hover: #e0631f;
+  --accent-text: #e5713f;
+  --accent-ink: #fff8f2;
+  --accent-dim: rgba(209, 82, 26, 0.18);
+  --accent-ring: rgba(209, 82, 26, 0.35);
+  --green: #34b579;
+  --green-dim: rgba(52, 181, 121, 0.16);
+  --red: #ef8a7f;
+  --red-dim: rgba(239, 138, 127, 0.15);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 16px 40px -20px rgba(0, 0, 0, 0.65);
+  --shadow-glow: 0 0 0 1px rgba(209, 82, 26, 0.32), 0 4px 20px -6px rgba(209, 82, 26, 0.4);
+}
+
+/* Warm ambient glow + selection tint, recoloured for the dark canvas. */
+[data-theme='dark'] .dash::before {
+  background:
+    radial-gradient(70rem 44rem at 62% -14rem, rgba(224, 99, 31, 0.08), transparent 62%),
+    radial-gradient(46rem 46rem at 108% 4%, rgba(209, 82, 26, 0.05), transparent 55%);
+}
+
+[data-theme='dark'] .dash ::selection {
+  background: rgba(209, 82, 26, 0.32);
+}
+
+/* Surfaces that hardcode a light value in the base sheet. */
+[data-theme='dark'] .dash-sidebar {
+  background: linear-gradient(180deg, #202020 0%, var(--bg) 52%);
+}
+
+[data-theme='dark'] .dash-user-avatar {
+  background: linear-gradient(160deg, #303030, var(--bg-elevated));
+}
+
+[data-theme='dark'] .dash-table tbody tr:hover {
+  background: #2a2a2a;
+}
+
+[data-theme='dark'] .dash-input:focus,
+[data-theme='dark'] .dash-textarea:focus {
+  background: #202020;
+}
+
+[data-theme='dark'] .dash-skeleton-bar {
+  background: linear-gradient(90deg, var(--bg-elevated) 25%, #363636 42%, var(--bg-elevated) 60%);
+  background-size: 300% 100%;
+}
+
+/* sokoon's dark primary button is an outline, not a fill — in Brian's orange. */
+[data-theme='dark'] .dash-btn--primary {
+  background: transparent;
+  color: var(--accent-text);
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+[data-theme='dark'] .dash-btn--primary:hover:not(:disabled) {
+  background: var(--accent-dim);
+  border-color: var(--accent-hover);
+  color: var(--accent-hover);
+  box-shadow: none;
+}
+
+/* Light hardcodes living in dashboard view sheets. */
+[data-theme='dark'] .overview-stat:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme='dark'] .agent-rename input {
+  background: var(--bg-raised);
 }
 
 /* Quiet warm light source + paper grain, same atmosphere as the landing hero. */
@@ -103,6 +197,51 @@
   border-right: 1px solid var(--border);
   background: linear-gradient(180deg, #f2ecdf 0%, var(--bg) 52%);
   overflow: hidden;
+  transition: transform 260ms var(--ease), visibility 260ms var(--ease);
+}
+
+.dash-sidebar-toggle {
+  position: fixed;
+  top: 1rem;
+  left: calc(var(--sidebar-w) + 1.5rem);
+  z-index: 41;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-secondary);
+  cursor: pointer;
+  transition: left 260ms var(--ease), color 150ms var(--ease), transform 150ms var(--ease);
+}
+
+.dash-sidebar-toggle:hover {
+  color: var(--accent-text);
+}
+
+.dash-sidebar-toggle:active {
+  transform: scale(0.96);
+}
+
+.dash-sidebar-toggle svg {
+  display: block;
+  fill: currentColor;
+}
+
+.dash.is-sidebar-collapsed .dash-sidebar {
+  transform: translateX(calc(-1 * var(--sidebar-w)));
+  visibility: hidden;
+}
+
+.dash.is-sidebar-collapsed .dash-sidebar-toggle {
+  left: 1rem;
+}
+
+.dash.is-sidebar-collapsed .dash-sidebar-toggle svg {
+  transform: scaleX(-1);
 }
 
 .dash-logo {
@@ -357,6 +496,40 @@
   transform: scale(0.98);
 }
 
+/* Theme toggle — same footer treatment as logout; Sun when dark, Moon when
+   light, mirroring sokoon's toggle. */
+.dash-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.45rem 0.6rem;
+  min-height: 36px;
+  cursor: pointer;
+  transition: color 150ms var(--ease), border-color 150ms var(--ease), background 150ms var(--ease);
+}
+
+.dash-theme-toggle .material-symbols-rounded {
+  color: var(--accent-text);
+}
+
+.dash-theme-toggle:hover {
+  color: var(--fg);
+  border-color: var(--muted);
+  background: var(--bg-hover);
+}
+
+.dash-theme-toggle:active {
+  transform: scale(0.98);
+}
+
 /* --- Main column ----------------------------------------------------------- */
 
 .dash-main {
@@ -364,13 +537,27 @@
   z-index: 1;
   margin-left: var(--sidebar-w);
   min-width: 0;
-  padding: 2.25rem 2.5rem 5rem;
+  /* Leave a shared top gutter for the fixed sidebar control on every page. */
+  padding: 4.5rem 2.5rem 5rem;
+  container: dashboard / inline-size;
+  overflow-x: clip;
+  transition: margin-left 260ms var(--ease);
+}
+
+.dash.is-sidebar-collapsed .dash-main {
+  margin-left: 0;
 }
 
 .dash-page {
+  width: min(100%, 68rem);
   max-width: 68rem;
   margin: 0 auto;
+  min-width: 0;
   animation: dash-page-in 300ms var(--ease) both;
+}
+
+.dash-page > * {
+  min-width: 0;
 }
 
 @keyframes dash-page-in {
@@ -810,9 +997,84 @@
   border: 0;
 }
 
+/* Page layouts respond to the usable dashboard column, not the full viewport.
+   This keeps their secondary columns from sliding behind the fixed sidebar. */
+@container dashboard (max-width: 1024px) {
+  .ivc-grid,
+  .skill-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ivc-rail,
+  .skill-detail-grid > aside {
+    position: static;
+  }
+
+  .skill-detail-grid > aside {
+    padding-top: 1.25rem;
+    padding-left: 0;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+}
+
+@container dashboard (max-width: 900px) {
+  .build-skill-layout,
+  .overview-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .build-skill-preview {
+    position: static;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .overview-stat {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .overview-stat:last-child {
+    border-bottom: 0;
+  }
+
+  .source-focus,
+  .source-category {
+    grid-template-columns: 1fr;
+  }
+
+  .source-library-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+}
+
+@container dashboard (max-width: 760px) {
+  .privacy-grid,
+  .interviews-new-fields,
+  .agent-meta,
+  .agents-copy-row,
+  .review-item-detail,
+  .skill-detail-row,
+  .source-roadmap-grid,
+  .build-source-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .privacy-card {
+    min-height: 0;
+  }
+}
+
 /* --- Responsive ------------------------------------------------------------------ */
 
 @media (max-width: 860px) {
+  .dash-sidebar-toggle {
+    display: none;
+  }
+
   .dash-sidebar {
     position: sticky;
     top: 0;
@@ -891,8 +1153,13 @@
     display: none;
   }
 
-  .dash-logout {
+  .dash-logout,
+  .dash-theme-toggle {
     min-height: 44px;
+  }
+
+  .dash-theme-toggle span {
+    display: none;
   }
 
   .dash-main {
@@ -923,6 +1190,12 @@
 
   .dash-head {
     margin-bottom: 1.35rem;
+  }
+}
+
+@media (max-width: 860px) {
+  [data-theme='dark'] .dash-sidebar {
+    background: rgba(26, 26, 26, 0.86);
   }
 }
 

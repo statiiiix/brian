@@ -4,7 +4,7 @@ import brianMark from '../../assets/brian-b-mark.svg';
 import { Icon, msym } from '../../components/Icon';
 import { api } from '../api';
 import { readCache, writeCache } from '../queryCache';
-import InterviewSources from '../components/InterviewSources';
+import InterviewComposer, { SourceChip } from '../components/InterviewComposer';
 import RichText from '../components/RichText';
 import StatusBadge from '../components/StatusBadge';
 import { interviewBrief, interviewTitle } from '../interviewTopic';
@@ -104,7 +104,7 @@ export default function InterviewChat() {
   }
 
   function send(e) {
-    e.preventDefault();
+    e?.preventDefault();
     if (!answer.trim() || busy) return;
     sendContent(answer.trim());
   }
@@ -235,15 +235,10 @@ export default function InterviewChat() {
         )}
       </header>
 
-      {(iv.status === 'active' || sources.length > 0) && (
-        <div className="ivc-source-control">
-          <InterviewSources
-            interviewId={iv.status === 'active' ? id : null}
-            sources={sources}
-            onSourcesChange={setSources}
-            disabled={busy || iv.status !== 'active'}
-          />
-        </div>
+      {iv.status !== 'active' && sources.length > 0 && (
+        <ul className="ivc-chips ivc-chips--readonly" aria-label="Sources Brian read">
+          {sources.map((source) => <SourceChip key={source.id} source={source} />)}
+        </ul>
       )}
 
       <div className="ivc-grid">
@@ -253,7 +248,10 @@ export default function InterviewChat() {
               <div key={i} className={`ivc-msg ivc-msg--${m.role}`}>
                 <span className="ivc-msg-who">
                   {m.role === 'brian' ? (
-                    <img className="ivc-msg-avatar" src={brianMark} alt="Brian" />
+                    <>
+                      <img className="ivc-msg-avatar" src={brianMark} alt="" />
+                      <span>Brian</span>
+                    </>
                   ) : (
                     'You'
                   )}
@@ -279,7 +277,8 @@ export default function InterviewChat() {
             {busy && (
               <div className="ivc-msg ivc-msg--brian ivc-msg--thinking">
                 <span className="ivc-msg-who">
-                  <img className="ivc-msg-avatar" src={brianMark} alt="Brian" />
+                  <img className="ivc-msg-avatar" src={brianMark} alt="" />
+                  <span>Brian</span>
                 </span>
                 <p className="ivc-bubble ivc-typing" aria-label="Brian is thinking">
                   <span /><span /><span />
@@ -305,43 +304,20 @@ export default function InterviewChat() {
           )}
 
           {iv.status === 'active' && (
-            <form className="ivc-composer" onSubmit={send}>
-              <label htmlFor="ivc-answer" className="sr-only">Your answer</label>
-              <div className="ivc-composer-field">
-                <textarea
-                  id="ivc-answer"
-                  ref={answerRef}
-                  className="ivc-answer"
-                  rows={1}
-                  placeholder="Answer in plain language — Brian asks the follow-ups."
-                  value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                  onKeyDown={onKeyDown}
-                  disabled={busy}
-                />
-                <button
-                  type="submit"
-                  className="dash-btn dash-btn--primary ivc-send"
-                  disabled={busy || !answer.trim()}
-                  aria-label="Send answer"
-                >
-                  <Icon path={msym.send} size={15} />
-                </button>
-              </div>
-              <p className="ivc-composer-hint">
-                <span>
-                  <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line
-                </span>
-                <button
-                  type="button"
-                  className="ivc-finish-link"
-                  onClick={finish}
-                  disabled={busy}
-                >
-                  Finish &amp; build the skill from what Brian has
-                </button>
-              </p>
-            </form>
+            <InterviewComposer
+              interviewId={id}
+              sources={sources}
+              onSourcesChange={setSources}
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              onKeyDown={onKeyDown}
+              onSend={() => send()}
+              canSend={!!answer.trim() && !busy}
+              busy={busy}
+              textareaRef={answerRef}
+              onFinish={finish}
+              finishDisabled={busy}
+            />
           )}
 
           {allCovered && !result && (

@@ -52,9 +52,12 @@ export const msym = {
   settings: 'settings',
   logout: 'logout',
   back: 'arrow_back',
+  sun: 'light_mode',
+  moon: 'dark_mode',
   check: 'check',
   clear: 'task_alt',
   send: 'send',
+  upload: 'upload_file',
 };
 
 export const icons = {

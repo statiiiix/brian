@@ -116,6 +116,34 @@ d("interview engine", () => {
     expect(promptsOf(llm)[0].schema).toBeUndefined();
   });
 
+  it("hands the opener what the expert already entered and tells it not to re-ask", async () => {
+    const iv = await createInterview({
+      topic: "Approve access requests\nWhat this skill is for: gate production access",
+      owner: "Maya",
+    });
+    const llm = fake([], "Got it — walk me through how you decide who gets in.");
+    await runTurn(iv, llm);
+    const opener = promptsOf(llm)[0];
+    expect(opener.schema).toBeUndefined();
+    expect(opener.user).toContain("gate production access");
+    expect(opener.user).toContain("Maya");
+    expect(opener.user).toContain("do not ask them to repeat");
+  });
+
+  it("never presents an 'Anyone' owner to the models as a person", async () => {
+    const iv = await createInterview({ topic: "Draft blog posts", owner: "Anyone" });
+    const llm = fake([], "What makes a post great here?");
+    await runTurn(iv, llm);
+    expect(promptsOf(llm)[0].user).not.toContain("Anyone");
+  });
+
+  it("drops an 'Anyone' owner from the finished draft", async () => {
+    const iv = await started("refunds", "Anyone");
+    const out = await runTurn(iv, fake([turn({ status: "ready", draft: goodDraft })]));
+    expect(out.status).toBe("ready");
+    expect(out.draft?.owner).toBeNull();
+  });
+
   it("parses the conversation into coverage and lets the interviewer ask the next question", async () => {
     const iv = await started("refunds");
     const llm = fake(

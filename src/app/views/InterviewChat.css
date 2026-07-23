@@ -67,10 +67,6 @@
   align-items: start;
 }
 
-.ivc-source-control {
-  margin: -0.55rem 0 1rem;
-}
-
 /* --- Chat column ---------------------------------------------------------- */
 
 .ivc-chat {
@@ -82,21 +78,29 @@
 
 .ivc-thread {
   flex: 1;
-  min-height: 20rem;
-  max-height: 58vh;
+  min-height: 22rem;
+  max-height: 60vh;
   overflow-y: auto;
-  padding: 1.4rem;
+  padding: 1.75rem clamp(1.1rem, 5%, 2.5rem);
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: 1.7rem;
+  scroll-behavior: smooth;
 }
 
 .ivc-msg {
-  max-width: 85%;
+  max-width: 80%;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.4rem;
   animation: ivc-msg-in 220ms var(--ease) both;
+}
+
+/* Brian speaks as flowing prose, not a bubble — the message spans the reading
+   column and its text is held to a comfortable measure. */
+.ivc-msg--brian {
+  align-self: stretch;
+  max-width: 100%;
 }
 
 @keyframes ivc-msg-in {
@@ -113,7 +117,7 @@
 .ivc-msg .ivc-bubble {
   margin: 0;
   padding: 0.65rem 0.95rem;
-  border-radius: 12px;
+  border-radius: 14px;
   font-size: 0.9rem;
 }
 
@@ -143,15 +147,21 @@
   height: 22px;
 }
 
-.ivc-msg--brian {
-  align-self: flex-start;
+.ivc-msg--brian .ivc-bubble {
+  max-width: 44rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--fg);
+  font-size: 1.0625rem;
+  line-height: 1.72;
 }
 
-.ivc-msg--brian .ivc-bubble {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-top-left-radius: 4px;
-  color: var(--fg);
+/* The thinking indicator is the one Brian bubble that keeps a soft chip so the
+   dots read as a pending reply rather than stray punctuation. */
+.ivc-msg--brian.ivc-msg--thinking .ivc-bubble {
+  padding: 0.55rem 0.2rem;
 }
 
 .ivc-msg--expert {
@@ -160,10 +170,13 @@
 }
 
 .ivc-msg--expert .ivc-bubble {
+  padding: 0.7rem 1rem;
   background: var(--accent-dim);
   border: 1px solid rgba(209, 82, 26, 0.22);
   border-top-right-radius: 4px;
   color: var(--fg);
+  font-size: 0.96rem;
+  line-height: 1.55;
 }
 
 /* Optimistic bubble: shown the instant you hit send, dimmed until the server
@@ -218,116 +231,6 @@
   }
 }
 
-/* Composer — a single floating field, no enclosing bar and no seam against the
-   thread above it. */
-
-/* Shares the thread's gutter so the field lines up with the bubbles above it. */
-.ivc-composer {
-  padding: 0.5rem 1.4rem 0.25rem;
-}
-
-.ivc-composer-field {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
-  padding: 0.4rem 0.4rem 0.4rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 22px;
-  background: var(--bg-raised);
-  box-shadow: 0 1px 2px rgba(74, 50, 22, 0.05), 0 14px 32px -22px rgba(74, 50, 22, 0.45);
-  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
-}
-
-.ivc-composer-field:hover {
-  border-color: var(--border-strong);
-}
-
-.ivc-composer-field:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-ring), 0 14px 32px -22px rgba(74, 50, 22, 0.45);
-}
-
-.ivc-answer {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  border: 0;
-  background: none;
-  color: var(--fg);
-  font: inherit;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  /* Height is driven by content in JS — no drag handle, no fixed box. */
-  resize: none;
-  overflow-y: auto;
-  max-height: 11rem;
-  padding: 0.5rem 0;
-}
-
-.ivc-answer::placeholder {
-  color: var(--muted-2);
-}
-
-/* The ring lives on the wrapper, so suppress the shell's own focus outline. */
-.dash .ivc-answer:focus,
-.dash .ivc-answer:focus-visible {
-  outline: none;
-}
-
-.ivc-answer:disabled {
-  color: var(--muted);
-  cursor: default;
-}
-
-.ivc-composer-hint {
-  margin: 0.5rem 0 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  font-size: 0.7rem;
-  color: var(--muted-2);
-}
-
-/* Keyboard hint is only relevant once the field has focus — quiet until then.
-   The finish link stays available so it can always be reached. */
-.ivc-composer-hint > span {
-  opacity: 0;
-  transition: opacity 160ms var(--ease);
-}
-
-.ivc-composer:focus-within .ivc-composer-hint > span {
-  opacity: 1;
-}
-
-.ivc-composer-hint kbd {
-  font: inherit;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.ivc-finish-link {
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  color: var(--muted-2);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-  transition: color 160ms var(--ease);
-}
-
-.ivc-finish-link:hover:not(:disabled) {
-  color: var(--accent-text);
-}
-
-.ivc-finish-link:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
 /* Coverage is complete: invite the expert to wrap up without forcing it. */
 .ivc-ready--finish {
   display: flex;
@@ -340,18 +243,6 @@
 }
 
 .ivc-ready--finish .dash-btn {
-  flex-shrink: 0;
-}
-
-.ivc-send {
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  padding: 0;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex-shrink: 0;
 }
 
@@ -541,23 +432,8 @@
     padding: 1rem;
   }
 
-  .ivc-composer {
-    padding: 0.5rem 1rem 0.25rem;
-  }
-
-  .ivc-msg {
+  .ivc-msg--expert {
     max-width: 92%;
-  }
-
-  /* 16px keeps iOS from zooming the viewport on focus. */
-  .ivc-answer {
-    font-size: 16px;
-  }
-
-  .ivc-send {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
   }
 }
 

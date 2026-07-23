@@ -35,9 +35,12 @@ const INTERVIEWER_SYSTEM = `You are Brian, an intelligent thought partner helpin
 build a skill for an AI agent. Lead a natural conversation. Do not behave like a form, rubric,
 or database-field collector, and never mention coverage states or hidden parsing.
 
-On the opening turn, welcome the expert and invite them to explain in their own words what
-skill they want to build, who or what it is for, and any context they think matters. Treat the
-topic as a hint, not a complete definition.
+On the opening turn, warmly acknowledge what the expert already told you — the skill's name,
+what it is for, and its owner when those were given — and never ask them to repeat any of it.
+Open with a single focused question about the first thing they have not specified yet: usually
+how the work actually gets done, the judgment it takes, or what a great result looks like. Only
+when almost nothing was given should you fall back to inviting them to explain in their own
+words what the skill should do and who it is for.
 
 On later turns, first respond to what the expert actually said. Briefly reflect useful
 understanding, answer their question, or repair a misunderstanding. Then ask one thoughtful
@@ -260,6 +263,34 @@ and edge cases the material leaves open. Make examples ultra-detailed worked use
   ].join("\n\n");
 }
 
+// "Anyone" is how the builder UI records "no single owner"; older interviews
+// stored the literal word, so never surface it to the models as a person.
+function ownerName(iv: Interview): string | null {
+  const owner = iv.owner?.trim();
+  return owner && owner.toLowerCase() !== "anyone" ? owner : null;
+}
+
+// The name, purpose, and owner the expert entered on the build form travel in
+// `topic` (first line is the title, later lines are the labelled brief). Surface
+// them plainly so the interviewer acknowledges them instead of re-collecting
+// what the expert already answered.
+function knownContext(iv: Interview): string {
+  const details = String(iv.topic ?? "")
+    .split("\n").slice(1).map((line) => line.trim()).filter(Boolean);
+  const owner = ownerName(iv);
+  const lines = [
+    ...details.map((line) => `- ${line}`),
+    owner && !details.some((line) => /^owner\b/i.test(line)) ? `- Owner: ${owner}` : "",
+  ].filter(Boolean);
+  return lines.length
+    ? `The expert already provided this when starting — do not ask them to repeat it:\n${lines.join("\n")}`
+    : "";
+}
+
+function topicTitle(iv: Interview): string {
+  return String(iv.topic ?? "").split("\n")[0]?.trim() || String(iv.topic ?? "");
+}
+
 function buildUser(
   iv: Interview, forceFinish: boolean, sources: InterviewSource[] = [],
   research?: ResearchResult,
@@ -267,9 +298,10 @@ function buildUser(
   const transcript = iv.messages
     .map((m) => `${m.role === "brian" ? "Brian" : "Expert"}: ${m.content}`)
     .join("\n");
+  const owner = ownerName(iv);
   return [
     `Process being captured: ${iv.topic}`,
-    iv.owner ? `Process owner: ${iv.owner}` : "",
+    owner ? `Process owner: ${owner}` : "",
     sourceMaterial(iv, sources),
     research ? `External web research (informational, not company policy):\n${research.summary}\n\nCitations:\n${research.citations.map((citation) => `- ${citation.title}: ${citation.url}`).join("\n")}` : "",
     transcript ? `Transcript so far:\n${transcript}` : "No questions asked yet — open the interview.",
@@ -324,8 +356,8 @@ function buildInterviewerUser(
     .map((m) => `${m.role === "brian" ? "Brian" : "Expert"}: ${m.content}`)
     .join("\n");
   return [
-    `Skill being built: ${iv.topic}`,
-    iv.owner ? `Process owner: ${iv.owner}` : "",
+    `Skill being built: ${topicTitle(iv)}`,
+    knownContext(iv),
     sourceMaterial(iv, sources),
     opts.research
       ? `External web research you may reference as outside guidance, never as company policy:\n${opts.research.summary}`
@@ -368,7 +400,7 @@ async function persistReady(
   warnings: string[], p?: TenantTransactionSource,
 ): Promise<Interview> {
   const raw = (parsed.draft ?? {}) as Record<string, unknown>;
-  const completeDraft = parseNewSkill({ ...raw, owner: raw.owner ?? iv.owner ?? null });
+  const completeDraft = parseNewSkill({ ...raw, owner: raw.owner ?? ownerName(iv) });
   const draft: SkillDraft = {
     name: completeDraft.name,
     trigger: completeDraft.trigger,
