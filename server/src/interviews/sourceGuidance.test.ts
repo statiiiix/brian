@@ -4,6 +4,7 @@ import {
   DASHBOARD_SOURCE_GUIDANCE,
   sourceDisplayName,
   sourceGuidance,
+  sourceMaterialPrompt,
 } from "./sourceGuidance.js";
 
 const DASHBOARD_SOURCES = {
@@ -102,5 +103,62 @@ describe("interview source guidance", () => {
     expect(prompt).toContain("Provider: Uploaded File");
     expect(prompt).toMatch(/extraction or OCR/i);
     expect(prompt).not.toContain("Unknown or newly added company source");
+  });
+
+  it("labels every attached material block with its provider and relevant rules", () => {
+    const prompt = sourceMaterialPrompt(null, [
+      source({
+        id: "slack",
+        source_type: "slack",
+        title: "Refund decisions",
+        url: "https://slack.example/archives/refunds",
+        extracted_text: "Maya approved refunds below $200.",
+      }),
+      source({
+        id: "salesforce",
+        source_type: "salesforce",
+        title: "Escalated cases",
+        url: null,
+        extracted_text: "Cases above $200 move to manager review.",
+      }),
+    ]);
+
+    expect(prompt).toContain("### Refund decisions\nProvider: Slack");
+    expect(prompt).toContain("Source: https://slack.example/archives/refunds");
+    expect(prompt).toContain("### Escalated cases\nProvider: Salesforce");
+    expect(prompt).toContain("Source: No source URL");
+    expect(prompt).toContain("conversational decisions");
+    expect(prompt).toContain("structured records");
+  });
+
+  it("applies provider guidance to legacy source snapshots", () => {
+    const prompt = sourceMaterialPrompt({
+      source_type: "notion",
+      fetched_at: "2026-07-20T00:00:00.000Z",
+      documents: [{
+        title: "Refund Runbook",
+        url: "https://notion.so/refunds",
+        text: "Refunds below $200 are automatic.",
+      }],
+    }, []);
+
+    expect(prompt).toContain("connected Notion workspace");
+    expect(prompt).toContain("### Refund Runbook\nProvider: Notion");
+    expect(prompt).toContain("workspace pages, databases, SOPs");
+  });
+
+  it("does not include failed, empty, or web material in company source prompts", () => {
+    const prompt = sourceMaterialPrompt(null, [
+      source({ id: "failed", source_type: "jira", status: "failed", extracted_text: "Failed read" }),
+      source({ id: "empty", source_type: "linear", extracted_text: "" }),
+      source({
+        id: "web",
+        kind: "web",
+        source_type: "web_research",
+        extracted_text: "External research",
+      }),
+    ]);
+
+    expect(prompt).toBe("");
   });
 });

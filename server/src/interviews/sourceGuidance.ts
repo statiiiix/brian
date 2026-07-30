@@ -1,4 +1,4 @@
-import type { InterviewSource } from "./types.js";
+import type { InterviewSource, SourceContext } from "./types.js";
 
 export interface SourceGuidanceRule {
   name: string;
@@ -307,5 +307,74 @@ export function sourceGuidance(sources: InterviewSource[]): string {
     ...sourceTypes.map(formatRule),
     "When providers disagree, preserve the disagreement and ask the expert which source governs. "
       + "Never silently merge their authority.",
+  ].join("\n\n");
+}
+
+function materialSources(sources: InterviewSource[]): InterviewSource[] {
+  return sources.filter((source) =>
+    source.kind !== "web"
+    && source.status === "ready"
+    && Boolean(source.extracted_text?.trim()));
+}
+
+function materialDocument(source: InterviewSource): string {
+  return [
+    `### ${source.title}`,
+    `Provider: ${sourceDisplayName(source.source_type)}`,
+    `Source: ${source.url ?? "No source URL"}`,
+    source.extracted_text,
+  ].join("\n");
+}
+
+function legacySources(context: SourceContext): InterviewSource[] {
+  return context.documents
+    .filter((document) => Boolean(document.text.trim()))
+    .map((document, index) => ({
+      id: `legacy-source-${index}`,
+      interview_id: "legacy-interview",
+      kind: "connector" as const,
+      title: document.title,
+      source_type: context.source_type,
+      url: document.url || null,
+      status: "ready" as const,
+      extracted_text: document.text,
+      idempotency_key: `legacy-source-${index}`,
+      added_at: context.fetched_at,
+      retrieved_at: context.fetched_at,
+      error_code: null,
+    }));
+}
+
+export function sourceMaterialPrompt(
+  context: SourceContext | null,
+  sources: InterviewSource[] = [],
+): string {
+  const ready = materialSources(sources);
+  if (ready.length > 0) {
+    return [
+      "Source material selected for this interview:",
+      ready.map(materialDocument).join("\n\n"),
+      sourceGuidance(ready),
+      `Ground the skill in this material. On the first turn, briefly explain what you learned
+from the selected source, then ask how its most important principle should apply to this
+specific company or use case. Never re-ask what the source already answers; ask about gaps,
+ambiguities, thresholds, application decisions, and edge cases. Cite source titles where relevant.`,
+    ].join("\n\n");
+  }
+
+  if (!context || context.documents.length === 0) return "";
+  const legacy = legacySources(context);
+  if (legacy.length === 0) return "";
+  return [
+    `Source material from the company's connected ${sourceDisplayName(context.source_type)} workspace (fetched ${context.fetched_at}):`,
+    legacy.map(materialDocument).join("\n\n"),
+    sourceGuidance(legacy),
+    `Ground the skill in this material: extract the trigger, inputs, step-by-step procedure,
+hard rules, guardrails, escalation target, and concrete worked use-case examples directly
+from it wherever the material states them. On your FIRST question, briefly summarize what
+you already inferred from the material, then ask about the most important gap. Never
+re-ask what the material already answers — ask only about gaps, ambiguities, thresholds,
+and edge cases the material leaves open. Make examples ultra-detailed worked use cases
+(situation → correct handling), citing the source document titles where relevant.`,
   ].join("\n\n");
 }
