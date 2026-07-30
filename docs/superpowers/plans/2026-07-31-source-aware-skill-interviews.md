@@ -273,7 +273,7 @@ Run:
 
 ```bash
 cd server
-npm run typecheck
+npx tsc --noEmit
 ```
 
 Expected: PASS with no TypeScript errors.
@@ -320,4 +320,3 @@ Expected: PASS.
 git add supabase/functions/brian/index.js supabase/functions/brian/index.ts
 git commit -m "build: bundle source-aware interview prompts"
 ```
-
