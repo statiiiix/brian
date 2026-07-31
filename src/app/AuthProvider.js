@@ -63,6 +63,10 @@ export function AuthProvider({ children }) {
   }, [session, refreshProfile]);
 
   const signOut = useCallback(async () => {
+    await api('/api/agent-connections/deactivate-for-logout', {
+      method: 'POST',
+      redirectOnUnauthorized: false,
+    });
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     clearCache();

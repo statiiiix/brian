@@ -6,6 +6,9 @@ function fakeVec(text: string): number[] {
   if (/refund/i.test(text)) v[1] = 1;
   if (/onboard/i.test(text)) v[2] = 1;
   if (/order status|lookup order/i.test(text)) v[3] = 1;
+  // A second axis on top of an existing subject, so a restatement can land in
+  // the grey zone (~0.29) rather than at 0 or 1: [1,0] vs [1,1] is cos 0.707.
+  if (/escalat|cap|over \$/i.test(text)) v[4] = 1;
   return v;
 }
 vi.mock("../db/embed.js", () => ({ EMBED_DIM: 1536, embed: vi.fn(async (t: string) => fakeVec(t)) }));
@@ -14,7 +17,9 @@ import pg from "pg";
 import { runMigrations } from "../db/migrate.js";
 import { resetDb } from "../test/resetDb.js";
 import { getSkill } from "../skills/repo.js";
-import { capture, type CapturedItem } from "./capture.js";
+import { capture, proposeCapture, commitCapture, type CapturedItem } from "./capture.js";
+import { routeCapture, type CaptureCandidate } from "./routing.js";
+import { applyProposal, listSkills, listVersions } from "../skills/repo.js";
 import { FOUNDING_TENANT_ID, runPrincipal } from "../db/tenant.js";
 import type { McpPrincipal } from "../auth/principal.js";
 import type { LlmClient } from "../llm/complete.js";
@@ -137,5 +142,145 @@ d("capture", () => {
       expect(row.target_id).toBe(captured[index].items[0].id);
     }
     expect(JSON.stringify(rows)).not.toContain("raw-secret");
+  });
+});
+
+// Pure: runs everywhere, including without a test database.
+describe("routeCapture", () => {
+  const cand = (over: Partial<CaptureCandidate>): CaptureCandidate => ({
+    id: "s1", name: "Refund Flow", trigger: "refund request",
+    status: "active", distance: 0.1, ...over,
+  });
+  const th = { simMax: 0.2, askMax: 0.45, maxCandidates: 3 };
+
+  it("merges without asking when the nearest skill is clearly the same", () => {
+    expect(routeCapture([cand({ distance: 0.05 })], th)).toMatchObject({ kind: "merge" });
+  });
+
+  it("asks when the nearest skill is in the grey zone", () => {
+    const route = routeCapture([cand({ distance: 0.3 }), cand({ id: "s2", distance: 0.4 })], th);
+    expect(route.kind).toBe("ask");
+    if (route.kind === "ask") expect(route.candidates.map((c) => c.id)).toEqual(["s1", "s2"]);
+  });
+
+  it("leaves candidates outside the grey zone out of the offer", () => {
+    const route = routeCapture([cand({ distance: 0.3 }), cand({ id: "s2", distance: 0.9 })], th);
+    expect(route.kind).toBe("ask");
+    if (route.kind === "ask") expect(route.candidates.map((c) => c.id)).toEqual(["s1"]);
+  });
+
+  it("creates without asking when nothing is close", () => {
+    expect(routeCapture([cand({ distance: 0.8 })], th)).toEqual({ kind: "create" });
+    expect(routeCapture([], th)).toEqual({ kind: "create" });
+  });
+
+  it("never offers a retired skill as a merge target", () => {
+    expect(routeCapture([cand({ status: "retired", distance: 0.02 })], th)).toEqual({ kind: "create" });
+    expect(routeCapture([cand({ status: "retired", distance: 0.3 })], th)).toEqual({ kind: "create" });
+  });
+
+  it("caps how many targets a human is asked to choose between", () => {
+    const many = [0.25, 0.28, 0.3, 0.33].map((distance, i) => cand({ id: `s${i}`, distance }));
+    const route = routeCapture(many, { ...th, maxCandidates: 2 });
+    expect(route.kind).toBe("ask");
+    if (route.kind === "ask") expect(route.candidates).toHaveLength(2);
+  });
+});
+
+d("capture propose/commit", () => {
+  let pool: pg.Pool;
+  beforeAll(async () => { pool = new pg.Pool({ connectionString: url }); await runMigrations(pool); });
+  afterAll(async () => { await resetDb(pool); await pool.end(); });
+  beforeEach(async () => { await resetDb(pool); });
+
+  const refundSkill = (name: string, trigger: string, tools: string[] = ["get_order"]) =>
+    clientReturning([{ kind: "skill", confidence: 0.95, skill: { ...skillBase, name, trigger, tools } }]);
+
+  it("writes nothing while proposing", async () => {
+    const proposals = await proposeCapture("refunds", refundSkill("Refund Flow", "refund request"), pool);
+    expect(proposals).toHaveLength(1);
+    expect(await listSkills(undefined, pool)).toHaveLength(0);
+  });
+
+  it("routes a near-duplicate to the human instead of forking the skill", async () => {
+    const first = await capture("refund process", refundSkill("Refund Flow", "refund request"), pool);
+    // Same subject, different wording: too far for dedup to merge it (which is
+    // why this used to become a second skill), too close to be new knowledge.
+    const proposals = await proposeCapture(
+      "refund escalation", refundSkill("Refund Escalation", "refund request over $250"), pool,
+    );
+    const route = proposals[0].kind === "skill" ? proposals[0].route : null;
+    expect(route?.kind).toBe("ask");
+    if (route?.kind === "ask") {
+      expect(route.candidates[0].id).toBe(first.items[0].id);
+      expect(route.candidates[0].distance).toBeGreaterThan(0.2);
+    }
+  });
+
+  it("files a human-chosen merge as a proposal against the target, not a new skill", async () => {
+    const first = await capture("refund process", refundSkill("Refund Flow", "refund request"), pool);
+    const targetId = first.items[0].id;
+
+    const proposals = await proposeCapture(
+      "refund cap", refundSkill("Refund Cap", "refund request over $250"), pool,
+    );
+    const committed = await commitCapture(
+      proposals, { 0: { action: "merge", targetId, review: true } }, pool,
+    );
+
+    expect(committed.items[0].action).toBe("proposed_draft");
+    const draft = await getSkill(committed.items[0].id, pool);
+    expect(draft!.status).toBe("draft");
+    expect(draft!.supersedes_skill_id).toBe(targetId);
+    // The live skill is untouched until someone approves.
+    expect((await getSkill(targetId, pool))!.name).toBe("Refund Flow");
+  });
+
+  it("applies an approved proposal onto its target and retires the proposal", async () => {
+    const first = await capture("refund process", refundSkill("Refund Flow", "refund request"), pool);
+    const targetId = first.items[0].id;
+    const proposals = await proposeCapture(
+      "refund cap", refundSkill("Refund Cap", "refund request over $250"), pool,
+    );
+    const committed = await commitCapture(
+      proposals, { 0: { action: "merge", targetId, review: true } }, pool,
+    );
+    const draftId = committed.items[0].id;
+
+    const target = await applyProposal(draftId, "review", pool);
+
+    expect(target.id).toBe(targetId);
+    expect(target.name).toBe("Refund Cap");
+    expect((await getSkill(draftId, pool))!.status).toBe("retired");
+    // The overwritten wording stays recoverable.
+    expect((await listVersions(targetId, pool)).some((v) => v.snapshot.name === "Refund Flow")).toBe(true);
+  });
+
+  it("creates a new skill when the human declines every offered target", async () => {
+    await capture("refund process", refundSkill("Refund Flow", "refund request"), pool);
+    const proposals = await proposeCapture(
+      "refund cap", refundSkill("Refund Cap", "refund request over $250"), pool,
+    );
+    const committed = await commitCapture(proposals, { 0: { action: "create" } }, pool);
+
+    expect(committed.items[0].action).toBe("created_active");
+    expect(await listSkills(undefined, pool)).toHaveLength(2);
+  });
+
+  it("falls back to automatic routing for items the human never answered", async () => {
+    const proposals = await proposeCapture(
+      "order status", refundSkill("Lookup Order Status", "customer asks order status"), pool,
+    );
+    const committed = await commitCapture(proposals, {}, pool);
+    expect(committed.items[0].action).toBe("created_active");
+  });
+
+  it("refuses a merge target that is not a skill in this tenant", async () => {
+    const proposals = await proposeCapture("refunds", refundSkill("Refund Flow", "refund request"), pool);
+    await expect(commitCapture(
+      proposals,
+      { 0: { action: "merge", targetId: "00000000-0000-4000-8000-0000000000ff", review: true } },
+      pool,
+    )).rejects.toThrow();
   });
 });

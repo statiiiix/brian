@@ -18,6 +18,19 @@ export function toolRisk(name: string): ToolRisk {
   return REGISTRY[name] ?? "destructive"; // unknown tools fail safe
 }
 
+// What a safe lookup establishes, so a compiled rule can reference
+// facts.order.placed_at after the agent has actually looked the order up.
+// Only safe (read-only) tools contribute facts.
+const FACT_SUBJECTS: Record<string, string> = {
+  get_order: "order",
+  lookup_customer: "customer",
+  get_ticket: "ticket",
+};
+
+export function factSubject(name: string): string | null {
+  return toolRisk(name) === "safe" ? FACT_SUBJECTS[name] ?? null : null;
+}
+
 export function skillIsAutoSafe(tools: string[]): boolean {
   return tools.every((t) => toolRisk(t) === "safe");
 }

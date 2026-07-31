@@ -8,15 +8,26 @@ vi.mock("../db/embed.js", () => ({
 import { runMigrations } from "../db/migrate.js";
 import { pool } from "../db/pool.js";
 import { createInterview, appendMessage, getInterview } from "./repo.js";
-import { runTurn, finishTurn, MAX_QUESTIONS } from "./engine.js";
+import {
+  buildInterviewerUser,
+  buildUser,
+  runTurn,
+  finishTurn,
+  MAX_QUESTIONS,
+} from "./engine.js";
 import type { LlmClient } from "../llm/complete.js";
 import type { ResearchClient } from "./research.js";
+import type { Interview, InterviewSource } from "./types.js";
 
 const d = process.env.TEST_DATABASE_URL ? describe : describe.skip;
 
-const defined = (summary: string) => ({ status: "defined", summary, reason: null });
-const missing = () => ({ status: "missing", summary: null, reason: null });
-const notApplicable = (reason: string) => ({ status: "not_applicable", summary: null, reason });
+const defined = (summary: string) => ({ status: "defined" as const, summary, reason: null });
+const missing = () => ({ status: "missing" as const, summary: null, reason: null });
+const notApplicable = (reason: string) => ({
+  status: "not_applicable" as const,
+  summary: null,
+  reason,
+});
 
 const fullCoverage = () => ({
   trigger: defined("A customer emails asking for money back"),
@@ -92,6 +103,105 @@ const fake = (parserOutputs: string[], reply = "Tell me more about that."): LlmC
 
 const promptsOf = (llm: LlmClient) =>
   vi.mocked(llm.complete).mock.calls.map(([args]) => args);
+
+function readySource(overrides: Partial<InterviewSource> = {}): InterviewSource {
+  return {
+    id: "source-1",
+    interview_id: "interview-1",
+    kind: "connector",
+    title: "Source material",
+    source_type: "notion",
+    url: null,
+    status: "ready",
+    extracted_text: "Useful company material",
+    idempotency_key: "source-key",
+    added_at: "2026-07-31T00:00:00.000Z",
+    retrieved_at: "2026-07-31T00:00:00.000Z",
+    error_code: null,
+    ...overrides,
+  };
+}
+
+function promptInterview(): Interview {
+  return {
+    id: "interview-1",
+    topic: "Refund handling",
+    owner: null,
+    status: "active",
+    messages: [],
+    coverage: {
+      trigger: false,
+      inputs: false,
+      procedure: false,
+      hard_rules: false,
+      guardrails: false,
+      escalation_target: false,
+      examples: false,
+    },
+    component_coverage: {
+      trigger: missing(),
+      inputs: missing(),
+      principles: missing(),
+      procedure: missing(),
+      tools: missing(),
+      hard_rules: missing(),
+      guardrails: missing(),
+      escalation_target: missing(),
+      quality_checks: missing(),
+      examples: missing(),
+    },
+    draft: null,
+    source_context: null,
+    assumptions: [],
+    warnings: [],
+    resulting_skill_id: null,
+    created_by: null,
+    created_at: "2026-07-31T00:00:00.000Z",
+    updated_at: "2026-07-31T00:00:00.000Z",
+  };
+}
+
+describe("interview prompt construction", () => {
+  it("passes attached provider names and rules to both interview agents", () => {
+    const iv = promptInterview();
+    const sources = [
+      readySource({
+        id: "slack",
+        source_type: "slack",
+        title: "Refund decisions",
+        extracted_text: "The support lead decides exceptions.",
+      }),
+      readySource({
+        id: "salesforce",
+        source_type: "salesforce",
+        title: "Escalated cases",
+        extracted_text: "Cases above $200 require review.",
+      }),
+    ];
+
+    for (const prompt of [
+      buildUser(iv, false, sources),
+      buildInterviewerUser(iv, sources),
+    ]) {
+      expect(prompt).toContain("Provider: Slack");
+      expect(prompt).toContain("Provider: Salesforce");
+      expect(prompt).toContain("conversational decisions");
+      expect(prompt).toContain("structured records");
+    }
+  });
+
+  it("uses a source added during an interview on the next prompt", () => {
+    const iv = promptInterview();
+    expect(buildUser(iv, false, [])).not.toContain("Provider: Slack");
+
+    const sources = [readySource({
+      source_type: "slack",
+      extracted_text: "Incident decision history",
+    })];
+    expect(buildUser(iv, false, sources)).toContain("Provider: Slack");
+    expect(buildInterviewerUser(iv, sources)).toContain("Provider: Slack");
+  });
+});
 
 async function started(topic: string, owner?: string) {
   const iv = await createInterview({ topic, owner: owner ?? null });
@@ -230,15 +340,56 @@ d("interview engine", () => {
         }],
       },
     });
-    const llm = fake([turn()], "I read the runbook — how should its $200 line apply here?");
+    const llm = fake(
+      [turn({ draft: goodDraft })],
+      "I read the runbook — how should its $200 line apply here?",
+    );
     const opened = await runTurn(iv, llm);
+
+    // Draft-first: with material to read, the opening turn parses it BEFORE
+    // speaking, so the expert reacts to a draft instead of a blank page.
+    expect(promptsOf(llm)[0].schema?.name).toBe("interview_turn");
     expect(promptsOf(llm)[0].user).toContain("Refunds under $200 are automatic.");
-    expect(promptsOf(llm)[0].user).toContain("connected notion workspace");
+    expect(promptsOf(llm)[1].schema).toBeUndefined();
+    expect(promptsOf(llm)[1].user).toContain("connected Notion workspace");
+    expect(promptsOf(llm)[1].user).toContain("Provider: Notion");
+    expect(opened.draft?.name).toBe("Refund Handling");
+    // A draft nobody has confirmed is not an approved procedure.
+    expect(opened.status).toBe("active");
 
     await appendMessage(opened.id, { role: "expert", content: "Same limit, but ask me over $500." });
     await runTurn((await getInterview(opened.id))!, llm);
-    expect(promptsOf(llm)[1].schema?.name).toBe("interview_turn");
-    expect(promptsOf(llm)[1].user).toContain("Refund Runbook");
+    expect(promptsOf(llm)[2].schema?.name).toBe("interview_turn");
+    expect(promptsOf(llm)[2].user).toContain("Refund Runbook");
+  });
+
+  it("still opens conversationally when there is no material to draft from", async () => {
+    const iv = await createInterview({ topic: "refunds" });
+    const llm = fake([turn()], "What should this skill do, and who relies on it?");
+    await runTurn(iv, llm);
+    expect(promptsOf(llm)).toHaveLength(1);
+    expect(promptsOf(llm)[0].schema).toBeUndefined();
+  });
+
+  it("opens conversationally when the pre-read of the sources fails", async () => {
+    const iv = await createInterview({
+      topic: "Refund handling from Notion",
+      source_context: {
+        source_type: "notion",
+        fetched_at: "2026-07-20T00:00:00.000Z",
+        documents: [{ title: "Refund Runbook", url: "https://notion.so/r", text: "Refunds under $200." }],
+      },
+    });
+    // Parser calls fail; the interview must still start rather than dying.
+    const llm: LlmClient = {
+      complete: vi.fn(async ({ schema }) => {
+        if (schema) throw new Error("parser unavailable");
+        return "Tell me how refunds actually work here.";
+      }),
+    };
+    const opened = await runTurn(iv, llm);
+    expect(opened.status).toBe("active");
+    expect(opened.messages.at(-1)?.content).toBe("Tell me how refunds actually work here.");
   });
 
   it("researches one genuine gap, cites it, and re-parses with the result", async () => {

@@ -5,6 +5,7 @@ import { decodeJwt } from "jose";
 export interface SupabaseAuthConfig {
   url: string;
   anonKey: string;
+  fallbackAnonKeys?: string[];
   dashboardAudience?: string;
   fetchFn?: typeof fetch;
 }
@@ -53,10 +54,16 @@ function defaultPublishableKey(raw: string | undefined): string | undefined {
 export function supabaseAuthFromEnv(): SupabaseAuthConfig | null {
   if (process.env.VITEST) return null;
   const url = runtimeEnv("SUPABASE_URL");
-  const anonKey = runtimeEnv("SUPABASE_ANON_KEY")
-    ?? defaultPublishableKey(runtimeEnv("SUPABASE_PUBLISHABLE_KEYS"));
+  const legacyKey = runtimeEnv("SUPABASE_ANON_KEY");
+  const modernKey = defaultPublishableKey(runtimeEnv("SUPABASE_PUBLISHABLE_KEYS"));
+  const anonKey = legacyKey ?? modernKey;
   return url && anonKey
-    ? { url, anonKey, dashboardAudience: runtimeEnv("DASHBOARD_JWT_AUDIENCE") ?? "authenticated" }
+    ? {
+      url,
+      anonKey,
+      fallbackAnonKeys: modernKey && modernKey !== anonKey ? [modernKey] : [],
+      dashboardAudience: runtimeEnv("DASHBOARD_JWT_AUDIENCE") ?? "authenticated",
+    }
     : null;
 }
 
@@ -76,8 +83,10 @@ function hasExpectedDashboardClaims(token: string, cfg: SupabaseAuthConfig): boo
     const claims = decodeJwt(token);
     const issuer = `${cfg.url.replace(/\/$/, "")}/auth/v1`;
     const expectedAudience = cfg.dashboardAudience ?? "authenticated";
+    const audienceMatches = claims.aud === expectedAudience
+      || (Array.isArray(claims.aud) && claims.aud.includes(expectedAudience));
     return claims.iss === issuer
-      && claims.aud === expectedAudience
+      && audienceMatches
       && typeof claims.sub === "string"
       && claims.client_id === undefined
       && claims.brian_token_type === undefined;
@@ -93,17 +102,25 @@ export async function verifyDashboardToken(
   if (!hasExpectedDashboardClaims(token, cfg)) return null;
   const subject = decodeJwt(token).sub;
   const f = cfg.fetchFn ?? fetch;
-  try {
-    const res = await f(`${cfg.url.replace(/\/$/, "")}/auth/v1/user`, {
-      headers: { apikey: cfg.anonKey, authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    const user = (await res.json()) as { id?: string; email?: string };
-    if (!user.id || !user.email || user.id !== subject) return null;
-    return { id: user.id, email: user.email };
-  } catch {
-    return null;
+  const keys = [...new Set([cfg.anonKey, ...(cfg.fallbackAnonKeys ?? [])])];
+  for (const [index, apiKey] of keys.entries()) {
+    try {
+      const res = await f(`${cfg.url.replace(/\/$/, "")}/auth/v1/user`, {
+        headers: { apikey: apiKey, authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const mayRetryKey = (res.status === 401 || res.status === 403) && index < keys.length - 1;
+        if (mayRetryKey) continue;
+        return null;
+      }
+      const user = (await res.json()) as { id?: string; email?: string };
+      if (!user.id || !user.email || user.id !== subject) return null;
+      return { id: user.id, email: user.email };
+    } catch {
+      return null;
+    }
   }
+  return null;
 }
 
 // Compatibility export for existing callers. It intentionally follows the

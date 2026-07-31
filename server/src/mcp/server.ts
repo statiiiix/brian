@@ -1,9 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { findSkill, getSkill } from "../skills/repo.js";
+import { getSkill, lookupSkill } from "../skills/repo.js";
 import { businessAdapters } from "./adapters.js";
 import { capture } from "../ingestion/capture.js";
-import { findContextWithDistance } from "../context/repo.js";
+import { findContextEntries } from "../context/repo.js";
 import { logExecution } from "../feedback/executions.js";
 import { BRIAN_INSTRUCTIONS } from "./instructions.js";
 import { FOUNDING_TENANT_ID } from "../db/tenant.js";
@@ -15,6 +15,9 @@ import {
   type AgentPermission,
 } from "../auth/permissions.js";
 import { markFirstMcpCall, writeAuditEvent } from "../identity/repo.js";
+import { factSubject, toolRisk } from "./toolRisk.js";
+import { guardAction } from "../policy/gate.js";
+import { recordConsultation, recordFact } from "../policy/repo.js";
 
 const SYSTEM_PRINCIPAL: SystemPrincipal = {
   kind: "system",
@@ -29,6 +32,17 @@ const SYSTEM_PRINCIPAL: SystemPrincipal = {
 function requirePermission(principal: AuthPrincipal, permission: AgentPermission): void {
   if (!hasPermission(principal.permissions, permission)) {
     throw new Error(`insufficient permission: ${permission}`);
+  }
+}
+
+// Session bookkeeping must never break a tool call: a failure here can only
+// cost the agent context, and the gate treats missing context as a denial, so
+// swallowing the error stays fail-closed.
+async function remember(work: Promise<unknown>): Promise<void> {
+  try {
+    await work;
+  } catch (error) {
+    console.error("policy: failed to record session state", error);
   }
 }
 
@@ -48,10 +62,32 @@ export function buildMcpServer(principal: AuthPrincipal = SYSTEM_PRINCIPAL): Mcp
     async ({ query }) => {
       requirePermission(principal, "skills:read");
       await markFirstMcpCall();
-      const skill = await findSkill(query);
-      return {
-        content: [{ type: "text", text: skill ? JSON.stringify(skill) : "NO_MATCHING_SKILL" }],
-      };
+      const { outcome, skill } = await lookupSkill(query);
+
+      // Two skills equally close cannot be told apart by embedding alone, and
+      // picking one silently is how an agent ends up governed by the wrong
+      // team's procedure. Hand the choice back instead.
+      if (outcome.kind === "ambiguous") {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              result: "AMBIGUOUS_SKILL_MATCH",
+              message:
+                "Several company skills match this task equally well. Ask the user which "
+                + "process applies, then call get_skill with its id. Do not guess.",
+              candidates: outcome.candidates.map((c) => ({
+                id: c.id, name: c.name, trigger: c.trigger,
+              })),
+            }),
+          }],
+        };
+      }
+
+      if (!skill) return { content: [{ type: "text", text: "NO_MATCHING_SKILL" }] };
+      // Consulting a skill is what puts its rules in force for this session.
+      await remember(recordConsultation(skill.id));
+      return { content: [{ type: "text", text: JSON.stringify(skill) }] };
     }
   );
 
@@ -61,6 +97,7 @@ export function buildMcpServer(principal: AuthPrincipal = SYSTEM_PRINCIPAL): Mcp
     async ({ id }) => {
       requirePermission(principal, "skills:read");
       const skill = await getSkill(id);
+      if (skill) await remember(recordConsultation(skill.id));
       return { content: [{ type: "text", text: skill ? JSON.stringify(skill) : "NOT_FOUND" }] };
     }
   );
@@ -68,12 +105,38 @@ export function buildMcpServer(principal: AuthPrincipal = SYSTEM_PRINCIPAL): Mcp
   for (const tool of businessAdapters({ tenantCredentials: principal.kind !== "system" })) {
     const permission = requiredPermissionForTool(tool.name);
     if (!hasPermission(principal.permissions, permission)) continue;
+    const destructive = toolRisk(tool.name) === "destructive";
+    const subject = factSubject(tool.name);
     server.registerTool(
       tool.name,
-      { description: tool.description, inputSchema: tool.inputSchema },
+      {
+        description: destructive
+          ? `${tool.description} Governed: Brian checks this company's hard rules before it runs and refuses the call if any rule fails.`
+          : tool.description,
+        inputSchema: tool.inputSchema,
+      },
       async (args: Record<string, unknown>) => {
         requirePermission(principal, permission);
+
+        // The enforcement point. Everything before this is advice; this is the
+        // line the agent cannot argue its way past.
+        const gate = await guardAction(tool.name, args);
+        if (gate.denial) {
+          await remember(writeAuditEvent("mcp.policy_denied", {
+            targetType: "tool",
+            targetId: tool.name,
+            metadata: {
+              violations: gate.decision.violations.map((v) => v.constraint_id),
+              skills: gate.sets.map((s) => s.skill_id).filter(Boolean),
+            },
+          }));
+          return { isError: true, content: [{ type: "text" as const, text: gate.denial }] };
+        }
+
         const result = await tool.handler(args);
+        // Safe lookups feed the fact store so later rules ("not older than 90
+        // days") can actually be checked against what the agent established.
+        if (subject) await remember(recordFact(subject, result));
         return {
           content: [
             { type: "text" as const, text: result == null ? "NOT_FOUND" : JSON.stringify(result) },
@@ -110,8 +173,15 @@ export function buildMcpServer(principal: AuthPrincipal = SYSTEM_PRINCIPAL): Mcp
     },
     async ({ query }) => {
       requirePermission(principal, "context:read");
-      const hit = await findContextWithDistance(query);
-      return { content: [{ type: "text", text: hit ? JSON.stringify(hit.entry) : "NO_MATCHING_CONTEXT" }] };
+      const hits = await findContextEntries(query);
+      return {
+        content: [{
+          type: "text",
+          text: hits.length === 0
+            ? "NO_MATCHING_CONTEXT"
+            : JSON.stringify(hits.map((h) => h.entry)),
+        }],
+      };
     }
   );
 

@@ -158,6 +158,11 @@
   color: var(--green);
 }
 
+.agent-status--inactive {
+  background: var(--accent-dim);
+  color: var(--accent-text);
+}
+
 .agent-status--revoked,
 .agent-status--denied {
   background: var(--red-dim);

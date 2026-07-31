@@ -34,6 +34,8 @@ function redirectDetails(uri) {
 }
 
 const OPTIONAL_AGENT_PERMISSIONS = ['knowledge:write', 'actions:execute'];
+const EMPTY_CHECKBOX_PATH = 'M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Z';
+const CHECKED_CHECKBOX_PATH = 'm424-312 282-282-56-56-226 226-114-114-56 56 170 170ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0-560v560-560Z';
 
 export default function OAuthConsent() {
   const location = useLocation();
@@ -222,17 +224,25 @@ export default function OAuthConsent() {
                 .filter((permission) => permission.id !== 'actions:execute'
                   || selectedMembership?.role === 'owner'
                   || selectedMembership?.role === 'admin')
-                .map((permission) => (
-                  <label key={permission.id} className={`consent-permission-option${permission.highRisk ? ' is-sensitive' : ''}`}>
-                    <input
-                      type="checkbox"
-                      aria-label={permission.title}
-                      checked={optionalPermissions.includes(permission.id)}
-                      onChange={(event) => togglePermission(permission.id, event.target.checked)}
-                    />
-                    <div><strong>{permission.title}</strong><p>{permission.description}</p></div>
-                  </label>
-                ))}
+                .map((permission) => {
+                  const checked = optionalPermissions.includes(permission.id);
+                  return (
+                    <label key={permission.id} className={`consent-permission-option${permission.highRisk ? ' is-sensitive' : ''}`}>
+                      <input
+                        type="checkbox"
+                        aria-label={permission.title}
+                        checked={checked}
+                        onChange={(event) => togglePermission(permission.id, event.target.checked)}
+                      />
+                      <span className="consent-checkbox-icon" aria-hidden="true">
+                        <svg viewBox="0 -960 960 960" focusable="false">
+                          <path d={checked ? CHECKED_CHECKBOX_PATH : EMPTY_CHECKBOX_PATH} />
+                        </svg>
+                      </span>
+                      <div><strong>{permission.title}</strong><p>{permission.description}</p></div>
+                    </label>
+                  );
+                })}
             </div>
             {selectedMembership?.role === 'viewer' && <p className="login-error">Viewers cannot connect agents. Ask a company admin to change your role.</p>}
             {!newConnectionsEnabled && <p className="login-error">New agent connections are temporarily paused.</p>}

@@ -39,7 +39,7 @@ test('links to Privacy from Settings and marks the route active', async () => {
   expect(privacyLink).toHaveAttribute('href', '/app/settings/privacy');
   expect(privacyLink).toHaveClass('is-active');
   expect(screen.getByRole('heading', { name: 'Privacy route' })).toBeInTheDocument();
-  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/skills?status=draft'));
+  await waitFor(() => expect(api).toHaveBeenCalledWith('/api/skills'));
 });
 
 test('toggles the desktop sidebar and exposes its current state', async () => {

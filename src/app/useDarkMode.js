@@ -7,11 +7,19 @@ import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 // by path — here the mount lifecycle does it).
 const STORAGE_KEY = 'theme';
 
+// matchMedia is absent in jsdom and in some embedded webviews; treating that as
+// "no preference expressed" keeps the light default rather than throwing during
+// the very first render of the dashboard shell.
+function prefersDark() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return null;
+  return window.matchMedia('(prefers-color-scheme: dark)');
+}
+
 function getInitialTheme() {
   if (typeof window === 'undefined') return 'light';
   const saved = window.localStorage.getItem(STORAGE_KEY);
   if (saved === 'light' || saved === 'dark') return saved;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return prefersDark()?.matches ? 'dark' : 'light';
 }
 
 export function useDarkMode() {
@@ -28,7 +36,8 @@ export function useDarkMode() {
 
   // Track OS changes until the user makes an explicit choice.
   useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const mq = prefersDark();
+    if (!mq?.addEventListener) return undefined;
     const onChange = (event) => {
       if (!window.localStorage.getItem(STORAGE_KEY)) {
         setTheme(event.matches ? 'dark' : 'light');

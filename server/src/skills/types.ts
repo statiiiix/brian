@@ -1,3 +1,5 @@
+import type { SkillPolicy } from "../policy/types.js";
+
 export type SkillStatus = "draft" | "active" | "needs_review" | "retired";
 export type ExecutionOutcome = "completed" | "escalated" | "failed";
 
@@ -27,6 +29,13 @@ export interface Skill {
   principles?: string[];
   quality_checks?: string[];
   sources?: SkillSourceRef[];
+  /** Compiled, server-enforced form of hard_rules (see src/policy). */
+  policy?: SkillPolicy;
+  /**
+   * Set on a draft that proposes a revision of an existing skill rather than a
+   * new procedure. Activating such a draft applies it onto the target.
+   */
+  supersedes_skill_id?: string | null;
   status: SkillStatus;
   version: number;
   last_reviewed_at: string | null;

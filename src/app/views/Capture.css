@@ -14,9 +14,26 @@
   flex-wrap: wrap;
 }
 
+/* Takes the space between the voice control and the submit button, and stays
+   left-aligned on the line of its own it drops to when the row runs out. */
 .capture-hint {
+  flex: 1 1 14rem;
+  min-width: 0;
   font-size: 0.8rem;
   color: var(--muted-2);
+}
+
+/* On a phone the footer stacks: voice control, then the button, then the hint
+   reading as a caption under both. */
+@media (max-width: 34rem) {
+  .capture-submit {
+    align-items: stretch;
+  }
+
+  .capture-hint {
+    order: 3;
+    flex-basis: 100%;
+  }
 }
 
 .capture-results {

@@ -72,15 +72,24 @@ async function main() {
     signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) return;
-  const { skill, context } = await res.json();
-  if (!skill && !context) return;
+  const { skill, ambiguous, context, contexts } = await res.json();
+  const entries = Array.isArray(contexts) && contexts.length > 0
+    ? contexts
+    : context ? [context] : [];
+  if (!skill && !ambiguous && entries.length === 0) return;
 
   const parts = ["<brian-briefing>", "Brian (company brain) matched this prompt:"];
   if (skill) {
     parts.push(`SKILL (follow its procedure; hard_rules and guardrails are non-negotiable):\n${JSON.stringify(skill)}`);
   }
-  if (context) {
-    parts.push(`CONTEXT (company goals/decisions/preferences that override defaults):\n${JSON.stringify(context)}`);
+  if (ambiguous) {
+    parts.push(
+      "SEVERAL SKILLS match this task equally well; Brian did not guess. Ask which "
+      + `process applies before acting:\n${JSON.stringify(ambiguous)}`
+    );
+  }
+  if (entries.length > 0) {
+    parts.push(`CONTEXT (company goals/decisions/preferences that override defaults):\n${JSON.stringify(entries)}`);
   }
   parts.push(
     "After finishing or escalating, call log_execution. If the skill does not fit the task, call find_skill yourself before improvising.",

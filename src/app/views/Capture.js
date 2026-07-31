@@ -2,8 +2,12 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { msym } from '../../components/Icon';
 import { api } from '../api';
+import CaptureDecisionModal from '../components/CaptureDecisionModal';
 import EmptyState from '../components/EmptyState';
+import VoiceRecorder from '../components/VoiceRecorder';
 import './Capture.css';
+import '../components/CaptureDecisionModal.css';
+import '../components/VoiceRecorder.css';
 
 const ACTION_LABELS = {
   created_active: 'Saved and activated',
@@ -12,11 +16,35 @@ const ACTION_LABELS = {
   proposed_draft: 'Proposed update — waiting in review',
 };
 
+// Skills the brain could not place on its own. Everything else — context, and
+// skills that clearly match or clearly do not — is filed without asking.
+function decisionsFrom(proposals) {
+  return proposals
+    .map((proposal, index) => ({ proposal, index }))
+    .filter(({ proposal }) => proposal.kind === 'skill' && proposal.route?.kind === 'ask')
+    .map(({ proposal, index }) => ({ proposal, index, candidates: proposal.route.candidates }));
+}
+
 export default function Capture() {
   const [text, setText] = useState('');
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState(null);
+
+  async function commit(proposals, choices) {
+    setBusy(true);
+    setPending(null);
+    try {
+      const res = await api('/api/capture/commit', { method: 'POST', body: { proposals, choices } });
+      setItems(res.items);
+      setText('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -24,12 +52,16 @@ export default function Capture() {
     setError('');
     setItems(null);
     try {
-      const res = await api('/api/capture', { method: 'POST', body: { text } });
-      setItems(res.items);
-      setText('');
+      const { proposals } = await api('/api/capture/propose', { method: 'POST', body: { text } });
+      const decisions = decisionsFrom(proposals);
+      if (decisions.length === 0) {
+        await commit(proposals, {});
+        return;
+      }
+      setPending({ proposals, decisions });
+      setBusy(false);
     } catch (err) {
       setError(err.message);
-    } finally {
       setBusy(false);
     }
   }
@@ -57,6 +89,12 @@ export default function Capture() {
           />
         </div>
         <div className="capture-submit">
+          <VoiceRecorder
+            disabled={busy}
+            // Spoken notes land in the box rather than submitting themselves —
+            // people re-read and edit before filing.
+            onTranscript={(spoken) => setText((prev) => (prev ? `${prev.trimEnd()} ${spoken}` : spoken))}
+          />
           <span className="capture-hint">Filed skills wait in review — nothing goes live on its own.</span>
           <button type="submit" className="dash-btn dash-btn--primary" disabled={busy || !text.trim()}>
             {busy ? 'Capturing…' : 'Capture'}
@@ -65,6 +103,16 @@ export default function Capture() {
       </form>
 
       {error && <p className="dash-error" role="alert">{error}</p>}
+
+      {pending && (
+        <CaptureDecisionModal
+          decisions={pending.decisions}
+          onResolve={(choices) => commit(pending.proposals, choices)}
+          // Walking away files the undecided skills the way capture always has:
+          // as drafts in the review queue. Nothing is lost by not choosing.
+          onDismiss={() => commit(pending.proposals, {})}
+        />
+      )}
 
       {items !== null && (
         <section className="capture-results" aria-label="Capture results">

@@ -8,18 +8,29 @@ import { pool } from "../db/pool.js";
 let cache: Record<string, string> | null = null;
 let cachePromise: Promise<Record<string, string>> | null = null;
 
-function loadSecrets(): Promise<Record<string, string>> {
-  if (cache) return Promise.resolve(cache);
-  if (!cachePromise) {
-    cachePromise = pool.query("select key, value from app_config")
+function queryConfig(): Promise<Record<string, string>> {
+  // `pool` is a lazy getter that THROWS synchronously when DATABASE_URL is
+  // unset, so the fallback below cannot be a bare .catch() — it would never
+  // run. An absent database means "no configured secrets", never an exception
+  // escaping into a request handler.
+  try {
+    return pool.query("select key, value from app_config")
       .then(({ rows }) => Object.fromEntries(
         (rows as { key: string; value: string }[]).map((r) => [r.key, r.value]),
       ))
-      .catch(() => ({}))
-      .then((loaded) => {
-        cache = loaded;
-        return loaded;
-      });
+      .catch(() => ({}));
+  } catch {
+    return Promise.resolve({});
+  }
+}
+
+function loadSecrets(): Promise<Record<string, string>> {
+  if (cache) return Promise.resolve(cache);
+  if (!cachePromise) {
+    cachePromise = queryConfig().then((loaded) => {
+      cache = loaded;
+      return loaded;
+    });
   }
   return cachePromise;
 }

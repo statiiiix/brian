@@ -6,10 +6,14 @@ import { parseNewSkill } from "../skills/validation.js";
 import { appendMessage, setTurnResult } from "./repo.js";
 import { defaultResearchClient, type ResearchClient, type ResearchResult } from "./research.js";
 import { addWebResearchSources, replaceInterviewEvidence } from "./sources.js";
+import { sourceMaterialPrompt } from "./sourceGuidance.js";
 import { normalizeCoverage } from "./types.js";
 import type { Interview, InterviewEvidence, InterviewSource, SkillDraft } from "./types.js";
 
-export const MAX_QUESTIONS = 25;
+// A cap, not a target. Real interviews ran to 19 messages and were abandoned
+// two thirds of the time; the readiness gate ends most of them well before
+// this, and a draft-first opening removes the questions sources can answer.
+export const MAX_QUESTIONS = 12;
 
 const PARSER_SYSTEM = `You are the hidden skill analyst behind an AI-led interview.
 Read the full conversation and source material, then maintain the structured skill state.
@@ -231,36 +235,7 @@ function parseTurnOutput(raw: unknown): z.infer<typeof turnSchema> {
 }
 
 function sourceMaterial(iv: Interview, sources: InterviewSource[] = []): string {
-  const ready = sources.filter((source) => source.status === "ready" && source.extracted_text);
-  if (ready.length > 0) {
-    const docs = ready.map((source) =>
-      `### ${source.title}\nSource: ${source.url ?? source.source_type}\n${source.extracted_text}`,
-    ).join("\n\n");
-    return [
-      "Source material selected for this interview:",
-      docs,
-      `Ground the skill in this material. On the first turn, briefly explain what you learned
-from the selected source, then ask how its most important principle should apply to this
-specific company or use case. Never re-ask what the source already answers; ask about gaps,
-ambiguities, thresholds, application decisions, and edge cases. Cite source titles where relevant.`,
-    ].join("\n\n");
-  }
-  const ctx = iv.source_context;
-  if (!ctx || ctx.documents.length === 0) return "";
-  const docs = ctx.documents
-    .map((d) => `### ${d.title}\nSource: ${d.url}\n${d.text}`)
-    .join("\n\n");
-  return [
-    `Source material from the company's connected ${ctx.source_type} workspace (fetched ${ctx.fetched_at}):`,
-    docs,
-    `Ground the skill in this material: extract the trigger, inputs, step-by-step procedure,
-hard rules, guardrails, escalation target, and concrete worked use-case examples directly
-from it wherever the material states them. On your FIRST question, briefly summarize what
-you already inferred from the material, then ask about the most important gap. Never
-re-ask what the material already answers — ask only about gaps, ambiguities, thresholds,
-and edge cases the material leaves open. Make examples ultra-detailed worked use cases
-(situation → correct handling), citing the source document titles where relevant.`,
-  ].join("\n\n");
+  return sourceMaterialPrompt(iv.source_context, sources);
 }
 
 // "Anyone" is how the builder UI records "no single owner"; older interviews
@@ -291,7 +266,7 @@ function topicTitle(iv: Interview): string {
   return String(iv.topic ?? "").split("\n")[0]?.trim() || String(iv.topic ?? "");
 }
 
-function buildUser(
+export function buildUser(
   iv: Interview, forceFinish: boolean, sources: InterviewSource[] = [],
   research?: ResearchResult,
 ): string {
@@ -348,7 +323,7 @@ function fallbackOpening(iv: Interview, sources: InterviewSource[]): string {
     : `Let's build this together. In your own words, what should this skill do for ${iv.topic}, who will use it, and what does a great result look like?`;
 }
 
-function buildInterviewerUser(
+export function buildInterviewerUser(
   iv: Interview, sources: InterviewSource[],
   opts: { research?: ResearchResult; guidance?: string[]; forceFinish?: boolean } = {},
 ): string {
@@ -428,6 +403,63 @@ async function persistReady(
 // The expert's own "we're done". The readiness gate stops the model from
 // finishing early; it must never stop the person being interviewed, so this
 // synthesizes a final draft from the conversation on demand.
+/** Whether the interview has company material worth drafting from up front. */
+function hasGrounding(iv: Interview, sources: InterviewSource[]): boolean {
+  return sources.some(
+    (source) => (source.kind === "connector" || source.kind === "upload") && source.status === "ready",
+  ) || Boolean(iv.source_context?.documents.length);
+}
+
+/**
+ * Opening turn for a source-grounded interview: parse the sources into a draft,
+ * store it so the expert can see and edit it immediately, then open the
+ * conversation on the gaps the sources genuinely left open. Never finishes the
+ * interview — a draft nobody has confirmed is not an approved procedure.
+ */
+async function openFromSources(
+  iv: Interview, llm: LlmClient, sources: InterviewSource[], p?: TenantTransactionSource,
+): Promise<Interview> {
+  let parsed: z.infer<typeof turnSchema> | null = null;
+  try {
+    parsed = await completeTurn(llm, buildUser(iv, false, sources));
+  } catch {
+    // A failed pre-read must not block the interview from starting.
+    parsed = null;
+  }
+
+  if (!parsed) {
+    const opening = await speak(llm, iv, sources, {}, fallbackOpening(iv, sources));
+    return appendMessage(iv.id, { role: "brian", content: opening }, p);
+  }
+
+  const gaps: ReadinessIssue[] = COMPONENTS
+    .filter((component) => parsed.coverage[component].status === "missing")
+    .map((component) => ({ component, detail: `${component} is still missing` }));
+  const draft = parsed.draft as SkillDraft | null;
+  const opening = await speak(llm, iv, sources, {
+    guidance: [
+      draft
+        ? "You have already drafted this skill from their own material. Open by telling them"
+          + " what you drafted in one or two sentences, then ask about the single most"
+          + " important thing the sources could not tell you."
+        : "You have read their material but it was not enough to draft from. Open by saying"
+          + " what you took from it, then ask the most important open question.",
+      ...gaps.map((gap) => gap.detail),
+    ],
+  }, fallbackOpening(iv, sources));
+
+  return withTenantTransaction(async (client) => {
+    await replaceInterviewEvidence(iv.id, parsed.evidence as InterviewEvidence[], client);
+    await setTurnResult(iv.id, {
+      coverage: parsed.coverage,
+      ...(draft ? { draft } : {}),
+      assumptions: parsed.assumptions,
+      warnings: parsed.warnings,
+    }, client);
+    return appendMessage(iv.id, { role: "brian", content: opening }, client);
+  }, p);
+}
+
 export async function finishTurn(
   iv: Interview, llm: LlmClient = defaultLlm(), p?: TenantTransactionSource,
   sources: InterviewSource[] = [],
@@ -443,6 +475,11 @@ export async function runTurn(
 ): Promise<Interview> {
   const questionsAsked = iv.messages.filter((m) => m.role === "brian").length;
   if (questionsAsked === 0) {
+    // Draft first. Two thirds of interviews were abandoned when the opening
+    // turn was a blank-page question, so when there is material to read, Brian
+    // reads it and drafts the skill BEFORE speaking. The expert then reacts to
+    // something concrete and only answers what the sources could not settle.
+    if (hasGrounding(iv, sources)) return openFromSources(iv, llm, sources, p);
     const opening = await speak(llm, iv, sources, {}, fallbackOpening(iv, sources));
     return appendMessage(iv.id, { role: "brian", content: opening }, p);
   }

@@ -21,6 +21,11 @@ function formatTimestamp(value, empty = 'Never') {
   return Number.isNaN(date.getTime()) ? empty : date.toLocaleString();
 }
 
+function statusLabel(status) {
+  if (!status) return 'Unknown';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
 export default function AgentConnections() {
   const { profile } = useAuth();
   const {
@@ -157,7 +162,7 @@ export default function AgentConnections() {
                     ) : <h3>{connectionName(connection)}</h3>}
                     <span>{connection.oauth_client_id || connection.oauthClientId || 'OAuth client'}</span>
                   </div>
-                  <span className={`agent-status agent-status--${connection.status || 'unknown'}`}>{connection.status || 'unknown'}</span>
+                  <span className={`agent-status agent-status--${connection.status || 'unknown'}`}>{statusLabel(connection.status)}</span>
                 </div>
                 <dl className="agent-meta">
                   <div><dt>Approved by</dt><dd>{approvedBy}</dd></div>
@@ -170,7 +175,9 @@ export default function AgentConnections() {
                 <div className="agent-actions">
                   {canManage && active && <button type="button" className="dash-btn dash-btn--ghost" onClick={() => beginRename(connection)}>Rename</button>}
                   {canManage && active && <button type="button" className="dash-btn dash-btn--danger" disabled={busy === id} onClick={() => revoke(connection)}>{busy === id ? 'Revoking…' : 'Revoke'}</button>}
-                  {!active && <p>Reconnect from the agent to create a new authorization grant.</p>}
+                  {connection.status === 'inactive' && connection.inactiveReason === 'user_logout'
+                    ? <p>Inactive because the approving user logged out of Brian. Reauthenticate from the agent to reconnect.</p>
+                    : !active && <p>Reconnect from the agent to create a new authorization grant.</p>}
                 </div>
               </article>
             );

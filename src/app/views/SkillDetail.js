@@ -26,6 +26,86 @@ function toForm(s) {
   };
 }
 
+// Which of this skill's rules Brian can actually stop an agent with. The
+// distinction matters: an "enforced" rule is checked by the server before an
+// irreversible tool runs, while an advisory rule only rides along in the
+// prompt and depends on the model choosing to honour it.
+function EnforcementPanel({ skill, onRecompile, busy }) {
+  const policy = skill.policy || {};
+  const constraints = policy.constraints || [];
+  const advisory = policy.advisory || [];
+  const hasRules = (skill.hard_rules?.length || 0) + (skill.guardrails?.length || 0) > 0;
+  if (!hasRules) return null;
+
+  return (
+    <section className="dash-card skill-detail-enforcement">
+      <h2 className="dash-h2">Enforcement</h2>
+
+      {policy.pending ? (
+        <p className="skill-detail-enf-warn" role="status">
+          These rules have changed and are not compiled yet, so Brian cannot enforce them.
+          Until they are, it refuses every irreversible action this skill governs.
+        </p>
+      ) : (
+        <p className="skill-detail-enf-note">
+          {constraints.length} of {constraints.length + advisory.length} rule
+          {constraints.length + advisory.length === 1 ? '' : 's'} checked by Brian before
+          an irreversible action runs.
+        </p>
+      )}
+
+      {constraints.length > 0 && (
+        <ul className="skill-detail-enf-list">
+          {constraints.map((c) => (
+            <li key={c.id} className="skill-detail-enf-item">
+              <span className="skill-detail-enf-badge skill-detail-enf-badge--on">Enforced</span>
+              <span className="skill-detail-enf-rule">{c.source_rule}</span>
+              <span className="dash-mono skill-detail-enf-check">
+                {describeCheck(c)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {advisory.length > 0 && (
+        <ul className="skill-detail-enf-list">
+          {advisory.map((a, i) => (
+            <li key={`${a.source_rule}-${i}`} className="skill-detail-enf-item">
+              <span className="skill-detail-enf-badge">Advisory</span>
+              <span className="skill-detail-enf-rule">{a.source_rule}</span>
+              <span className="skill-detail-enf-why">{a.reason}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <button type="button" className="dash-btn dash-btn--ghost" onClick={onRecompile} disabled={busy}>
+        {busy ? 'Working…' : 'Recompile rules'}
+      </button>
+    </section>
+  );
+}
+
+function describeCheck(constraint) {
+  const check = constraint.check || {};
+  const scope = (constraint.tools || []).includes('*')
+    ? 'any action'
+    : (constraint.tools || []).join(', ');
+  switch (check.kind) {
+    case 'max': return `${check.field} ≤ ${check.value} · ${scope}`;
+    case 'min': return `${check.field} ≥ ${check.value} · ${scope}`;
+    case 'max_age_days': return `${check.field} within ${check.value} days · ${scope}`;
+    case 'equals': return `${check.field} = ${check.value} · ${scope}`;
+    case 'one_of': return `${check.field} ∈ [${(check.values || []).join(', ')}] · ${scope}`;
+    case 'not_one_of': return `${check.field} ∉ [${(check.values || []).join(', ')}] · ${scope}`;
+    case 'matches': return `${check.field} matches /${check.pattern}/ · ${scope}`;
+    case 'required': return `${check.field} required · ${scope}`;
+    case 'never': return `never permitted · ${scope}`;
+    default: return scope;
+  }
+}
+
 export default function SkillDetail() {
   const { id } = useParams();
   const { data: skill, error, setError, refresh: refreshSkill } = useCachedQuery(`/api/skills/${id}`);
@@ -104,6 +184,23 @@ export default function SkillDetail() {
     try {
       await api(`/api/skills/${id}/${action}`, { method: 'POST' });
       setNotice(action === 'activate' ? 'Skill is now active.' : 'Skill retired.');
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Rules are compiled on save; this is the repair path when that compile
+  // failed and the skill is left unable to enforce anything.
+  async function recompile() {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/api/skills/${id}/compile-policy`, { method: 'POST' });
+      setNotice('Rules recompiled.');
       await load();
     } catch (e) {
       setError(e.message);
@@ -246,6 +343,8 @@ export default function SkillDetail() {
         </section>
 
         <aside>
+          <EnforcementPanel skill={skill} onRecompile={recompile} busy={busy} />
+
           {skill.sources?.length > 0 && (
             <section className="dash-card skill-detail-provenance">
               <h2 className="dash-h2">Skill sources</h2>

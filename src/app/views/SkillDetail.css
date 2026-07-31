@@ -157,3 +157,70 @@
 .skill-detail-prov-link:hover {
   color: var(--accent-hover);
 }
+
+/* Enforcement: which rules Brian can actually stop an agent with. */
+.skill-detail-enforcement {
+  margin-bottom: 1rem;
+}
+
+.skill-detail-enf-note,
+.skill-detail-enf-warn {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.skill-detail-enf-warn {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--warn-border, var(--border));
+  border-radius: 0.5rem;
+  background: var(--warn-bg, var(--bg-raised));
+  color: var(--text);
+}
+
+.skill-detail-enf-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.skill-detail-enf-item {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-raised);
+}
+
+.skill-detail-enf-badge {
+  justify-self: start;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.3rem;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.skill-detail-enf-badge--on {
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+}
+
+.skill-detail-enf-rule {
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.skill-detail-enf-check,
+.skill-detail-enf-why {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}

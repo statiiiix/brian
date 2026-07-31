@@ -74,6 +74,33 @@ describe("verifySupabaseToken", () => {
     expect(init.headers.authorization).toBe(`Bearer ${raw}`);
   });
 
+  it("accepts a browser token whose audience is an array containing authenticated", async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      id: "u1", email: "a@b.c",
+    }), { status: 200 }));
+
+    await expect(verifySupabaseToken(
+      dashboardToken({ aud: ["authenticated"] }),
+      cfg(fetchFn),
+    )).resolves.toEqual({ id: "u1", email: "a@b.c" });
+  });
+
+  it("retries user verification with the modern publishable key when the legacy key is rejected", async () => {
+    const fetchFn = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      new Headers(init?.headers).get("apikey") === "legacy"
+        ? new Response("{}", { status: 401 })
+        : new Response(JSON.stringify({ id: "u1", email: "a@b.c" }), { status: 200 }));
+
+    await expect(verifySupabaseToken(dashboardToken(), {
+      url: "https://x.supabase.co",
+      anonKey: "legacy",
+      fallbackAnonKeys: ["modern"],
+      fetchFn,
+    })).resolves.toEqual({ id: "u1", email: "a@b.c" });
+    expect(fetchFn.mock.calls.map(([, init]) => new Headers(init?.headers).get("apikey")))
+      .toEqual(["legacy", "modern"]);
+  });
+
   it("rejects OAuth-client and wrong-audience tokens before contacting /user", async () => {
     const fetchFn = vi.fn();
     expect(await verifySupabaseToken(dashboardToken({ client_id: "mcp-client" }), cfg(fetchFn))).toBeNull();

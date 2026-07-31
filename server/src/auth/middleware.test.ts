@@ -5,6 +5,7 @@ vi.mock("../skills/repo.js", () => ({
   NotFoundError: class NotFoundError extends Error {},
   createSkill: vi.fn(),
   findSkillsWithDistance: vi.fn(async () => []),
+  lookupSkill: vi.fn(async () => ({ outcome: { kind: "no_match", nearest: null }, skill: null })),
   getSkill: vi.fn(async () => null),
   listSkills: vi.fn(async () => []),
   listVersions: vi.fn(async () => []),
@@ -14,6 +15,7 @@ vi.mock("../skills/repo.js", () => ({
 vi.mock("../context/repo.js", () => ({
   createContext: vi.fn(),
   findContextWithDistance: vi.fn(async () => null),
+  findContextEntries: vi.fn(async () => []),
   getContext: vi.fn(async () => null),
   listContext: vi.fn(async () => []),
   listContextVersions: vi.fn(async () => []),
@@ -443,5 +445,51 @@ describe("OAuth permission derivation", () => {
     expect(permissionsForOAuthScope("email skills:read actions:execute unknown:scope")).toEqual([
       "skills:read", "actions:execute",
     ]);
+  });
+});
+
+// The connector scheduler's machine route. It carries no user session, so its
+// only protection is the shared secret — worth pinning down.
+describe("scheduled connector sync route", () => {
+  const scheduler = () => testClient(buildApp({
+    authRequired: true,
+    authToken: "legacy-static",
+    legacyAgentTokensEnabled: true,
+  }));
+
+  const call = async (headers: Record<string, string> = {}) => {
+    const client = scheduler();
+    await client.ready();
+    const res = await client.inject({
+      method: "POST", url: "/api/internal/connectors/sync-due", headers,
+    });
+    await client.close();
+    return res;
+  };
+
+  it("does not exist when no scheduler secret is configured", async () => {
+    delete process.env.CONNECTOR_SYNC_SECRET;
+    expect((await call()).statusCode).toBe(404);
+  });
+
+  it("rejects a missing or wrong secret", async () => {
+    process.env.CONNECTOR_SYNC_SECRET = "correct-horse-battery-staple";
+    try {
+      expect((await call()).statusCode).toBe(401);
+      expect((await call({ authorization: "Bearer wrong" })).statusCode).toBe(401);
+      // A prefix of the real secret must not pass either.
+      expect((await call({ authorization: "Bearer correct-horse" })).statusCode).toBe(401);
+    } finally {
+      delete process.env.CONNECTOR_SYNC_SECRET;
+    }
+  });
+
+  it("never accepts the dashboard's own auth in place of the secret", async () => {
+    process.env.CONNECTOR_SYNC_SECRET = "correct-horse-battery-staple";
+    try {
+      expect((await call({ authorization: "Bearer legacy-static" })).statusCode).toBe(401);
+    } finally {
+      delete process.env.CONNECTOR_SYNC_SECRET;
+    }
   });
 });

@@ -77,6 +77,10 @@ function routeKind(path: string, method: string): "public" | "bootstrap" | "huma
     || path.endsWith("/api/connectors/google/callback")
     || path.endsWith("/api/connectors/slack/callback")
     || /\/api\/connectors\/[a-z_]+\/callback$/.test(path)
+    // Machine route for the connector scheduler: it carries no user session and
+    // authenticates itself with a shared secret inside the handler, which also
+    // 404s when no secret is configured.
+    || path.endsWith("/api/internal/connectors/sync-due")
   ) return "public";
   if (path.endsWith("/api/invitations/accept")) return "bootstrap";
   if (method === "GET" && path.endsWith("/api/privacy/deletion-requests")) return "bootstrap";

@@ -1,0 +1,146 @@
+.voice {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  min-height: 44px;
+}
+
+/* 44px tall so the control is a comfortable target on touch. */
+.voice-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0 0.95rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition:
+    border-color 160ms var(--ease),
+    background-color 160ms var(--ease),
+    transform 120ms var(--ease);
+}
+
+.voice-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.voice-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.voice-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.voice-btn--stop {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* The recording state is carried by the label, the timer and the meter — not
+   by colour alone. */
+.voice-time {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.voice-time.is-warning {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.voice-cancel {
+  border: 0;
+  background: none;
+  padding: 0.4rem 0.3rem;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--muted-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.voice-cancel:hover {
+  color: var(--fg);
+}
+
+.voice-meter {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+}
+
+.voice-meter-bar {
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.75;
+  transform: scaleY(0.12);
+  transform-origin: center;
+  /* Short enough to track the voice, long enough not to strobe. */
+  transition: transform 90ms linear;
+  will-change: transform;
+}
+
+.voice-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: voice-spin 700ms linear infinite;
+}
+
+@keyframes voice-spin {
+  to { transform: rotate(360deg); }
+}
+
+.voice-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  width: 100%;
+  font-size: 0.8rem;
+  color: var(--red);
+}
+
+.voice-error-dismiss {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-btn,
+  .voice-meter-bar {
+    transition: none;
+  }
+
+  .voice-btn:active:not(:disabled) {
+    transform: none;
+  }
+
+  .voice-spinner {
+    animation-duration: 2s;
+  }
+}

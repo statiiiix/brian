@@ -126,3 +126,13 @@
     grid-template-columns: 1fr;
   }
 }
+
+.review-item-supersedes {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.review-item-supersedes a {
+  color: var(--accent);
+}

@@ -70,6 +70,13 @@ export default function ReviewQueue() {
                 <span className="dash-mono">v{s.version}</span>
                 {s.owner && <span>{s.owner}</span>}
               </p>
+              {s.supersedes && (
+                <p className="review-item-supersedes">
+                  Proposed update to{' '}
+                  <Link to={`/app/skills/${s.supersedes.id}`}>{s.supersedes.name}</Link>
+                  {' — approving replaces that skill rather than adding one.'}
+                </p>
+              )}
             </div>
             <div className="review-item-actions">
               <button
@@ -94,7 +101,7 @@ export default function ReviewQueue() {
                 onClick={() => act(s.id, 'activate')}
                 disabled={busyId === s.id}
               >
-                {busyId === s.id ? 'Working…' : 'Approve'}
+                {busyId === s.id ? 'Working…' : s.supersedes ? 'Approve update' : 'Approve'}
               </button>
             </div>
           </div>

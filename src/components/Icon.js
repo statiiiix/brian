@@ -58,6 +58,8 @@ export const msym = {
   clear: 'task_alt',
   send: 'send',
   upload: 'upload_file',
+  mic: 'mic',
+  stop: 'stop_circle',
 };
 
 export const icons = {

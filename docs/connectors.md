@@ -77,6 +77,41 @@ listed in `docs/oauth-app-registrations.md`.
 - `GET /api/evidence?status=unpromoted` — list extracted skill evidence that
   has not yet been promoted into a draft.
 
+## Staying current (scheduled sync)
+
+A brain that only refreshes when someone runs a CLI goes stale, so syncs run on
+a schedule. Because the API is stateless (Supabase Edge), the schedule lives
+outside the process: any cron that can send one authenticated request drives it.
+
+- `POST /api/internal/connectors/sync-due` — syncs every connector that is
+  `connected` and whose `last_synced_at` is older than
+  `CONNECTOR_SYNC_INTERVAL_MINUTES` (default 360), up to `CONNECTOR_SYNC_BATCH`
+  (default 10) per run. Returns per-connector results; one failing provider
+  never stops the others.
+
+The route authenticates with a shared secret and **fails closed**: without
+`CONNECTOR_SYNC_SECRET` configured it returns 404, and a wrong bearer returns
+401. It is not reachable with a dashboard session or an agent token.
+
+Enable it:
+
+1. Generate a secret and set `CONNECTOR_SYNC_SECRET` in the edge environment
+   (`openssl rand -hex 32`).
+2. Point a scheduler at the endpoint every 30–60 minutes. With Supabase cron:
+
+   ```sql
+   select cron.schedule('brian-connector-sync', '*/30 * * * *', $$
+     select net.http_post(
+       url := 'https://api.brianthebrain.app/api/internal/connectors/sync-due',
+       headers := jsonb_build_object('Authorization', 'Bearer ' || current_setting('brian.sync_secret'))
+     );
+   $$);
+   ```
+
+Tenants are enumerated first and each sync runs inside `runTenant`, so the
+per-tenant RLS predicate still applies to every query the pipeline makes — a
+cross-tenant sweep would return no rows under the `brian_app` role by design.
+
 ## Storage (migration 006, tenant-scoped + RLS)
 
 - `connectors` — one row per (tenant, source): credentials, cursor, status.

@@ -100,6 +100,15 @@ function relativeTime(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+// Why a skill surfaced in the attention queue — the specific signal, so the
+// owner knows what to go and fix rather than just that something is wrong.
+export function attentionReason(skill) {
+  if (skill.policy_pending) return 'Rules are not compiled, so nothing is enforced';
+  if (skill.denied > 0) return `Brian blocked ${skill.denied} action${skill.denied === 1 ? '' : 's'} under this skill`;
+  if (skill.failed > 0) return `${skill.failed} run${skill.failed === 1 ? '' : 's'} failed`;
+  return 'Escalates often — the procedure may not cover the real cases';
+}
+
 export default function Overview() {
   const headline = useMemo(() => greeting(), []);
 
@@ -109,6 +118,7 @@ export default function Overview() {
   const skillsQuery = useCachedQuery('/api/skills');
   const executionsQuery = useCachedQuery('/api/executions');
   const connectorsQuery = useCachedQuery('/api/connectors');
+  const metricsQuery = useCachedQuery('/api/metrics');
 
   const error = skillsQuery.error || executionsQuery.error || connectorsQuery.error;
   const data = useMemo(() => {
@@ -120,6 +130,8 @@ export default function Overview() {
     };
   }, [skillsQuery.data, executionsQuery.data, connectorsQuery.data]);
 
+  const metrics = metricsQuery.data;
+
   const stats = useMemo(() => {
     const skills = data?.skills || [];
     const executions = data?.executions || [];
@@ -129,8 +141,9 @@ export default function Overview() {
       review: skills.filter((s) => s.status === 'draft' || s.status === 'needs_review').length,
       runs: executions.length,
       sources: connectors.filter((c) => c.status === 'connected').length,
+      blocked: metrics?.blockedActions ?? 0,
     };
-  }, [data]);
+  }, [data, metrics]);
 
   const skillNames = useMemo(() => {
     const map = {};
@@ -177,8 +190,12 @@ export default function Overview() {
     { key: 'active', label: 'Active skills', value: stats.active, to: '/app/skills' },
     { key: 'review', label: 'Needs review', value: stats.review, to: '/app/review', highlight: stats.review > 0 },
     { key: 'runs', label: 'Governed runs', value: stats.runs, to: '/app/executions' },
+    // The number that proves the product works: actions Brian refused outright.
+    { key: 'blocked', label: 'Actions blocked', value: stats.blocked, to: '/app/executions' },
     { key: 'sources', label: 'Connected sources', value: stats.sources, to: '/app/connectors' },
   ];
+
+  const attention = metrics?.attention || [];
 
   return (
     <div className="overview">
@@ -224,6 +241,33 @@ export default function Overview() {
                 </div>
               </section>
             </div>
+          )}
+
+          {attention.length > 0 && (
+            <section className="overview-section">
+              <div className="overview-section-head">
+                <h2>Skills needing a human</h2>
+                <Link to="/app/skills" className="overview-text-link">All skills →</Link>
+              </div>
+              <div className="dash-table-wrap">
+                <table className="dash-table">
+                  <thead>
+                    <tr><th>Skill</th><th>Runs</th><th>Escalated</th><th>Blocked</th><th>Why</th></tr>
+                  </thead>
+                  <tbody>
+                    {attention.slice(0, 5).map((s) => (
+                      <tr key={s.skill_id}>
+                        <td><Link to={`/app/skills/${s.skill_id}`}>{s.name}</Link></td>
+                        <td className="dash-mono">{s.runs}</td>
+                        <td className="dash-mono">{s.escalated}</td>
+                        <td className="dash-mono">{s.denied}</td>
+                        <td>{attentionReason(s)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           )}
 
           <section className="overview-section">

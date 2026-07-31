@@ -3,15 +3,18 @@ import type { Context } from "hono";
 import { randomUUID } from "node:crypto";
 import {
   createSkill, getSkill, listSkills, updateSkill, setStatus, listVersions, NotFoundError,
-  findSkillsWithDistance,
+  findSkillsWithDistance, lookupSkill, applyProposal,
 } from "../skills/repo.js";
 import { parseNewSkill, parseUpdateSkill, ValidationError } from "../skills/validation.js";
+import { compileAndStoreSkillPolicy } from "../policy/service.js";
+import { listDecisions, listPendingPolicySkills } from "../policy/repo.js";
 import { listExecutions } from "../feedback/executions.js";
+import { brainMetrics, needsAttention } from "../feedback/metrics.js";
 import { draftFromText } from "../ingestion/draftFromText.js";
 import type { SkillStatus } from "../skills/types.js";
-import { createContext, getContext, listContext, updateContext, retireContext, listContextVersions, findContextWithDistance } from "../context/repo.js";
+import { createContext, getContext, listContext, updateContext, retireContext, listContextVersions, findContextEntries } from "../context/repo.js";
 import { parseNewContext, parseUpdateContext } from "../context/validation.js";
-import { capture } from "../ingestion/capture.js";
+import { capture, proposeCapture, commitCapture } from "../ingestion/capture.js";
 import { ingestBulk } from "../ingestion/bulk.js";
 import type { ContextStatus } from "../context/types.js";
 import { registerMcpHttp } from "../mcp/http.js";
@@ -22,6 +25,10 @@ import {
 } from "../auth/supabase.js";
 import { runPrincipal, runTenant } from "../db/tenant.js";
 import { secret } from "../config/secrets.js";
+import { timingSafeEqual } from "node:crypto";
+// Buffer is not a global in the Supabase Edge runtime this bundles into.
+import { Buffer } from "node:buffer";
+import { syncDueConnectors } from "../connectors/schedule.js";
 import {
   loadMcpOperationalFlags,
   type McpOperationalFlags,
@@ -86,6 +93,7 @@ import {
   createInvitation,
   currentTenant,
   denyAgentConnection,
+  deactivateAgentConnectionsForLogout,
   getOnboardingState,
   listAgentConnections,
   listMembers,
@@ -266,7 +274,6 @@ export type App = Hono<AppEnv>;
 
 // Vector-search hits farther than this cosine distance are treated as
 // no-match so hooks don't inject unrelated skills into every prompt.
-const BRIEFING_MAX_DISTANCE = 0.6;
 
 // Fastify parsed missing/empty JSON bodies to undefined; keep that tolerance.
 async function jsonBody(c: Context): Promise<any> {
@@ -1054,6 +1061,13 @@ export function buildApp(opts: AppOptions = {}): App {
     return c.json({ connections: await listAgentConnections(principal.userId, principal.role) });
   });
 
+  app.post("/api/agent-connections/deactivate-for-logout", async (c) => {
+    const principal = humanPrincipal(c);
+    if (!principal) return c.json({ error: "unauthorized" }, 401);
+    const deactivated = await deactivateAgentConnectionsForLogout(principal.userId);
+    return c.json({ deactivated });
+  });
+
   app.get("/api/agent-connections/:id", async (c) => {
     const principal = humanPrincipal(c);
     if (!principal || principal.role === "viewer") return c.json({ error: "forbidden" }, 403);
@@ -1151,18 +1165,49 @@ export function buildApp(opts: AppOptions = {}): App {
     return c.json(s);
   });
 
+  // Writing rules compiles them: a skill's hard rules only become enforceable
+  // once policy/compile has turned them into checks (repo marks them pending
+  // until then, and the MCP gate refuses to act under a pending skill).
   app.post("/api/skills", async (c) => {
     const input = parseNewSkill(await jsonBody(c));
-    return c.json(await createSkill(input), 201);
+    const skill = await createSkill(input);
+    await compileAndStoreSkillPolicy(skill.id);
+    return c.json((await getSkill(skill.id)) ?? skill, 201);
   });
 
   app.put("/api/skills/:id", async (c) => {
     const patch = parseUpdateSkill(await jsonBody(c));
-    return c.json(await updateSkill(c.req.param("id"), patch, "api", undefined));
+    const skill = await updateSkill(c.req.param("id"), patch, "api", undefined);
+    await compileAndStoreSkillPolicy(skill.id);
+    return c.json((await getSkill(skill.id)) ?? skill);
   });
 
-  app.post("/api/skills/:id/activate", async (c) =>
-    c.json(await setStatus(c.req.param("id"), "active")));
+  // Recompile on demand: the dashboard offers this for skills whose compile
+  // failed, and it is how an operator repairs enforcement without an edit.
+  app.post("/api/skills/:id/compile-policy", async (c) => {
+    const skill = await getSkill(c.req.param("id"));
+    if (!skill) return c.json({ error: "skill not found" }, 404);
+    return c.json(await compileAndStoreSkillPolicy(skill.id));
+  });
+
+  // Activation is the choke point for skills that arrived by capture or the
+  // review queue rather than through the editor, so it compiles too.
+  //
+  // A draft that supersedes another skill is not a skill of its own: approving
+  // it applies its content to the target and retires the proposal, so the
+  // corpus gains a revision instead of a near-duplicate.
+  app.post("/api/skills/:id/activate", async (c) => {
+    const id = c.req.param("id");
+    const pending = await getSkill(id);
+    if (pending?.supersedes_skill_id) {
+      const target = await applyProposal(id, "review");
+      if (target.policy?.pending) await compileAndStoreSkillPolicy(target.id);
+      return c.json((await getSkill(target.id)) ?? target);
+    }
+    const skill = await setStatus(id, "active");
+    if (skill.policy?.pending) await compileAndStoreSkillPolicy(id);
+    return c.json((await getSkill(id)) ?? skill);
+  });
 
   app.post("/api/skills/:id/retire", async (c) =>
     c.json(await setStatus(c.req.param("id"), "retired")));
@@ -1178,6 +1223,20 @@ export function buildApp(opts: AppOptions = {}): App {
     c.json(await evidenceForDraft("skill", c.req.param("id"))));
 
   app.get("/api/executions", async (c) => c.json(await listExecutions()));
+
+  // The feedback loop read back: outcomes over time, per-skill health, and the
+  // queue of skills a human should revise.
+  app.get("/api/metrics", async (c) => {
+    const metrics = await brainMetrics();
+    return c.json({ ...metrics, attention: needsAttention(metrics) });
+  });
+
+  // Every allow/deny the enforcement gate made, newest first: the evidence that
+  // a refusal happened and why.
+  app.get("/api/policy/decisions", async (c) => c.json(await listDecisions()));
+
+  // Skills whose rules are written but not yet enforceable.
+  app.get("/api/policy/pending", async (c) => c.json(await listPendingPolicySkills()));
 
   app.get("/api/evidence", async (c) => {
     if (c.req.query("status") !== "unpromoted") return c.json([]);
@@ -1197,14 +1256,19 @@ export function buildApp(opts: AppOptions = {}): App {
     if (typeof query !== "string" || query.trim().length === 0) {
       return c.json({ error: "query is required" }, 400);
     }
-    const [skills, ctx] = await Promise.all([
-      findSkillsWithDistance(query, 1),
-      findContextWithDistance(query),
+    // Same abstention decision as the MCP find_skill path, so a hook-driven
+    // agent and an MCP-driven one are governed identically.
+    const [lookup, ctx] = await Promise.all([
+      lookupSkill(query),
+      findContextEntries(query),
     ]);
-    const skillHit = skills[0];
     return c.json({
-      skill: skillHit && skillHit.distance <= BRIEFING_MAX_DISTANCE ? skillHit.skill : null,
-      context: ctx && ctx.distance <= BRIEFING_MAX_DISTANCE ? ctx.entry : null,
+      skill: lookup.skill,
+      ambiguous: lookup.outcome.kind === "ambiguous"
+        ? lookup.outcome.candidates.map((cand) => ({ id: cand.id, name: cand.name }))
+        : null,
+      context: ctx[0]?.entry ?? null,
+      contexts: ctx.map((hit) => hit.entry),
     });
   });
 
@@ -1222,6 +1286,29 @@ export function buildApp(opts: AppOptions = {}): App {
       return c.json({ error: "text is required" }, 400);
     }
     return c.json(await capture(text));
+  });
+
+  // The two-step capture the dashboard uses: propose reads and decides nothing,
+  // so the browser can ask a human where an uncertain skill belongs before
+  // commit writes it. Agents keep using POST /api/capture, which does both.
+  app.post("/api/capture/propose", async (c) => {
+    const text = (await jsonBody(c))?.text;
+    if (typeof text !== "string" || text.trim().length === 0) {
+      return c.json({ error: "text is required" }, 400);
+    }
+    return c.json({ proposals: await proposeCapture(text) });
+  });
+
+  app.post("/api/capture/commit", async (c) => {
+    const body = await jsonBody(c);
+    if (!Array.isArray(body?.proposals)) {
+      return c.json({ error: "proposals array is required" }, 400);
+    }
+    const choices = body?.choices;
+    if (choices != null && (typeof choices !== "object" || Array.isArray(choices))) {
+      return c.json({ error: "choices must be an object keyed by item index" }, 400);
+    }
+    return c.json(await commitCapture(body.proposals, choices ?? {}));
   });
 
   app.post("/api/ingest/bulk", async (c) => {
@@ -1458,9 +1545,12 @@ export function buildApp(opts: AppOptions = {}): App {
     }
     const activate = (await jsonBody(c))?.activate !== false;
     let skill = await createSkill(parseNewSkill(iv.draft));
+    // Compile before activating: an active skill that cannot enforce its own
+    // rules would block every action it governs.
+    await compileAndStoreSkillPolicy(skill.id);
     if (activate) skill = await setStatus(skill.id, "active");
     const interview = await completeInterview(iv.id, skill.id);
-    return c.json({ interview, skill });
+    return c.json({ interview, skill: (await getSkill(skill.id)) ?? skill });
   });
 
   app.post("/api/interviews/:id/abandon", async (c) => {
@@ -1720,6 +1810,34 @@ export function buildApp(opts: AppOptions = {}): App {
         { error: message === `connector ${type} is not configured` ? message : "connector sync failed" },
         400,
       );
+    }
+  });
+
+  // Length is compared first because timingSafeEqual throws on a mismatch;
+  // the length of a shared secret is not the part worth protecting.
+  function exactBearerToken(header: string | undefined, expected: string): boolean {
+    if (!header?.startsWith("Bearer ")) return false;
+    const actual = Buffer.from(header.slice("Bearer ".length));
+    const wanted = Buffer.from(expected);
+    return actual.length === wanted.length && timingSafeEqual(actual, wanted);
+  }
+
+  // Scheduled refresh. Not a user route: an external scheduler (Supabase cron,
+  // GitHub Actions, any cron that can send a header) calls this with the shared
+  // secret and Brian syncs whatever is stale across tenants. Fails closed —
+  // with no secret configured the endpoint does not exist.
+  app.post("/api/internal/connectors/sync-due", async (c) => {
+    const expected = await secret("CONNECTOR_SYNC_SECRET");
+    if (!expected) return c.json({ error: "not found" }, 404);
+    if (!exactBearerToken(c.req.header("authorization"), expected)) {
+      c.header("Cache-Control", "no-store");
+      return c.json({ error: "unauthorized" }, 401);
+    }
+    try {
+      return c.json(await syncDueConnectors());
+    } catch (e) {
+      console.error("scheduled connector sync failed", e);
+      return c.json({ error: "scheduled sync failed" }, 500);
     }
   });
 

@@ -18,7 +18,8 @@ export interface AgentConnection {
   clientUri: string | null;
   redirectOrigins: string[];
   permissions: AgentPermission[];
-  status: "pending" | "active" | "denied" | "revoked";
+  status: "pending" | "active" | "inactive" | "denied" | "revoked";
+  inactiveReason: "user_logout" | null;
   approvedAt: string | null;
   lastUsedAt: string | null;
   expiresAt: string | null;
@@ -44,7 +45,7 @@ export class AgentConnectionConflict extends Error {
 
 const CONNECTION_COLS = `id, tenant_id, user_id, oauth_client_id, client_name, display_name,
   client_uri, redirect_origins, permissions, status, approved_at, last_used_at,
-  expires_at, revoked_at, created_at, updated_at`;
+  expires_at, revoked_at, inactive_reason, created_at, updated_at`;
 
 function iso(value: unknown): string | null {
   return value ? new Date(value as string | number | Date).toISOString() : null;
@@ -62,6 +63,7 @@ function connection(row: any): AgentConnection {
     redirectOrigins: Array.isArray(row.redirect_origins) ? row.redirect_origins.map(String) : [],
     permissions: normalizePermissions(row.permissions),
     status: row.status,
+    inactiveReason: row.inactive_reason ?? null,
     approvedAt: iso(row.approved_at),
     lastUsedAt: iso(row.last_used_at),
     expiresAt: iso(row.expires_at),
@@ -150,7 +152,7 @@ export async function prepareAgentConnection(input: {
   const existing = await p.query(
     `select ${CONNECTION_COLS} from agent_connections
       where tenant_id=$1 and user_id=$2 and oauth_client_id=$3
-        and status in ('pending','active')
+        and status in ('pending','active','inactive')
       order by created_at desc limit 1`,
     [tenantId, input.userId, input.clientId],
   );
@@ -164,6 +166,7 @@ export async function prepareAgentConnection(input: {
       `update agent_connections set client_name=$2, client_uri=$3, redirect_origins=$4::jsonb,
           display_name=coalesce(display_name,$2), permissions=$5::text[], status='pending',
           approved_at=null, expires_at=now()+interval '10 minutes', revoked_at=null,
+          inactive_reason=null,
           updated_at=now()
         where id=$1 and tenant_id=$6 returning ${CONNECTION_COLS}`,
       [row.id, clientName, clientUri, JSON.stringify([origin]), granted, tenantId],
@@ -269,6 +272,28 @@ export async function listAgentConnections(
   return rows.map(connection);
 }
 
+export async function deactivateAgentConnectionsForLogout(
+  actorUserId: string,
+  p: Queryable = db(),
+): Promise<number> {
+  const { rows } = await p.query(
+    `update agent_connections
+        set status='inactive', inactive_reason='user_logout', expires_at=null, updated_at=now()
+      where tenant_id=$1 and user_id=$2 and status in ('pending','active')
+      returning id`,
+    [tenantOrFounding(), actorUserId],
+  );
+  for (const row of rows) {
+    await writeAuditEvent("agent_connection.inactive", {
+      targetType: "agent_connection",
+      targetId: row.id,
+      connectionId: row.id,
+      metadata: { reason: "user_logout" },
+    }, p);
+  }
+  return rows.length;
+}
+
 export async function updateAgentConnection(
   id: string,
   actorUserId: string,
@@ -314,8 +339,9 @@ export async function revokeAgentConnection(
 ): Promise<AgentConnection | null> {
   if (role === "viewer") return null;
   const { rows } = await p.query(
-    `update agent_connections set status='revoked', revoked_at=now(), expires_at=null, updated_at=now()
-      where id=$1 and tenant_id=$2 and status in ('pending','active')
+    `update agent_connections
+        set status='revoked', revoked_at=now(), expires_at=null, inactive_reason=null, updated_at=now()
+      where id=$1 and tenant_id=$2 and status in ('pending','active','inactive')
         and ($3::boolean or user_id=$4)
       returning ${CONNECTION_COLS}`,
     [id, tenantOrFounding(), role === "owner" || role === "admin", actorUserId],

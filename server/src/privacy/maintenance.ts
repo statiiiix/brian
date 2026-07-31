@@ -339,6 +339,11 @@ async function processOneCompanyDeletion(pool: pg.Pool): Promise<boolean> {
     const tenantId = request.tenant_id as string;
     // FK-safe order. Security audit and deletion-request evidence are retained;
     // their tenant FKs become NULL when the tenant row is removed.
+    // Enforcement state (023). Both cascade from tenants, but company deletion
+    // enumerates every table on purpose: the guarantee is "we removed it", not
+    // "the database probably did".
+    await client.query("delete from agent_session_state where tenant_id=$1", [tenantId]);
+    await client.query("delete from policy_decisions where tenant_id=$1", [tenantId]);
     await client.query("delete from evidence where tenant_id=$1", [tenantId]);
     await client.query("delete from connectors where tenant_id=$1", [tenantId]);
     await client.query("delete from interviews where tenant_id=$1", [tenantId]);

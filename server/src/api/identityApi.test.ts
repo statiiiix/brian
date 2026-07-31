@@ -204,6 +204,39 @@ d("identity and agent-connection API", () => {
     expect(serializedMetrics).not.toContain("attacker.example");
   });
 
+  it("marks the user's active agent grants inactive before global logout", async () => {
+    const inserted = await pool.query(
+      `insert into agent_connections
+        (tenant_id,user_id,oauth_client_id,client_name,permissions,status,approved_at)
+       values ($1,$2,$3,'Logout Client',array['skills:read'],'active',now())
+       returning id`,
+      [TENANT, USER, CLIENT],
+    );
+
+    const response = await client().inject({
+      method: "POST",
+      url: "/api/agent-connections/deactivate-for-logout",
+      headers: auth,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ deactivated: 1 });
+    expect((await pool.query(
+      "select status,inactive_reason from agent_connections where id=$1",
+      [inserted.rows[0].id],
+    )).rows[0]).toEqual({ status: "inactive", inactive_reason: "user_logout" });
+    expect(await resolveMcpGrant()).toEqual([]);
+
+    const listed = await client().inject({ method: "GET", url: "/api/agent-connections", headers: auth });
+    expect(listed.json().connections).toEqual([
+      expect.objectContaining({
+        id: inserted.rows[0].id,
+        status: "inactive",
+        inactiveReason: "user_logout",
+      }),
+    ]);
+  });
+
   it("rejects an invalid browser permission selection before preparing a grant", async () => {
     const response = await client().inject({
       method: "POST",

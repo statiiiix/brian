@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "brian": {
-      "command": "npm",
-      "args": ["--prefix", "server", "run", "mcp"]
+      "type": "http",
+      "url": "https://api.brianthebrain.app/mcp"
     }
   }
 }

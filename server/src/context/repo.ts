@@ -110,3 +110,25 @@ export async function findContextWithDistance(
      order by embedding <=> $1::vector limit 1`, [vec, tenantOrFounding()]);
   return rows[0] ? { entry: rowToContext(rows[0]), distance: Number(rows[0].distance) } : null;
 }
+
+/**
+ * Company context relevant to a task. A company's goals, decisions, and
+ * preferences are plural by nature — returning only the single nearest row
+ * (which is what the MCP tool used to do) silently hid the rest, so an agent
+ * could follow one preference while breaking three others.
+ */
+export async function findContextEntries(
+  query: string,
+  limit = Number(process.env.CONTEXT_MATCH_LIMIT ?? 5),
+  maxDistance = Number(process.env.CONTEXT_MATCH_MAX_DISTANCE ?? 0.55),
+  p: Queryable = db(),
+): Promise<{ entry: ContextEntry; distance: number }[]> {
+  const vec = toVectorLiteral(await embed(query));
+  const { rows } = await p.query(
+    `select ${COLUMNS}, embedding <=> $1::vector as distance
+     from context_entries where status='active' and tenant_id=$2
+       and embedding <=> $1::vector <= $3
+     order by embedding <=> $1::vector limit $4`,
+    [vec, tenantOrFounding(), maxDistance, limit]);
+  return rows.map((r) => ({ entry: rowToContext(r), distance: Number(r.distance) }));
+}

@@ -49,6 +49,9 @@ d("agent briefing API", () => {
     const body = res.json();
     expect(body.skill?.name).toBe("Refund handling");
     expect(body.context?.content).toBe("We prioritize retention over margin");
+    // Context is plural: a company's preferences rarely come one at a time.
+    expect(body.contexts).toHaveLength(1);
+    expect(body.ambiguous).toBeNull();
   });
 
   it("returns nulls when nothing matches", async () => {
@@ -56,7 +59,7 @@ d("agent briefing API", () => {
       method: "POST", url: "/api/agent/briefing", payload: { query: "anything" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ skill: null, context: null });
+    expect(res.json()).toEqual({ skill: null, ambiguous: null, context: null, contexts: [] });
   });
 
   it("rejects a missing query with 400", async () => {

@@ -165,6 +165,47 @@ export const INTERVIEW_TURN_JSON_SCHEMA: Record<string, unknown> = {
   },
 };
 
+// Policy: compile a skill's English hard rules into machine-checkable rules.
+// Deliberately flat (no oneOf/anyOf) because Structured Outputs strict mode
+// does not accept discriminated unions; `parsePolicy` narrows it afterwards.
+// A rule the model cannot reduce to a check must come back as kind "advisory"
+// rather than a guessed constraint — a wrong constraint is worse than none.
+export const POLICY_COMPILE_JSON_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  required: ["rules"],
+  properties: {
+    rules: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "source_rule", "kind", "tools", "field", "number_value",
+          "text_value", "values", "message", "advisory_reason",
+        ],
+        properties: {
+          source_rule: { type: "string" },
+          kind: {
+            type: "string",
+            enum: [
+              "max", "min", "equals", "one_of", "not_one_of", "matches",
+              "required", "max_age_days", "never", "advisory",
+            ],
+          },
+          tools: { type: "array", items: { type: "string" } },
+          field: { type: ["string", "null"] },
+          number_value: { type: ["number", "null"] },
+          text_value: { type: ["string", "null"] },
+          values: { type: ["array", "null"], items: { type: "string" } },
+          message: { type: "string" },
+          advisory_reason: { type: ["string", "null"] },
+        },
+      },
+    },
+  },
+};
+
 // Connectors: classify one communication thread into reusable knowledge.
 export const CONNECTOR_EXTRACT_JSON_SCHEMA: Record<string, unknown> = {
   type: "object",

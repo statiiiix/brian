@@ -25,6 +25,10 @@ export async function resetDb(pool: pg.Pool): Promise<void> {
       )`,
   );
   await pool.query("delete from oauth_states");
+  // Enforcement state (023): session consultations/facts reference skills, and
+  // decisions must not leak between test files.
+  await pool.query("delete from agent_session_state");
+  await pool.query("delete from policy_decisions");
   await pool.query("delete from evidence");
   await pool.query("delete from connectors");
   await pool.query("delete from interviews");
